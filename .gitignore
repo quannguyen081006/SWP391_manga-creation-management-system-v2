@@ -1,0 +1,22 @@
+# NetBeans build output
+build/
+dist/
+nbproject/private/
+
+# IDE files
+*.iml
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Sensitive config — mỗi người tự tạo local
+web/WEB-INF/jdbc.properties
+
+# Uploaded images (keep folder structure)
+web/img/chapter/*
+!web/img/chapter/.gitkeep
+web/img/task/*
+!web/img/task/.gitkeep
