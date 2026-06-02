@@ -86,6 +86,15 @@ public class RankingService {
             throw new BusinessRuleException("Vote entry only allowed while period OPEN (BR-49)");
         }
 
+        // BR-RNK-01: Validate current date is within period date range
+        java.sql.Date startDate = (java.sql.Date) period.get("startDate");
+        java.sql.Date endDate = (java.sql.Date) period.get("endDate");
+        java.sql.Date currentDate = new java.sql.Date(System.currentTimeMillis());
+        
+        if (currentDate.before(startDate) || currentDate.after(endDate)) {
+            throw new BusinessRuleException("Vote entry only allowed during active period dates (BR-RNK-01)");
+        }
+
         // Validate voteCount (BR-51)
         if (request.getVoteCount() < 0) {
             throw new BusinessRuleException("voteCount cannot be negative (BR-51)");

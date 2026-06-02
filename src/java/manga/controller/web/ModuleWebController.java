@@ -290,9 +290,24 @@ public class ModuleWebController {
 
     @RequestMapping(value = "/ranking/periods", method = RequestMethod.GET)
     public String rankingPeriods(HttpSession session, Model model) {
-        requireUser(session);
+        AuthenticatedUser user = requireUser(session);
         model.addAttribute("periods", rankingRepository.listPeriods());
         model.addAttribute("seriesList", productionRepository.listSeries());
+        
+        // BR-RNK-06: Track which periods the current board member has already submitted for
+        if (user.hasRole("EDITORIAL_BOARD")) {
+            java.util.Set<Long> submittedPeriodIds = new java.util.HashSet<Long>();
+            for (Map<String, Object> period : rankingRepository.listPeriods()) {
+                long periodId = (Long) period.get("id");
+                if (rankingRepository.hasSubmittedEntries(periodId, user.getId())) {
+                    submittedPeriodIds.add(periodId);
+                }
+            }
+            model.addAttribute("submittedRankingPeriodIds", submittedPeriodIds);
+        } else {
+            model.addAttribute("submittedRankingPeriodIds", new java.util.HashSet<Long>());
+        }
+        
         return "ranking/period";
     }
 

@@ -13,6 +13,7 @@ import javax.sql.DataSource;
 import manga.common.exception.BusinessRuleException;
 import manga.dto.RevenueDataPoint;
 import manga.model.AuthenticatedUser;
+import manga.repository.AuditLogRepository;
 import manga.repository.DecisionRepository;
 import manga.repository.MangakaRankingRepository;
 import manga.repository.RankingRepository;
@@ -34,6 +35,9 @@ public class ClosePeriodPipelineService {
 
     @Autowired
     private DataSource dataSource;
+
+    @Autowired
+    private AuditLogRepository auditLogRepository;
 
     @Transactional
     public void executePipeline(long periodId, AuthenticatedUser user) {
@@ -72,6 +76,41 @@ public class ClosePeriodPipelineService {
 
         // PHASE 5: Finalize period (separate transaction)
         phase5FinalizePeriod(periodId, user, period.get("name").toString());
+    }
+
+    // BR-RNK-10: Execute pipeline without user check for scheduler use
+    @Transactional
+    public void executePipelineAsSystem(long periodId) {
+        // Lock & Validate period is OPEN
+        Map<String, Object> period = rankingRepository.findPeriodById(periodId);
+        if (period == null) {
+            throw new BusinessRuleException("Ranking period not found");
+        }
+        String status = (String) period.get("status");
+        if (!"OPEN".equalsIgnoreCase(status)) {
+            throw new BusinessRuleException("Only OPEN period can be closed and calculated");
+        }
+
+        // Validate that there is at least one VoteEntry for this period
+        List<Map<String, Object>> entries = rankingRepository.listEntries(periodId);
+        if (entries == null || entries.isEmpty()) {
+            throw new BusinessRuleException("Cannot close period: At least one vote entry is required");
+        }
+
+        // PHASE 1: Lock period (separate transaction)
+        phase1LockPeriod(periodId, null);
+
+        // PHASE 2: Series Ranking (separate transaction)
+        phase2CalculateSeriesRanking(periodId, null);
+
+        // PHASE 3: Mangaka Ranking (separate transaction)
+        phase3CalculateMangakaRanking(periodId, null);
+
+        // PHASE 4: Decision Engine (separate transaction)
+        phase4RunDecisionEngine(periodId, null);
+
+        // PHASE 5: Finalize period (separate transaction)
+        phase5FinalizePeriod(periodId, null, period.get("name").toString());
     }
 
     @Transactional
@@ -124,6 +163,12 @@ public class ClosePeriodPipelineService {
                 ps.setLong(1, periodId);
                 ps.executeUpdate();
             }
+            // BR-RNK-09: Audit log for ranking calculated and archived
+            Long actorId = (user != null) ? user.getId() : null;
+            auditLogRepository.insertLog(actorId, "RANKING_CALCULATED", "RANKING_PERIOD", periodId, 
+                "Ranking period " + periodId + " calculation completed");
+            auditLogRepository.insertLog(actorId, "RANKING_RESULT_ARCHIVED", "RANKING_PERIOD", periodId, 
+                "Ranking period " + periodId + " result archived");
         } catch (SQLException ex) {
             throw new RuntimeException("Database error in phase 5: finalize period", ex);
         }
@@ -137,7 +182,7 @@ public class ClosePeriodPipelineService {
                 + "   CAST(("
                 + "     SUM(CAST(ve.voteCount AS DECIMAL(18,6)))"
                 + "     / NULLIF(SUM(CAST(ve.readerCount AS DECIMAL(18,6))), 0)"
-                + "   ) * 100 AS DECIMAL(6,2)) AS rankScore"
+                + "   ) * 100) AS DECIMAL(6,2) rankScore"
                 + " FROM VoteEntry ve"
                 + " WHERE ve.periodId = ?"
                 + "   AND ve.voteCount >= 0"
@@ -146,13 +191,17 @@ public class ClosePeriodPipelineService {
                 + " GROUP BY ve.seriesId"
                 + "), ranked AS ("
                 + " SELECT"
-                + "   seriesId,"
-                + "   totalLikes,"
-                + "   totalReads,"
-                + "   rankScore,"
-                + "   ROW_NUMBER() OVER (ORDER BY rankScore DESC, seriesId ASC) AS rankPosition,"
+                + "   a.seriesId,"
+                + "   a.totalLikes,"
+                + "   a.totalReads,"
+                + "   a.rankScore,"
+                + "   s.publicationDate,"
+                + "   ROW_NUMBER() OVER (ORDER BY a.rankScore DESC, a.totalLikes DESC,"
+                + "     CASE WHEN s.publicationDate IS NULL THEN 1 ELSE 0 END ASC,"
+                + "     s.publicationDate ASC, a.seriesId ASC) AS rankPosition,"
                 + "   COUNT(*) OVER () AS totalRows"
-                + " FROM agg"
+                + " FROM agg a"
+                + " JOIN Series s ON s.id = a.seriesId"
                 + ")"
                 + " INSERT INTO RankingRecord ("
                 + "   periodId,"
@@ -338,7 +387,8 @@ public class ClosePeriodPipelineService {
             String revenueTrendJson = jsonBuilder.toString();
 
             // Create DecisionSession with revenue trend snapshot
-            decisionRepository.createSession(seriesId, rankingRecordId, suggestion, revenueTrendJson);
+            Long actorId = (user != null) ? user.getId() : null;
+            decisionRepository.createSession(seriesId, rankingRecordId, suggestion, revenueTrendJson, actorId);
         }
     }
 

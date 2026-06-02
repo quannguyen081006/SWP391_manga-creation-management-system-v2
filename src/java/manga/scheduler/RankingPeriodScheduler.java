@@ -29,9 +29,6 @@ public class RankingPeriodScheduler {
     private ClosePeriodPipelineService closePeriodPipelineService;
 
     @Autowired
-    private RankingService rankingService;
-
-    @Autowired
     private NotificationService notificationService;
 
     /**
@@ -82,14 +79,9 @@ public class RankingPeriodScheduler {
             String periodName = (String) period.get("name");
 
             try {
-                // Close the period
-                rankingRepository.closePeriod(periodId);
-
-                // Trigger calculation pipeline (reuse existing logic)
-                // Note: This requires an AuthenticatedUser, but scheduler runs as system
-                // We'll need to handle this - either create a system user or bypass auth
-                // For now, we'll use a placeholder approach
-                rankingService.closeRankingPeriod(periodId, null);
+                // BR-RNK-10: Trigger calculation pipeline using system context (no user required)
+                // Pipeline handles OPEN -> CLOSED -> CALCULATED transition
+                closePeriodPipelineService.executePipelineAsSystem(periodId);
 
                 // Notify Editorial Board that period has closed and calculation started
                 notifyEditorialBoardPeriodClosed(periodId, periodName);

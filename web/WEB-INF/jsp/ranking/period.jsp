@@ -296,15 +296,24 @@
                 
                 <c:if test="${p.status == 'OPEN'}">
                     <c:if test="${sessionScope.AUTH_USER.hasRole('EDITORIAL_BOARD')}">
-                        <form method="post" action="${pageContext.request.contextPath}/main/ranking/periods/${p.id}/upload" enctype="multipart/form-data" style="display:inline-block;">
-                            <div class="upload-zone">
-                                <label class="upload-label">
-                                    📤 Upload CSV
-                                    <input type="file" name="csvFile" accept=".csv" required />
-                                </label>
-                            </div>
-                            <button class="btn small" type="submit" style="margin-left: 10px;">Submit</button>
-                        </form>
+                        <c:choose>
+                            <c:when test="${submittedRankingPeriodIds.contains(p.id)}">
+                                <span style="color: #27ae60; font-weight: 600; padding: 8px 16px; background: rgba(39, 174, 96, 0.1); border-radius: 4px;">
+                                    ✓ Vote entry submitted
+                                </span>
+                            </c:when>
+                            <c:otherwise>
+                                <form method="post" action="${pageContext.request.contextPath}/main/ranking/periods/${p.id}/upload" enctype="multipart/form-data" style="display:inline-block;">
+                                    <div class="upload-zone">
+                                        <label class="upload-label">
+                                            📤 Upload CSV
+                                            <input type="file" name="csvFile" accept=".csv" required />
+                                        </label>
+                                    </div>
+                                    <button class="btn small" type="submit" style="margin-left: 10px;">Submit</button>
+                                </form>
+                            </c:otherwise>
+                        </c:choose>
                     </c:if>
                     <c:if test="${sessionScope.AUTH_USER.hasRole('ADMIN')}">
                         <form method="post" action="${pageContext.request.contextPath}/main/ranking/periods/${p.id}/close" style="display:inline-block;">

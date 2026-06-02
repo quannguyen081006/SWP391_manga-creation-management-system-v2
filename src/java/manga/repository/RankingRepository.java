@@ -231,9 +231,22 @@ public class RankingRepository {
         }
     }
 
-    public void replaceCsvEntries(long periodId, long adminUserId, List<RankingCsvRow> rows) {
+    public boolean hasSubmittedEntries(long periodId, long boardMemberId) {
+        String sql = "SELECT COUNT(1) FROM VoteEntry WHERE periodId = ? AND boardMemberId = ?";
+        try (Connection conn = dataSource.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, periodId);
+            ps.setLong(2, boardMemberId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getInt(1) > 0;
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot check submitted entries", ex);
+        }
+    }
+
+    public void replaceCsvEntries(long periodId, long boardMemberId, List<RankingCsvRow> rows) {
         String statusSql = "SELECT status FROM RankingPeriod WHERE id = ?";
-        String deleteSql = "DELETE FROM VoteEntry WHERE periodId = ? AND boardMemberId = ?";
+        String checkExistingSql = "SELECT COUNT(1) FROM VoteEntry WHERE periodId = ? AND boardMemberId = ?";
         try ( Connection conn = dataSource.getConnection()) {
             boolean hasRevenue = hasVoteEntryRevenueColumn(conn);
             String insertSql = hasRevenue
@@ -255,17 +268,23 @@ public class RankingRepository {
                     }
                 }
 
-                try ( PreparedStatement ps = conn.prepareStatement(deleteSql)) {
+                // BR-RNK-06: Reject if board member already has entries for this period
+                try ( PreparedStatement ps = conn.prepareStatement(checkExistingSql)) {
                     ps.setLong(1, periodId);
-                    ps.setLong(2, adminUserId);
-                    ps.executeUpdate();
+                    ps.setLong(2, boardMemberId);
+                    try ( ResultSet rs = ps.executeQuery()) {
+                        rs.next();
+                        if (rs.getInt(1) > 0) {
+                            throw new IllegalArgumentException("Board member has already submitted entries for this period. Duplicate submission not allowed (BR-RNK-06)");
+                        }
+                    }
                 }
 
                 try ( PreparedStatement ps = conn.prepareStatement(insertSql)) {
                     for (RankingCsvRow row : rows) {
                         ps.setLong(1, periodId);
                         ps.setLong(2, row.getSeriesId());
-                        ps.setLong(3, adminUserId);
+                        ps.setLong(3, boardMemberId);
                         ps.setInt(4, row.getVoteCount());
                         ps.setInt(5, row.getReaderCount());
                         if (hasRevenue) {
@@ -343,10 +362,12 @@ public class RankingRepository {
         String insertRankingSql
                 = ";WITH agg AS ("
                 + " SELECT ve.seriesId,"
+                + "   SUM(CAST(ve.voteCount AS BIGINT)) AS totalLikes,"
+                + "   SUM(CAST(ve.readerCount AS BIGINT)) AS totalReads,"
                 + "   CAST(("
                 + "     SUM(CAST(ve.voteCount AS DECIMAL(18,6)))"
                 + "     / NULLIF(SUM(CAST(ve.readerCount AS DECIMAL(18,6))), 0)"
-                + "   ) * 100 AS DECIMAL(6,2)) AS rankScore"
+                + "   ) * 100) AS DECIMAL(6,2) rankScore"
                 + " FROM VoteEntry ve"
                 + " WHERE ve.periodId = ?"
                 + "   AND ve.voteCount >= 0"
@@ -355,11 +376,17 @@ public class RankingRepository {
                 + " GROUP BY ve.seriesId"
                 + "), ranked AS ("
                 + " SELECT"
-                + "   seriesId,"
-                + "   rankScore,"
-                + "   ROW_NUMBER() OVER (ORDER BY rankScore DESC, seriesId ASC) AS rankPosition,"
+                + "   a.seriesId,"
+                + "   a.totalLikes,"
+                + "   a.totalReads,"
+                + "   a.rankScore,"
+                + "   s.publicationDate,"
+                + "   ROW_NUMBER() OVER (ORDER BY a.rankScore DESC, a.totalLikes DESC,"
+                + "     CASE WHEN s.publicationDate IS NULL THEN 1 ELSE 0 END ASC,"
+                + "     s.publicationDate ASC, a.seriesId ASC) AS rankPosition,"
                 + "   COUNT(*) OVER () AS totalRows"
-                + " FROM agg"
+                + " FROM agg a"
+                + " JOIN Series s ON s.id = a.seriesId"
                 + ")"
                 + " INSERT INTO RankingRecord ("
                 + "   periodId,"
@@ -367,6 +394,8 @@ public class RankingRepository {
                 + "   rankScore,"
                 + "   rankPosition,"
                 + "   isBottomTwenty,"
+                + "   totalLikes,"
+                + "   totalReads,"
                 + "   calculatedAt"
                 + " )"
                 + " SELECT"
@@ -379,6 +408,8 @@ public class RankingRepository {
                 + "       THEN 1"
                 + "     ELSE 0"
                 + "   END,"
+                + "   r.totalLikes,"
+                + "   r.totalReads,"
                 + "   GETDATE()"
                 + " FROM ranked r";
 

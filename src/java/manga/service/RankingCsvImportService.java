@@ -34,6 +34,20 @@ public class RankingCsvImportService {
             throw new BusinessRuleException("CSV upload is only allowed for OPEN ranking periods");
         }
 
+        // BR-RNK-01: Validate current date is within period date range
+        java.sql.Date startDate = (java.sql.Date) period.get("startDate");
+        java.sql.Date endDate = (java.sql.Date) period.get("endDate");
+        java.sql.Date currentDate = new java.sql.Date(System.currentTimeMillis());
+        
+        if (currentDate.before(startDate) || currentDate.after(endDate)) {
+            throw new BusinessRuleException("CSV upload only allowed during active period dates (BR-RNK-01)");
+        }
+
+        // BR-RNK-06: Reject if board member already submitted entries for this period
+        if (rankingRepository.hasSubmittedEntries(periodId, user.getId())) {
+            throw new BusinessRuleException("You have already submitted vote entries for this period. Duplicate submission is not allowed (BR-RNK-06)");
+        }
+
         List<RankingCsvRow> rows = parseAndValidate(file);
         rankingRepository.replaceCsvEntries(periodId, user.getId(), rows);
         return rows.size();

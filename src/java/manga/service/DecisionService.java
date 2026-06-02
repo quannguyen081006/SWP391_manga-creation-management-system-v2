@@ -80,7 +80,7 @@ public class DecisionService {
         // Note: systemSuggestion is null here since this is manual session creation
         // The pipeline auto-generates suggestions for bottom 20% series
         // revenueTrendSnapshot is null for manual sessions
-        long sessionId = decisionRepository.createSession(request.getSeriesId(), request.getRankingRecordId(), null, null);
+        long sessionId = decisionRepository.createSession(request.getSeriesId(), request.getRankingRecordId(), null, null, user.getId());
 
         return sessionId;
     }
@@ -112,33 +112,5 @@ public class DecisionService {
             request.getJustification() == null ? null : request.getJustification().trim());
     }
 
-    public void finalizeDecision(long sessionId, AuthenticatedUser user) {
-        // ADMIN only
-        if (!user.hasRole("ADMIN")) {
-            throw new BusinessRuleException("Only ADMIN can finalize decision");
-        }
-
-        // Validate session exists and is OPEN
-        Map<String, Object> session = decisionRepository.getSessionDetail(sessionId);
-        String status = (String) session.get("status");
-        if (!DecisionSessionStatus.OPEN.name().equals(status)) {
-            throw new BusinessRuleException("Only OPEN session can be finalized");
-        }
-
-        // Validate quorum >= 3 (BR-62)
-        Object votesObj = session.get("votes");
-        int totalVotes = 0;
-        if (votesObj instanceof List) {
-            List<?> votes = (List<?>) votesObj;
-            totalVotes = votes.size();
-        }
-        if (totalVotes < 3) {
-            throw new BusinessRuleException("Cannot finalize without quorum (minimum 3 valid votes) (BR-62)");
-        }
-
-        // Finalize (repository handles aggregation, majority result, series cancellation)
-        decisionRepository.finalizeSession(sessionId);
-
-        // Notification is handled within repository's transaction
-    }
+    // finalizeDecision removed - quorum-based finalization in resolveIfQuorum handles this automatically
 }

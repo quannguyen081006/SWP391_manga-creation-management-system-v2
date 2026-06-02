@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
+import manga.repository.AuditLogRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
@@ -18,6 +19,9 @@ public class DecisionRepository {
 
     @Autowired
     private DataSource dataSource;
+
+    @Autowired
+    private AuditLogRepository auditLogRepository;
 
     // ------------------------------------------------------------------ //
     //  listSessions — không thay đổi                                      //
@@ -121,6 +125,7 @@ public class DecisionRepository {
         String sessionSql  = "SELECT status, seriesId FROM DecisionSession WHERE id = ?";
         String conflictSql = "SELECT tantouEditorId FROM Series WHERE id = ?";
         String dupSql      = "SELECT COUNT(1) FROM DecisionVote WHERE sessionId = ? AND voterId = ?";
+        String voterSql    = "SELECT u.status FROM [User] u JOIN UserRole ur ON ur.userId = u.id JOIN [Role] r ON r.id = ur.roleId WHERE u.id = ? AND r.name = 'EDITORIAL_BOARD'";
         String insertSql   = "INSERT INTO DecisionVote (sessionId, voterId, decision, justification, votedAt)"
                            + " VALUES (?, ?, ?, ?, GETDATE())";
 
@@ -142,6 +147,20 @@ public class DecisionRepository {
                                 "Cannot vote on a " + status + " decision session (BR-64)");
                         }
                         seriesId = rs.getLong("seriesId");
+                    }
+                }
+
+                // Check 2.5: BR-DEC-01 - Verify voter is ACTIVE and has EDITORIAL_BOARD role
+                try (PreparedStatement ps = conn.prepareStatement(voterSql)) {
+                    ps.setLong(1, voterId);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (!rs.next()) {
+                            throw new IllegalArgumentException("Voter not found or does not have EDITORIAL_BOARD role (BR-DEC-01)");
+                        }
+                        String voterStatus = rs.getString("status");
+                        if (!"ACTIVE".equalsIgnoreCase(voterStatus)) {
+                            throw new IllegalArgumentException("Voter is not ACTIVE (BR-DEC-01)");
+                        }
                     }
                 }
 
@@ -181,8 +200,12 @@ public class DecisionRepository {
                     ps.executeUpdate();
                 }
 
+                // BR-DEC-06: Audit log for vote submitted
+                auditLogRepository.insertLog(voterId, "DECISION_VOTE_SUBMITTED", "DECISION_SESSION", sessionId, 
+                    "Voter " + voterId + " submitted decision: " + normalized);
+
                 // Step 6: Kiểm tra quorum và finalize nếu đủ (BR-62)
-                resolveIfQuorum(conn, sessionId, seriesId);
+                resolveIfQuorum(conn, sessionId, seriesId, voterId);
 
                 conn.commit();
 
@@ -205,7 +228,7 @@ public class DecisionRepository {
     //  Nếu CANCEL → update Series.status = CANCELLED (BR-69)             //
     //  Gửi DECISION_RESOLVED notification cho tất cả Board members        //
     // ------------------------------------------------------------------ //
-    private void resolveIfQuorum(Connection conn, long sessionId, long seriesId) throws SQLException {
+    private void resolveIfQuorum(Connection conn, long sessionId, long seriesId, Long triggeringVoterId) throws SQLException {
 
         String countSql =
             "SELECT"
@@ -252,6 +275,10 @@ public class DecisionRepository {
             ps.executeUpdate();
         }
 
+        // BR-DEC-06: Audit log for session resolved
+        auditLogRepository.insertLog(triggeringVoterId, "DECISION_SESSION_RESOLVED", "DECISION_SESSION", sessionId, 
+            "Decision session " + sessionId + " resolved with result: " + result);
+
         // Nếu CANCEL → update Series.status = CANCELLED (BR-69)
         if ("CANCEL".equals(result)) {
             String cancelSeriesSql = "UPDATE Series SET status = 'CANCELLED' WHERE id = ?";
@@ -259,9 +286,13 @@ public class DecisionRepository {
                 ps.setLong(1, seriesId);
                 ps.executeUpdate();
             }
+            // BR-DEC-06: Audit log for series cancelled
+            auditLogRepository.insertLog(triggeringVoterId, "SERIES_CANCELLED", "SERIES", seriesId, 
+                "Series " + seriesId + " cancelled due to decision session " + sessionId);
         }
 
         // Gửi DECISION_RESOLVED notification cho tất cả Board members active (BR-65)
+        // BR-DEC-08: Exclude Tantou Editor from notification
         String notifySql =
             "INSERT INTO Notification (userId, type, title, message, viewUrl, referenceId, referenceType, isRead, createdAt)"
             + " SELECT u.id,"
@@ -276,11 +307,14 @@ public class DecisionRepository {
             + " FROM [User] u"
             + " JOIN UserRole ur ON ur.userId = u.id"
             + " JOIN [Role] ro ON ro.id = ur.roleId"
+            + " JOIN Series s ON s.id = ?"
             + " WHERE u.status = 'ACTIVE'"
-            + "   AND ro.name = 'EDITORIAL_BOARD'";
+            + "   AND ro.name = 'EDITORIAL_BOARD'"
+            + "   AND u.id <> s.tantouEditorId";
         try (PreparedStatement ps = conn.prepareStatement(notifySql)) {
             ps.setLong(1, sessionId);
             ps.setLong(2, sessionId);
+            ps.setLong(3, seriesId);
             ps.executeUpdate();
         }
     }
@@ -288,7 +322,7 @@ public class DecisionRepository {
     // ------------------------------------------------------------------ //
     //  createSession — create new OPEN decision session                    //
     // ------------------------------------------------------------------ //
-    public long createSession(long seriesId, long rankingRecordId, String systemSuggestion, String revenueTrendSnapshot) {
+    public long createSession(long seriesId, long rankingRecordId, String systemSuggestion, String revenueTrendSnapshot, Long actorId) {
         try (Connection conn = dataSource.getConnection()) {
             boolean hasSystemSuggestion = hasDecisionSessionSystemSuggestionColumn(conn);
             boolean hasRevenueTrendSnapshot = hasDecisionSessionRevenueTrendSnapshotColumn(conn);
@@ -332,6 +366,9 @@ public class DecisionRepository {
                     if (rs.next()) {
                         long sessionId = rs.getLong(1);
                         notifyEligibleBoardMembers(conn, sessionId, seriesId);
+                        // BR-DEC-06: Audit log for session opened
+                        auditLogRepository.insertLog(actorId, "DECISION_SESSION_OPENED", "DECISION_SESSION", sessionId, 
+                            "Decision session " + sessionId + " opened for series " + seriesId);
                         conn.commit();
                         return sessionId;
                     }
@@ -371,23 +408,9 @@ public class DecisionRepository {
     }
 
     // ------------------------------------------------------------------ //
-    //  finalizeSession — manually finalize session (for ADMIN)           //
+    //  finalizeSession — REMOVED to prevent closing with null result       //
+    //  Quorum-based finalization in resolveIfQuorum() handles this        //
     // ------------------------------------------------------------------ //
-    public void finalizeSession(long sessionId) {
-        // This method is called by DecisionService.finalizeDecision()
-        // The actual finalization logic is in resolveIfQuorum()
-        // This is a placeholder for manual finalization if needed
-        String sql = "UPDATE DecisionSession SET status = 'CLOSED', closedAt = GETDATE() WHERE id = ? AND status = 'OPEN'";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, sessionId);
-            if (ps.executeUpdate() == 0) {
-                throw new IllegalArgumentException("Only OPEN session can be finalized");
-            }
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot finalize decision session", ex);
-        }
-    }
 
     // ------------------------------------------------------------------ //
     //  mapSession helper — không thay đổi                                 //

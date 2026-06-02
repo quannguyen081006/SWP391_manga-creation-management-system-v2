@@ -56,13 +56,7 @@ public class DecisionApiController {
         return ApiResponse.ok(null, "Decision vote submitted");
     }
 
-    @RequestMapping(value = "/{id}/finalize", method = RequestMethod.POST)
-    public ApiResponse<Object> finalize(@PathVariable("id") long id, HttpSession session) {
-        AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        SessionUserUtil.requireRole(user, "ADMIN", "Only ADMIN can finalize decision");
-        decisionService.finalizeDecision(id, user);
-        return ApiResponse.ok(null, "Decision finalized");
-    }
+    // Finalize endpoint removed - quorum-based finalization in resolveIfQuorum handles this automatically
 }
 
 
