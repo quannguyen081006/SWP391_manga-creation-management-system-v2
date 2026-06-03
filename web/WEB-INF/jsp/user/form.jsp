@@ -67,10 +67,12 @@
             <label>Roles</label>
             <div class="role-choice-grid">
                 <c:forEach items="${availableRoles}" var="r">
-                    <label class="role-choice">
-                        <input type="checkbox" name="roles" value="${r}" ${fn:contains(selectedRolesCsv, r) ? 'checked' : ''} />
-                        <span>${r}</span>
-                    </label>
+                    <c:if test="${r ne 'ADMIN'}">
+                        <label class="role-choice">
+                            <input type="checkbox" name="roles" value="${r}" ${fn:contains(selectedRolesCsv, r) ? 'checked' : ''} />
+                            <span>${r}</span>
+                        </label>
+                    </c:if>
                 </c:forEach>
             </div>
             <c:if test="${adminRoleLocked}">

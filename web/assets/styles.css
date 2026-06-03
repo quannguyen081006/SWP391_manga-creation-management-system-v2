@@ -1317,14 +1317,37 @@ input, textarea, select {
 .notify-item {
     border-bottom: 1px solid #f1f5f9;
     padding: 10px 12px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
 }
 
 .notify-item:last-child {
     border-bottom: none;
 }
 
-.notify-item.is-unread {
-    background: #f8fafc;
+.notify-item-main {
+    min-width: 0;
+    flex: 1;
+}
+
+.notify-item.is-unread,
+.noti-item.unread {
+    background-color: #EBF3FB;
+    border-left: 3px solid #0d6efd;
+    font-weight: 500;
+}
+
+.notify-item.is-read,
+.noti-item.read {
+    background-color: #ffffff;
+    color: #6c757d;
+}
+
+.mark-read-btn {
+    cursor: pointer;
+    min-width: 14px;
+    margin-top: 2px;
 }
 
 .notify-type {
@@ -1338,6 +1361,11 @@ input, textarea, select {
     font-size: 13px;
     color: #111827;
     line-height: 1.35;
+}
+
+.notify-item.read .notify-type,
+.notify-item.read .notify-message {
+    color: #6c757d;
 }
 
 .notify-read-form {
@@ -1839,10 +1867,22 @@ input, textarea, select {
     box-shadow: 0 1px 2px rgba(14, 20, 31, .05);
 }
 
-.notification-row.is-unread {
-    border-color: #c7d2fe;
-    background: #f8fafc;
-    box-shadow: inset 3px 0 0 #8b5cf6;
+.notification-row.is-unread,
+.notification-row.unread {
+    border-color: #bfdbfe;
+    background: #EBF3FB;
+    box-shadow: inset 3px 0 0 #0d6efd;
+    font-weight: 500;
+}
+
+.notification-row.is-read,
+.notification-row.read {
+    color: #6c757d;
+}
+
+.notification-row.read .notification-time,
+.notification-row.read p {
+    color: #6c757d;
 }
 
 .notification-main {

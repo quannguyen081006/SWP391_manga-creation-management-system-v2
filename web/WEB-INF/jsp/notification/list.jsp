@@ -29,7 +29,7 @@
         </c:when>
         <c:otherwise>
             <c:forEach items="${notifications}" var="n">
-                <article class="notification-row ${n.read ? 'is-read' : 'is-unread'}">
+                <article class="notification-row noti-item ${n.read ? 'is-read read' : 'is-unread unread'}">
                     <div class="notification-main">
                         <div class="notification-row-head">
                             <span class="notification-title">${empty n.title ? n.type : n.title}</span>

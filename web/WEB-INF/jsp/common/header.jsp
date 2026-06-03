@@ -151,7 +151,7 @@
         <path d="M9 21a3 3 0 0 0 6 0"></path>
     </svg>
     <c:if test="${headerUnreadNotificationCount gt 0}">
-        <span class="notify-count">${headerUnreadNotificationCount}</span>
+        <span class="notify-count noti-badge">${headerUnreadNotificationCount}</span>
     </c:if>
 </summary>
                     <div class="notify-menu">
@@ -165,17 +165,20 @@
                             </c:when>
                             <c:otherwise>
                                 <c:forEach items="${headerNotifications}" var="n">
-                                    <div class="notify-item ${n.read ? 'is-read' : 'is-unread'}">
-                                        <div class="notify-type">${empty n.title ? n.type : n.title}</div>
-                                        <div class="notify-message">${n.message}</div>
-                                        <c:if test="${not empty n.viewUrl}">
-                                            <a class="btn small notify-view" href="${ctx}${n.viewUrl}">View</a>
-                                        </c:if>
-                                        <c:if test="${!n.read}">
-                                            <form method="post" action="${ctx}/main/notifications/${n.id}/read" class="notify-read-form">
-                                                <button type="submit">Mark read</button>
-                                            </form>
-                                        </c:if>
+                                    <div class="notify-item noti-item ${n.read ? 'is-read read' : 'is-unread unread'}">
+                                        <div class="notify-item-main">
+                                            <div class="notify-type">${empty n.title ? n.type : n.title}</div>
+                                            <div class="notify-message">${n.message}</div>
+                                            <c:if test="${not empty n.viewUrl}">
+                                                <a class="btn small notify-view" href="${ctx}${n.viewUrl}">View</a>
+                                            </c:if>
+                                            <c:if test="${!n.read}">
+                                                <button type="button"
+                                                        class="btn small notify-view mark-read-btn notify-read-btn"
+                                                        style="color:#dc3545; border-color:#dc3545;"
+                                                        data-id="${n.id}" title="Mark as read">Mark read</button>
+                                            </c:if>
+                                        </div>
                                     </div>
                                 </c:forEach>
                             </c:otherwise>
@@ -246,6 +249,45 @@
                                             .replace(/"/g, '&quot;');
                                 }
                             }());
+                        </script>
+                        <script>
+                            document.addEventListener('click', function (e) {
+                                var btn = e.target.closest('.mark-read-btn');
+                                if (!btn) {
+                                    return;
+                                }
+
+                                e.preventDefault();
+                                e.stopPropagation();
+
+                                var id = btn.dataset.id;
+                                var ctx = window.MANGA_CTX || '';
+                                fetch(ctx + '/api/v1/notifications/' + id + '/read', {
+                                    method: 'PATCH',
+                                    credentials: 'same-origin'
+                                }).then(function (res) {
+                                    if (!res.ok) {
+                                        return;
+                                    }
+
+                                    var item = btn.closest('.noti-item');
+                                    if (item) {
+                                        item.classList.remove('unread', 'is-unread');
+                                        item.classList.add('read', 'is-read', 'opacity-50');
+                                    }
+                                    btn.remove();
+
+                                    var badge = document.querySelector('.noti-badge');
+                                    if (badge) {
+                                        var count = parseInt(badge.textContent, 10) - 1;
+                                        if (count <= 0) {
+                                            badge.style.display = 'none';
+                                        } else {
+                                            badge.textContent = count;
+                                        }
+                                    }
+                                });
+                            });
                         </script>
                         <a class="logout-link" href="${ctx}/main/logout">Logout</a>
                     </div>

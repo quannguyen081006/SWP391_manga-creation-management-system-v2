@@ -31,7 +31,7 @@ public class NotificationViewAdvice {
         if (user == null) {
             return java.util.Collections.emptyList();
         }
-        return notificationRepository.listByUser(user.getId(), 5);
+        return notificationRepository.listByUser(user.getId());
     }
 
     private AuthenticatedUser getUser(HttpSession session) {

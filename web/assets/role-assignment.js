@@ -1,37 +1,56 @@
 (function () {
     'use strict';
 
-    var SINGLE_ONLY = { MANGAKA: true, ASSISTANT: true, ADMIN: true };
-    var DUAL_PAIR = { TANTOU_EDITOR: true, EDITORIAL_BOARD: true };
+    var SINGLE_ONLY = { MANGAKA: true, ASSISTANT: true };
+    var EDITOR_PAIR = { TANTOU_EDITOR: true, EDITORIAL_BOARD: true };
 
-    function selectedRoles(root) {
-        var boxes = root.querySelectorAll('input[name="roles"]:checked');
-        var roles = [];
-        for (var i = 0; i < boxes.length; i++) {
-            roles.push(boxes[i].value);
-        }
-        return roles;
+    function findRole(root, role) {
+        return root.querySelector('input[name="roles"][value="' + role + '"]');
     }
 
-    function applyRoleRules(root) {
-        var roles = selectedRoles(root);
-        var hasSingleOnly = roles.some(function (role) { return SINGLE_ONLY[role]; });
+    function enforceRoleRules(root, changed) {
+        var isCreateUserForm = root.classList.contains('role-choice-grid');
         var boxes = root.querySelectorAll('input[name="roles"]');
         for (var i = 0; i < boxes.length; i++) {
-            var box = boxes[i];
-            var role = box.value;
-            var checked = box.checked;
-            var disable = false;
-            if (hasSingleOnly) {
-                disable = !checked;
-            } else if (!checked && SINGLE_ONLY[role] && roles.length > 0) {
-                disable = true;
-            } else if (roles.length >= 2 && !checked) {
-                disable = true;
-            } else if (roles.length === 1 && !DUAL_PAIR[role] && !checked) {
-                disable = true;
+            if (isCreateUserForm && boxes[i].value === 'ADMIN') {
+                boxes[i].checked = false;
+                boxes[i].disabled = true;
+            } else {
+                boxes[i].disabled = false;
             }
-            box.disabled = disable;
+        }
+
+        if (!changed) {
+            for (var k = 0; k < boxes.length; k++) {
+                if (boxes[k].checked && SINGLE_ONLY[boxes[k].value]) {
+                    enforceRoleRules(root, boxes[k]);
+                    return;
+                }
+            }
+        }
+
+        if (!changed || !changed.checked) {
+            return;
+        }
+
+        if (SINGLE_ONLY[changed.value]) {
+            for (var j = 0; j < boxes.length; j++) {
+                if (boxes[j] !== changed) {
+                    boxes[j].checked = false;
+                }
+            }
+            return;
+        }
+
+        if (EDITOR_PAIR[changed.value]) {
+            var mangaka = findRole(root, 'MANGAKA');
+            var assistant = findRole(root, 'ASSISTANT');
+            if (mangaka) {
+                mangaka.checked = false;
+            }
+            if (assistant) {
+                assistant.checked = false;
+            }
         }
     }
 
@@ -39,10 +58,12 @@
         var forms = document.querySelectorAll('.role-choice-grid, .role-check-grid');
         for (var i = 0; i < forms.length; i++) {
             (function (root) {
-                root.addEventListener('change', function () {
-                    applyRoleRules(root);
+                root.addEventListener('change', function (event) {
+                    if (event.target && event.target.matches('input[name="roles"]')) {
+                        enforceRoleRules(root, event.target);
+                    }
                 });
-                applyRoleRules(root);
+                enforceRoleRules(root, null);
             })(forms[i]);
         }
     }
