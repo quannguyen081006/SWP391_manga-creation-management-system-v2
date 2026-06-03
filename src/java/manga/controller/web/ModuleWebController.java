@@ -81,6 +81,9 @@ public class ModuleWebController {
     @Autowired
     private RankingService rankingService;
 
+    @Autowired
+    private manga.service.ReviewTaskService reviewTaskService;
+
     @RequestMapping(value = "/proposals/{id}/edit", method = RequestMethod.GET)
     public String proposalEditPage(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
@@ -883,6 +886,7 @@ public class ModuleWebController {
         model.addAttribute("createdAtFormatted", createdAtFormatted);
         model.addAttribute("submittedAtFormatted", submittedAtFormatted);
         model.addAttribute("currentUser", user);
+        model.addAttribute("isMangakaRole", user.hasRole("MANGAKA"));
         model.addAttribute("isMangakaOwner", isMangakaOwner);
         model.addAttribute("isAssignedTantou", isAssignedTantou);
         model.addAttribute("isAdmin", isAdmin);
@@ -1126,12 +1130,69 @@ public class ModuleWebController {
             if (version.getSubmittedAt() != null) {
                 submittedAtMap.put(version.getId(), version.getSubmittedAt().format(formatter));
             }
+            // Attach review task SLA data for inbox UI
+            try {
+                manga.model.ReviewTask task = reviewTaskService.getReviewTask(version.getId());
+                if (task != null) {
+                    java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                    long remaining = java.time.Duration.between(now, task.getDueAt()).getSeconds();
+                    boolean overdue = remaining <= 0;
+                    String urgency;
+                    long s24 = 24 * 3600;
+                    long s12 = 12 * 3600;
+                    if (remaining <= 0) { urgency = "OVERDUE"; }
+                    else if (remaining <= s12) { urgency = "RED"; }
+                    else if (remaining <= s24) { urgency = "YELLOW"; }
+                    else { urgency = "GREEN"; }
+
+                    // put into maps for JSP
+                    // Format timestamps for display
+                    java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+                    // reuse submittedAtMap to show dueAt and assignedAt via separate maps
+                    // Using model attribute names: remainingSecondsMap, urgencyMap, dueAtMap, assignedAtMap
+                    // Lazy-create maps if absent
+                    // We'll collect maps outside loop by ensuring they're initialized earlier (below)
+                }
+            } catch (Exception ex) {
+                // ignore per-display; backend remains functional
+            }
         }
-        
+        // Build SLA maps
+        java.util.Map<Long,Long> remainingSecondsMap = new java.util.HashMap<>();
+        java.util.Map<Long,String> urgencyMap = new java.util.HashMap<>();
+        java.util.Map<Long,String> dueAtMap = new java.util.HashMap<>();
+        java.util.Map<Long,String> assignedAtMap = new java.util.HashMap<>();
+
+        for (manga.model.ManuscriptVersion version : underReviewVersions) {
+            manga.model.ReviewTask task = reviewTaskService.getReviewTask(version.getId());
+            if (task != null) {
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                long remaining = java.time.Duration.between(now, task.getDueAt()).getSeconds();
+                boolean overdue = remaining <= 0;
+                String urgency;
+                long s24 = 24 * 3600;
+                long s12 = 12 * 3600;
+                if (remaining <= 0) { urgency = "OVERDUE"; }
+                else if (remaining <= s12) { urgency = "RED"; }
+                else if (remaining <= s24) { urgency = "YELLOW"; }
+                else { urgency = "GREEN"; }
+
+                remainingSecondsMap.put(version.getId(), remaining);
+                urgencyMap.put(version.getId(), urgency);
+                java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+                dueAtMap.put(version.getId(), task.getDueAt() != null ? task.getDueAt().format(fmt) : "");
+                assignedAtMap.put(version.getId(), task.getAssignedAt() != null ? task.getAssignedAt().format(fmt) : "");
+            }
+        }
+
         model.addAttribute("underReviewVersions", underReviewVersions);
         model.addAttribute("chapterMap", chapterMap);
         model.addAttribute("mangakaNames", mangakaNames);
         model.addAttribute("submittedAtMap", submittedAtMap);
+        model.addAttribute("remainingSecondsMap", remainingSecondsMap);
+        model.addAttribute("urgencyMap", urgencyMap);
+        model.addAttribute("dueAtMap", dueAtMap);
+        model.addAttribute("assignedAtMap", assignedAtMap);
         model.addAttribute("currentUser", user);
         model.addAttribute("isAdmin", isAdmin);
         

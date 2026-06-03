@@ -7,7 +7,9 @@
 <head>
     <title>Manuscript Workspace - Chapter ${chapter.chapterNumber}</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css">
-    <script src="${pageContext.request.contextPath}/assets/manuscript-workspace.js"></script>
+    <c:if test="${not isMangakaRole}">
+        <script src="${pageContext.request.contextPath}/assets/manuscript-workspace.js"></script>
+    </c:if>
     <style>
         /* Professional Light Editorial Workspace Styles */
         

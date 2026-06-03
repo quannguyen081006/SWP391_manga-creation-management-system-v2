@@ -141,10 +141,16 @@ public class ReviewTaskService {
     public void checkWarningThreshold() {
         List<ReviewTask> warningTasks = reviewTaskRepository.findWarningThresholdTasks();
         for (ReviewTask task : warningTasks) {
+            // Avoid duplicate reminders: only notify once per (user, type, reference)
+            String notifType = "REVIEW_WARNING";
+            boolean already = notificationService.existsNotification(task.getReviewerId(), notifType, task.getVersionId());
+            if (already) {
+                continue;
+            }
             // Send warning notification to reviewer
             notificationService.notifyUser(
                 task.getReviewerId(),
-                "REVIEW_WARNING",
+                notifType,
                 "Manuscript review due in 12 hours. Please complete soon.",
                 task.getVersionId(),
                 "MANUSCRIPT"

@@ -20,6 +20,13 @@ public class NotificationService {
         notificationRepository.create(userId, type.trim().toUpperCase(), message.trim(), referenceId, referenceType);
     }
 
+    /**
+     * Check whether a notification of the same type/reference already exists for the user.
+     */
+    public boolean existsNotification(long userId, String type, long referenceId) {
+        return notificationRepository.exists(userId, type, referenceId);
+    }
+
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
     }

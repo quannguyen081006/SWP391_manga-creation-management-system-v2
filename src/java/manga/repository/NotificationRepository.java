@@ -118,6 +118,32 @@ public class NotificationRepository {
     }
 
     /**
+     * Check if a notification of a given type and reference already exists for a user.
+     * Used to prevent duplicate reminders.
+     */
+    public boolean exists(long userId, String type, long referenceId) {
+        String sql = "SELECT COUNT(*) FROM Notification WHERE userId = ? AND type = ? AND referenceId = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, userId);
+            ps.setString(2, type);
+            if (referenceId <= 0) {
+                ps.setNull(3, java.sql.Types.BIGINT);
+            } else {
+                ps.setLong(3, referenceId);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0;
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot check notification existence", ex);
+        }
+        return false;
+    }
+
+    /**
      * Lay viewUrl cho notification cua user, co sua fallback cho URL cu.
      */
     public String viewUrlByUser(long userId, long id) {

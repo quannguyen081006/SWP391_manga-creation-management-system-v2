@@ -164,7 +164,8 @@ public class ReviewTaskRepository {
      * Find tasks in warning threshold (36h before due).
      */
     public List<ReviewTask> findWarningThresholdTasks() {
-        String sql = "SELECT id, versionId, reviewerId, assignedAt, dueAt, reviewStatus FROM ReviewTask WHERE dueAt BETWEEN DATEADD(HOUR, 36, GETDATE()) AND DATEADD(HOUR, 48, GETDATE()) AND reviewStatus = 'ASSIGNED'";
+        // Find tasks that are due within the next 12 hours (i.e. assigned ~36 hours ago)
+        String sql = "SELECT id, versionId, reviewerId, assignedAt, dueAt, reviewStatus FROM ReviewTask WHERE dueAt BETWEEN GETDATE() AND DATEADD(HOUR, 12, GETDATE()) AND reviewStatus = 'ASSIGNED'";
         List<ReviewTask> results = new ArrayList<>();
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {

@@ -10,6 +10,9 @@ import manga.model.ManuscriptPage;
 import manga.model.ManuscriptVersion;
 import manga.service.ManuscriptVersionService;
 import manga.service.ReviewTaskService;
+import manga.dto.ReviewTaskDTO;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -173,12 +176,42 @@ public class ManuscriptVersionApiController {
      * GET /api/v1/manuscript-versions/{id}/review-task
      */
     @GetMapping("/{id}/review-task")
-    public ApiResponse<manga.model.ReviewTask> getReviewTask(
+    public ApiResponse<ReviewTaskDTO> getReviewTask(
             @PathVariable Long id,
             @ModelAttribute AuthenticatedUser user) {
         
         manga.model.ReviewTask task = reviewTaskService.getReviewTask(id);
-        return ApiResponse.success(task);
+        if (task == null) {
+            return ApiResponse.success(null);
+        }
+
+        ReviewTaskDTO dto = new ReviewTaskDTO();
+        dto.setId(task.getId());
+        dto.setVersionId(task.getVersionId());
+        dto.setReviewerId(task.getReviewerId());
+        dto.setAssignedAt(task.getAssignedAt());
+        dto.setDueAt(task.getDueAt());
+        dto.setReviewStatus(task.getReviewStatus());
+
+        LocalDateTime now = LocalDateTime.now();
+        long remaining = Duration.between(now, task.getDueAt()).getSeconds();
+        dto.setRemainingSeconds(remaining);
+        dto.setOverdue(remaining <= 0);
+
+        // Urgency: GREEN (>24h), YELLOW (12h-24h], RED (0-12h], OVERDUE (<=0)
+        long s24 = 24 * 3600;
+        long s12 = 12 * 3600;
+        if (remaining <= 0) {
+            dto.setUrgencyLevel("OVERDUE");
+        } else if (remaining <= s12) {
+            dto.setUrgencyLevel("RED");
+        } else if (remaining <= s24) {
+            dto.setUrgencyLevel("YELLOW");
+        } else {
+            dto.setUrgencyLevel("GREEN");
+        }
+
+        return ApiResponse.success(dto);
     }
 
     /**

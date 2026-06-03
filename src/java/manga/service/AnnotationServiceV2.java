@@ -135,6 +135,11 @@ public class AnnotationServiceV2 {
             throw new BusinessRuleException("Annotation content is required");
         }
 
+        // Role-based authorization: Mangaka are not allowed to create annotations
+        if (user != null && user.hasRole("MANGAKA")) {
+            throw new BusinessRuleException("ANNOTATION_UNAUTHORIZED_MANGAKA: Mangaka users cannot create annotations");
+        }
+
         // Get pageNumber from manuscriptPageId if needed for backward compatibility
         Integer pageNumber = null;
         if (manuscriptPageId != null) {
@@ -154,7 +159,7 @@ public class AnnotationServiceV2 {
 
         // Insert annotation with manuscriptVersionId and manuscriptPageId
         String sql = "INSERT INTO Annotation (manuscriptVersionId, manuscriptPageId, editorId, pageNumber, category, status, content, xPercent, yPercent, widthPercent, heightPercent, severity, parentAnnotationId, createdAt) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE())";
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ,? ,GETDATE())";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
             ps.setLong(1, manuscriptVersionId);
@@ -226,6 +231,11 @@ public class AnnotationServiceV2 {
             throw new RuntimeException("Cannot check manuscript status", ex);
         }
 
+        // Role-based authorization: Mangaka cannot resolve annotations
+        if (user != null && user.hasRole("MANGAKA")) {
+            throw new BusinessRuleException("ANNOTATION_UNAUTHORIZED_MANGAKA: Mangaka users cannot modify annotations");
+        }
+
         String sql = "UPDATE Annotation SET status = 'RESOLVED', resolvedAt = GETDATE(), resolvedBy = ? WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -244,6 +254,11 @@ public class AnnotationServiceV2 {
      * Dismiss annotation (mark as not applicable).
      */
     public void dismissAnnotation(Long annotationId, Long dismissedBy, AuthenticatedUser user) {
+        // Role-based authorization: Mangaka cannot dismiss annotations
+        if (user != null && user.hasRole("MANGAKA")) {
+            throw new BusinessRuleException("ANNOTATION_UNAUTHORIZED_MANGAKA: Mangaka users cannot modify annotations");
+        }
+
         String sql = "UPDATE Annotation SET status = 'DISMISSED', resolvedAt = GETDATE(), resolvedBy = ? WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -303,6 +318,11 @@ public class AnnotationServiceV2 {
         }
 
         // Create reply annotation with parentAnnotationId set
+        // Role-based authorization: Mangaka cannot add replies/annotations
+        if (user != null && user.hasRole("MANGAKA")) {
+            throw new BusinessRuleException("ANNOTATION_UNAUTHORIZED_MANGAKA: Mangaka users cannot create annotation replies");
+        }
+
         return addAnnotation(
             manuscriptVersionId,
             editorId,
