@@ -1,5 +1,6 @@
 package manga.controller.api;
 
+import java.util.Enumeration;
 import manga.common.ApiResponse;
 import manga.dto.CreateAnnotationRequestDTO;
 import manga.model.AnnotationSummary;
@@ -9,10 +10,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import javax.servlet.http.HttpSession;
 
 /**
  * API Controller for Annotation operations.
- * 
+ *
  * Provides REST endpoints for coordinate-based annotations.
  */
 @RestController
@@ -23,53 +25,79 @@ public class AnnotationApiController {
     private AnnotationServiceV2 annotationService;
 
     /**
-     * Add annotation with coordinates.
-     * POST /api/v1/annotations
+     * Add annotation with coordinates. POST /api/v1/annotations
      */
-    @PostMapping
+    @PostMapping(
+            consumes = "application/json",
+            produces = "application/json"
+    )
     public ApiResponse<Long> addAnnotation(
             @RequestBody CreateAnnotationRequestDTO request,
-            @ModelAttribute AuthenticatedUser user) {
-        
+            HttpSession session) {
+        AuthenticatedUser user
+                = (AuthenticatedUser) session.getAttribute("AUTH_USER");
+        if (user == null) {
+            return ApiResponse.error("Unauthorized");
+        }
+
+        System.out.println("=== CONTROLLER DEBUG ===");
+        System.out.println("request = " + request);
+
+        System.out.println("x = " + request.getxCoordinatePercent());
+        System.out.println("y = " + request.getyCoordinatePercent());
+        System.out.println("w = " + request.getWidthPercent());
+        System.out.println("h = " + request.getHeightPercent());
+
         long annotationId = annotationService.addAnnotation(
                 request.getManuscriptVersionId(),
                 user.getId(),
                 request.getManuscriptPageId(),
                 manga.enums.AnnotationCategory.valueOf(request.getCategory()),
-                request.getSeverity() != null ? manga.enums.AnnotationSeverity.valueOf(request.getSeverity()) : null,
+                request.getSeverity() != null
+                ? manga.enums.AnnotationSeverity.valueOf(request.getSeverity())
+                : null,
                 request.getContent(),
-                request.getXPercent(),
-                request.getYPercent(),
+                request.getxCoordinatePercent(),
+                request.getyCoordinatePercent(),
                 request.getWidthPercent(),
                 request.getHeightPercent(),
                 request.getParentAnnotationId(),
                 user
         );
+
         return ApiResponse.success(annotationId);
+
     }
 
     /**
-     * List annotations for manuscript version.
-     * GET /api/v1/annotations?manuscriptVersionId={id}
+     * List annotations for manuscript version. GET
+     * /api/v1/annotations?manuscriptVersionId={id}
      */
     @GetMapping
     public ApiResponse<List<AnnotationSummary>> listAnnotations(
             @RequestParam Long manuscriptVersionId,
-            @ModelAttribute AuthenticatedUser user) {
-        
+            HttpSession session) {
+        AuthenticatedUser user
+                = (AuthenticatedUser) session.getAttribute("AUTH_USER");
+        if (user == null) {
+            return ApiResponse.error("Unauthorized");
+        }
         List<AnnotationSummary> annotations = annotationService.listAnnotations(manuscriptVersionId);
         return ApiResponse.success(annotations);
     }
 
     /**
-     * Get annotation by ID.
-     * GET /api/v1/annotations/{id}
+     * Get annotation by ID. GET /api/v1/annotations/{id}
      */
     @GetMapping("/{id}")
     public ApiResponse<AnnotationSummary> getAnnotation(
             @PathVariable Long id,
-            @ModelAttribute AuthenticatedUser user) {
-        
+            HttpSession session) {
+        AuthenticatedUser user
+                = (AuthenticatedUser) session.getAttribute("AUTH_USER");
+        if (user == null) {
+            return ApiResponse.error("Unauthorized");
+        }
         AnnotationSummary annotation = annotationService.getAnnotation(id);
         if (annotation == null) {
             return ApiResponse.error("Annotation not found");
@@ -78,55 +106,114 @@ public class AnnotationApiController {
     }
 
     /**
-     * Resolve annotation.
-     * POST /api/v1/annotations/{id}/resolve
+     * Resolve annotation. POST /api/v1/annotations/{id}/resolve
      */
     @PostMapping("/{id}/resolve")
     public ApiResponse<Void> resolveAnnotation(
             @PathVariable Long id,
-            @ModelAttribute AuthenticatedUser user) {
-        
+            HttpSession session) {
+        AuthenticatedUser user
+                = (AuthenticatedUser) session.getAttribute("AUTH_USER");
+        if (user == null) {
+            return ApiResponse.error("Unauthorized");
+        }
         annotationService.resolveAnnotation(id, user.getId(), user);
         return ApiResponse.success(null);
     }
 
     /**
-     * Dismiss annotation.
-     * POST /api/v1/annotations/{id}/dismiss
+     * Dismiss annotation. POST /api/v1/annotations/{id}/dismiss
      */
     @PostMapping("/{id}/dismiss")
     public ApiResponse<Void> dismissAnnotation(
             @PathVariable Long id,
-            @ModelAttribute AuthenticatedUser user) {
-        
+            HttpSession session) {
+        AuthenticatedUser user
+                = (AuthenticatedUser) session.getAttribute("AUTH_USER");
+        if (user == null) {
+            return ApiResponse.error("Unauthorized");
+        }
         annotationService.dismissAnnotation(id, user.getId(), user);
         return ApiResponse.success(null);
     }
 
     /**
-     * Add reply to annotation.
-     * POST /api/v1/annotations/{id}/replies
+     * Add reply to annotation. POST /api/v1/annotations/{id}/replies
      */
     @PostMapping("/{id}/replies")
     public ApiResponse<Long> addReply(
             @PathVariable Long id,
             @RequestBody CreateAnnotationRequestDTO request,
-            @ModelAttribute AuthenticatedUser user) {
-        
+            HttpSession session) {
+        AuthenticatedUser user
+                = (AuthenticatedUser) session.getAttribute("AUTH_USER");
+        if (user == null) {
+            return ApiResponse.error("Unauthorized");
+        }
+
         long replyId = annotationService.addReply(id, user.getId(), request.getContent(), user);
         return ApiResponse.success(replyId);
     }
 
     /**
-     * List replies for annotation.
-     * GET /api/v1/annotations/{id}/replies
+     * List replies for annotation. GET /api/v1/annotations/{id}/replies
      */
     @GetMapping("/{id}/replies")
     public ApiResponse<List<AnnotationSummary>> listReplies(
             @PathVariable Long id,
-            @ModelAttribute AuthenticatedUser user) {
-        
+            HttpSession session) {
+        AuthenticatedUser user
+                = (AuthenticatedUser) session.getAttribute("AUTH_USER");
+        if (user == null) {
+            return ApiResponse.error("Unauthorized");
+        }
+
         List<AnnotationSummary> replies = annotationService.listReplies(id);
         return ApiResponse.success(replies);
     }
+
+    @PostMapping(
+            value = "/debug",
+            consumes = "application/json"
+    )
+    public String debug(
+            @RequestBody CreateAnnotationRequestDTO request,
+            HttpSession session
+    ) {
+
+        System.out.println("SESSION:");
+        System.out.println(session);
+
+        System.out.println("SESSION ATTRIBUTES:");
+
+        Enumeration<String> names
+                = session.getAttributeNames();
+
+        while (names.hasMoreElements()) {
+
+            String name = names.nextElement();
+
+            System.out.println(
+                    name + " = "
+                    + session.getAttribute(name)
+            );
+        }
+
+        System.out.println(request);
+
+        return "OK";
+
+    }
+
+    @PostMapping
+    public ApiResponse<Long> addAnnotation(
+            @RequestBody String rawJson,
+            @ModelAttribute AuthenticatedUser user) {
+
+        System.out.println("RAW JSON:");
+        System.out.println(rawJson);
+
+        return ApiResponse.success(1L);
+    }
+
 }

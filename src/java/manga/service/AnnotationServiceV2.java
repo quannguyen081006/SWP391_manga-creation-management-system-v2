@@ -23,12 +23,10 @@ import javax.sql.DataSource;
 
 /**
  * Enhanced Annotation Service for coordinate-based annotations.
- * 
- * Supports the new visual workspace workflow with:
- * - Coordinate anchoring (BR-8: responsive scaling)
- * - Thread/reply support
- * - Resolution states
- * - Severity levels
+ *
+ * Supports the new visual workspace workflow with: - Coordinate anchoring
+ * (BR-8: responsive scaling) - Thread/reply support - Resolution states -
+ * Severity levels
  */
 @Service
 @Transactional
@@ -44,16 +42,15 @@ public class AnnotationServiceV2 {
     private DataSource dataSource;
 
     /**
-     * Add annotation with coordinates.
-     * BR-5: Annotations belong to specific manuscript version
-     * BR-8: Coordinates must be between 0-100
+     * Add annotation with coordinates. BR-5: Annotations belong to specific
+     * manuscript version BR-8: Coordinates must be between 0-100
      */
     public long addAnnotation(Long manuscriptVersionId, Long editorId, Long manuscriptPageId,
-                             AnnotationCategory category, AnnotationSeverity severity,
-                             String content, Double xPercent, Double yPercent,
-                             Double widthPercent, Double heightPercent,
-                             Long parentAnnotationId, AuthenticatedUser user) {
-        
+            AnnotationCategory category, AnnotationSeverity severity,
+            String content, Double xPercent, Double yPercent,
+            Double widthPercent, Double heightPercent,
+            Long parentAnnotationId, AuthenticatedUser user) {
+
         // Validate manuscript version exists and is UNDER_REVIEW
         manga.model.ManuscriptVersion version = manuscriptVersionRepository.findById(manuscriptVersionId);
         if (version == null) {
@@ -65,22 +62,21 @@ public class AnnotationServiceV2 {
         }
 
         // Check if manuscript version is immutable before adding annotation
-        if (version.getStatus() == ManuscriptStatus.APPROVED || 
-            version.getStatus() == ManuscriptStatus.PUBLISHED ||
-            version.getStatus() == ManuscriptStatus.REJECTED ||
-            version.getStatus() == ManuscriptStatus.ARCHIVED) {
+        if (version.getStatus() == ManuscriptStatus.APPROVED
+                || version.getStatus() == ManuscriptStatus.PUBLISHED
+                || version.getStatus() == ManuscriptStatus.REJECTED
+                || version.getStatus() == ManuscriptStatus.ARCHIVED) {
             throw new BusinessRuleException(
-                "Cannot add annotation: manuscript version is " + version.getStatus()
+                    "Cannot add annotation: manuscript version is " + version.getStatus()
             );
         }
 
         // Validate manuscriptPageId belongs to this manuscriptVersionId
         if (manuscriptPageId != null) {
             String pageCheckSql = "SELECT manuscriptVersionId FROM ManuscriptPage WHERE id = ?";
-            try (Connection conn = dataSource.getConnection();
-                 PreparedStatement ps = conn.prepareStatement(pageCheckSql)) {
+            try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(pageCheckSql)) {
                 ps.setLong(1, manuscriptPageId);
-                try (ResultSet rs = ps.executeQuery()) {
+                try ( ResultSet rs = ps.executeQuery()) {
                     if (!rs.next()) {
                         throw new BusinessRuleException("Manuscript page not found");
                     }
@@ -94,13 +90,18 @@ public class AnnotationServiceV2 {
             }
         }
 
+        System.out.println("SERVICE DEBUG");
+        System.out.println(xPercent);
+        System.out.println(yPercent);
+        System.out.println(widthPercent);
+        System.out.println(heightPercent);
         // Validate coordinates (BR-8)
         if (xPercent != null || yPercent != null || widthPercent != null || heightPercent != null) {
             if (xPercent == null || yPercent == null || widthPercent == null || heightPercent == null) {
                 throw new BusinessRuleException("All coordinates must be provided together");
             }
-            if (xPercent < 0 || xPercent > 100 || yPercent < 0 || yPercent > 100 ||
-                widthPercent <= 0 || widthPercent > 100 || heightPercent <= 0 || heightPercent > 100) {
+            if (xPercent < 0 || xPercent > 100 || yPercent < 0 || yPercent > 100
+                    || widthPercent <= 0 || widthPercent > 100 || heightPercent <= 0 || heightPercent > 100) {
                 throw new BusinessRuleException("Coordinates must be between 0-100 (BR-8)");
             }
             // Coordinates require manuscriptPageId to be set
@@ -113,10 +114,9 @@ public class AnnotationServiceV2 {
         if (parentAnnotationId != null) {
             // Check if parent exists and belongs to same manuscript version
             String parentCheckSql = "SELECT manuscriptVersionId FROM Annotation WHERE id = ?";
-            try (Connection conn = dataSource.getConnection();
-                 PreparedStatement ps = conn.prepareStatement(parentCheckSql)) {
+            try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(parentCheckSql)) {
                 ps.setLong(1, parentAnnotationId);
-                try (ResultSet rs = ps.executeQuery()) {
+                try ( ResultSet rs = ps.executeQuery()) {
                     if (!rs.next()) {
                         throw new BusinessRuleException("Parent annotation not found");
                     }
@@ -144,10 +144,9 @@ public class AnnotationServiceV2 {
         Integer pageNumber = null;
         if (manuscriptPageId != null) {
             String pageSql = "SELECT pageNumber FROM ManuscriptPage WHERE id = ?";
-            try (Connection conn = dataSource.getConnection();
-                 PreparedStatement ps = conn.prepareStatement(pageSql)) {
+            try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(pageSql)) {
                 ps.setLong(1, manuscriptPageId);
-                try (ResultSet rs = ps.executeQuery()) {
+                try ( ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
                         pageNumber = rs.getInt("pageNumber");
                     }
@@ -158,10 +157,9 @@ public class AnnotationServiceV2 {
         }
 
         // Insert annotation with manuscriptVersionId and manuscriptPageId
-        String sql = "INSERT INTO Annotation (manuscriptVersionId, manuscriptPageId, editorId, pageNumber, category, status, content, xPercent, yPercent, widthPercent, heightPercent, severity, parentAnnotationId, createdAt) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ,? ,GETDATE())";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
+        String sql = "INSERT INTO Annotation (manuscriptVersionId, manuscriptPageId, editorId, pageNumber, category, status, content, xPercent, yPercent, widthPercent, heightPercent, severity, parentAnnotationId, createdAt) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ,? ,GETDATE())";
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
             ps.setLong(1, manuscriptVersionId);
             if (manuscriptPageId != null) {
                 ps.setLong(2, manuscriptPageId);
@@ -194,13 +192,33 @@ public class AnnotationServiceV2 {
             } else {
                 ps.setNull(13, java.sql.Types.BIGINT);
             }
+            System.out.println("=== INSERT DEBUG ===");
+
+            System.out.println("manuscriptVersionId = " + manuscriptVersionId);
+            System.out.println("manuscriptPageId = " + manuscriptPageId);
+            System.out.println("editorId = " + editorId);
+            System.out.println("pageNumber = " + pageNumber);
+            System.out.println("category = " + category);
+            System.out.println("content = " + content);
+            System.out.println("xPercent = " + xPercent);
+            System.out.println("yPercent = " + yPercent);
+            System.out.println("widthPercent = " + widthPercent);
+            System.out.println("heightPercent = " + heightPercent);
+            System.out.println("severity = " + severity);
+            System.out.println("parentAnnotationId = " + parentAnnotationId);
             ps.executeUpdate();
-            try (ResultSet rs = ps.getGeneratedKeys()) {
+            try ( ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
                     return rs.getLong(1);
                 }
             }
         } catch (SQLException ex) {
+
+            System.out.println("=== SQL ERROR DEBUG ===");
+            System.out.println(ex.getMessage());
+
+            ex.printStackTrace();
+
             throw new RuntimeException("Cannot create annotation", ex);
         }
         throw new RuntimeException("Failed to create annotation");
@@ -211,18 +229,17 @@ public class AnnotationServiceV2 {
      */
     public void resolveAnnotation(Long annotationId, Long resolvedBy, AuthenticatedUser user) {
         // Check if manuscript version is immutable before resolving annotation
-        String versionCheckSql = "SELECT mv.status FROM Annotation a " +
-                                "JOIN ManuscriptVersion mv ON mv.id = a.manuscriptVersionId " +
-                                "WHERE a.id = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(versionCheckSql)) {
+        String versionCheckSql = "SELECT mv.status FROM Annotation a "
+                + "JOIN ManuscriptVersion mv ON mv.id = a.manuscriptVersionId "
+                + "WHERE a.id = ?";
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(versionCheckSql)) {
             ps.setLong(1, annotationId);
-            try (ResultSet rs = ps.executeQuery()) {
+            try ( ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     String status = rs.getString("status");
                     if ("APPROVED".equals(status) || "PUBLISHED".equals(status) || "REJECTED".equals(status) || "ARCHIVED".equals(status)) {
                         throw new BusinessRuleException(
-                            "Cannot resolve annotation: manuscript version is " + status
+                                "Cannot resolve annotation: manuscript version is " + status
                         );
                     }
                 }
@@ -237,8 +254,7 @@ public class AnnotationServiceV2 {
         }
 
         String sql = "UPDATE Annotation SET status = 'RESOLVED', resolvedAt = GETDATE(), resolvedBy = ? WHERE id = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, resolvedBy);
             ps.setLong(2, annotationId);
             int rows = ps.executeUpdate();
@@ -260,8 +276,7 @@ public class AnnotationServiceV2 {
         }
 
         String sql = "UPDATE Annotation SET status = 'DISMISSED', resolvedAt = GETDATE(), resolvedBy = ? WHERE id = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, dismissedBy);
             ps.setLong(2, annotationId);
             int rows = ps.executeUpdate();
@@ -283,11 +298,10 @@ public class AnnotationServiceV2 {
         Long manuscriptPageId = null;
         Integer pageNumber = null;
         String category = null;
-        
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(parentSql)) {
+
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(parentSql)) {
             ps.setLong(1, parentAnnotationId);
-            try (ResultSet rs = ps.executeQuery()) {
+            try ( ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) {
                     throw new BusinessRuleException("Parent annotation not found");
                 }
@@ -302,10 +316,9 @@ public class AnnotationServiceV2 {
 
         // Validate parent is not resolved
         String statusCheckSql = "SELECT status FROM Annotation WHERE id = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(statusCheckSql)) {
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(statusCheckSql)) {
             ps.setLong(1, parentAnnotationId);
-            try (ResultSet rs = ps.executeQuery()) {
+            try ( ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     String status = rs.getString("status");
                     if ("RESOLVED".equals(status) || "DISMISSED".equals(status)) {
@@ -324,31 +337,30 @@ public class AnnotationServiceV2 {
         }
 
         return addAnnotation(
-            manuscriptVersionId,
-            editorId,
-            manuscriptPageId,
-            AnnotationCategory.valueOf(category),
-            null,
-            content,
-            null,
-            null,
-            null,
-            null,
-            parentAnnotationId,
-            user
+                manuscriptVersionId,
+                editorId,
+                manuscriptPageId,
+                AnnotationCategory.valueOf(category),
+                null,
+                content,
+                null,
+                null,
+                null,
+                null,
+                parentAnnotationId,
+                user
         );
     }
 
     /**
-     * Count OPEN annotations for manuscript version.
-     * Used for approval gate check - cannot approve with open annotations.
+     * Count OPEN annotations for manuscript version. Used for approval gate
+     * check - cannot approve with open annotations.
      */
     public long countOpenAnnotations(Long manuscriptVersionId) {
         String sql = "SELECT COUNT(*) FROM Annotation WHERE manuscriptVersionId = ? AND status = 'OPEN'";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, manuscriptVersionId);
-            try (ResultSet rs = ps.executeQuery()) {
+            try ( ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     return rs.getLong(1);
                 }
@@ -363,17 +375,16 @@ public class AnnotationServiceV2 {
      * List annotations for manuscript version.
      */
     public List<manga.model.AnnotationSummary> listAnnotations(Long manuscriptVersionId) {
-        String sql = "SELECT a.id, a.manuscriptVersionId, a.manuscriptPageId, a.editorId, u.fullName AS editorName, a.pageNumber, " +
-                    "a.category, a.status, a.content, a.createdAt, a.xPercent, a.yPercent, a.widthPercent, a.heightPercent, " +
-                    "a.severity, a.parentAnnotationId, a.resolvedAt, a.resolvedBy " +
-                    "FROM Annotation a " +
-                    "LEFT JOIN [User] u ON u.id = a.editorId " +
-                    "WHERE a.manuscriptVersionId = ? ORDER BY a.createdAt DESC";
+        String sql = "SELECT a.id, a.manuscriptVersionId, a.manuscriptPageId, a.editorId, u.fullName AS editorName, a.pageNumber, "
+                + "a.category, a.status, a.content, a.createdAt, a.xPercent, a.yPercent, a.widthPercent, a.heightPercent, "
+                + "a.severity, a.parentAnnotationId, a.resolvedAt, a.resolvedBy "
+                + "FROM Annotation a "
+                + "LEFT JOIN [User] u ON u.id = a.editorId "
+                + "WHERE a.manuscriptVersionId = ? ORDER BY a.createdAt DESC";
         List<manga.model.AnnotationSummary> results = new ArrayList<>();
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, manuscriptVersionId);
-            try (ResultSet rs = ps.executeQuery()) {
+            try ( ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     results.add(mapAnnotationSummary(rs));
                 }
@@ -388,16 +399,15 @@ public class AnnotationServiceV2 {
      * Get annotation by ID.
      */
     public manga.model.AnnotationSummary getAnnotation(Long annotationId) {
-        String sql = "SELECT a.id, a.manuscriptVersionId, a.manuscriptPageId, a.editorId, u.fullName AS editorName, a.pageNumber, " +
-                    "a.category, a.status, a.content, a.createdAt, a.xPercent, a.yPercent, a.widthPercent, a.heightPercent, " +
-                    "a.severity, a.parentAnnotationId, a.resolvedAt, a.resolvedBy " +
-                    "FROM Annotation a " +
-                    "LEFT JOIN [User] u ON u.id = a.editorId " +
-                    "WHERE a.id = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+        String sql = "SELECT a.id, a.manuscriptVersionId, a.manuscriptPageId, a.editorId, u.fullName AS editorName, a.pageNumber, "
+                + "a.category, a.status, a.content, a.createdAt, a.xPercent, a.yPercent, a.widthPercent, a.heightPercent, "
+                + "a.severity, a.parentAnnotationId, a.resolvedAt, a.resolvedBy "
+                + "FROM Annotation a "
+                + "LEFT JOIN [User] u ON u.id = a.editorId "
+                + "WHERE a.id = ?";
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, annotationId);
-            try (ResultSet rs = ps.executeQuery()) {
+            try ( ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     return mapAnnotationSummary(rs);
                 }
@@ -412,17 +422,16 @@ public class AnnotationServiceV2 {
      * List replies for annotation.
      */
     public List<manga.model.AnnotationSummary> listReplies(Long parentAnnotationId) {
-        String sql = "SELECT a.id, a.manuscriptVersionId, a.manuscriptPageId, a.editorId, u.fullName AS editorName, a.pageNumber, " +
-                    "a.category, a.status, a.content, a.createdAt, a.xPercent, a.yPercent, a.widthPercent, a.heightPercent, " +
-                    "a.severity, a.parentAnnotationId, a.resolvedAt, a.resolvedBy " +
-                    "FROM Annotation a " +
-                    "LEFT JOIN [User] u ON u.id = a.editorId " +
-                    "WHERE a.parentAnnotationId = ? ORDER BY a.createdAt ASC";
+        String sql = "SELECT a.id, a.manuscriptVersionId, a.manuscriptPageId, a.editorId, u.fullName AS editorName, a.pageNumber, "
+                + "a.category, a.status, a.content, a.createdAt, a.xPercent, a.yPercent, a.widthPercent, a.heightPercent, "
+                + "a.severity, a.parentAnnotationId, a.resolvedAt, a.resolvedBy "
+                + "FROM Annotation a "
+                + "LEFT JOIN [User] u ON u.id = a.editorId "
+                + "WHERE a.parentAnnotationId = ? ORDER BY a.createdAt ASC";
         List<manga.model.AnnotationSummary> results = new ArrayList<>();
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, parentAnnotationId);
-            try (ResultSet rs = ps.executeQuery()) {
+            try ( ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     results.add(mapAnnotationSummary(rs));
                 }

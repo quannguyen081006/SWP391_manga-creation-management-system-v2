@@ -4,14 +4,15 @@ package manga.dto;
  * DTO for creating annotation requests.
  */
 public class CreateAnnotationRequestDTO {
+
     private Long manuscriptVersionId;
     private Long manuscriptPageId;
     private Integer pageNumber;
     private String category;
     private String severity;
     private String content;
-    private Double xPercent;
-    private Double yPercent;
+    private Double xCoordinatePercent;
+    private Double yCoordinatePercent;
     private Double widthPercent;
     private Double heightPercent;
     private Long parentAnnotationId;
@@ -65,20 +66,20 @@ public class CreateAnnotationRequestDTO {
         this.content = content;
     }
 
-    public Double getXPercent() {
-        return xPercent;
+    public Double getxCoordinatePercent() {
+        return xCoordinatePercent;
     }
 
-    public void setXPercent(Double xPercent) {
-        this.xPercent = xPercent;
+    public void setxCoordinatePercent(Double xCoordinatePercent) {
+        this.xCoordinatePercent = xCoordinatePercent;
     }
 
-    public Double getYPercent() {
-        return yPercent;
+    public Double getyCoordinatePercent() {
+        return yCoordinatePercent;
     }
 
-    public void setYPercent(Double yPercent) {
-        this.yPercent = yPercent;
+    public void setyCoordinatePercent(Double yCoordinatePercent) {
+        this.yCoordinatePercent = yCoordinatePercent;
     }
 
     public Double getWidthPercent() {
@@ -103,5 +104,21 @@ public class CreateAnnotationRequestDTO {
 
     public void setParentAnnotationId(Long parentAnnotationId) {
         this.parentAnnotationId = parentAnnotationId;
+    }
+
+    @Override
+    public String toString() {
+        return "CreateAnnotationRequestDTO{"
+                + "manuscriptVersionId=" + manuscriptVersionId
+                + ", manuscriptPageId=" + manuscriptPageId
+                + ", category='" + category + '\''
+                + ", severity='" + severity + '\''
+                + ", content='" + content + '\''
+                + ", xCoordinatePercent=" + xCoordinatePercent
+                + ", yCoordinatePercent=" + yCoordinatePercent
+                + ", widthPercent=" + widthPercent
+                + ", heightPercent=" + heightPercent
+                + ", parentAnnotationId=" + parentAnnotationId
+                + '}';
     }
 }
