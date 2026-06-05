@@ -634,7 +634,7 @@ public class PageTaskRepository {
             throw new IllegalArgumentException("Assistant can only submit task for review");
         }
 
-        String readSql = "SELECT chapterId, assistantId, status, taskType FROM PageTask WHERE id = ?";
+        String readSql = "SELECT chapterId, assistantId, pageRangeStart, pageRangeEnd, status, taskType FROM PageTask WHERE id = ?";
         String updateSql = "UPDATE PageTask SET status = ?, updatedAt = GETDATE(), lastProgressAt = GETDATE() WHERE id = ?";
 
         try (Connection conn = dataSource.getConnection();
@@ -642,6 +642,8 @@ public class PageTaskRepository {
             read.setLong(1, taskId);
             long chapterId;
             long ownerAssistantId;
+            int pageRangeStart;
+            int pageRangeEnd;
             String currentStatus;
             try (ResultSet rs = read.executeQuery()) {
                 if (!rs.next()) {
@@ -649,6 +651,8 @@ public class PageTaskRepository {
                 }
                 chapterId = rs.getLong("chapterId");
                 ownerAssistantId = rs.getLong("assistantId");
+                pageRangeStart = rs.getInt("pageRangeStart");
+                pageRangeEnd = rs.getInt("pageRangeEnd");
                 currentStatus = rs.getString("status");
             }
 
@@ -663,6 +667,8 @@ public class PageTaskRepository {
                     || "OVERDUE".equals(current))) {
                 throw new IllegalArgumentException("Assistant can submit only from active/rework task state (BR-TSK-01)");
             }
+
+            validateSubmittedTaskImages(conn, taskId, pageRangeStart, pageRangeEnd);
 
             try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
                 ps.setString(1, normalized);
@@ -680,6 +686,28 @@ public class PageTaskRepository {
                     "TASK");
         } catch (SQLException ex) {
             throw new RuntimeException("Cannot update task status", ex);
+        }
+    }
+
+    private void validateSubmittedTaskImages(Connection conn, long taskId, int pageRangeStart, int pageRangeEnd) throws SQLException {
+        int expected = pageRangeEnd - pageRangeStart + 1;
+        String sql = "SELECT COUNT(DISTINCT pageNumber) "
+                + "FROM ChapterImage "
+                + "WHERE pageTaskId = ? "
+                + "AND isActive = 1 "
+                + "AND imageType = 'PAGE' "
+                + "AND pageNumber BETWEEN ? AND ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, taskId);
+            ps.setInt(2, pageRangeStart);
+            ps.setInt(3, pageRangeEnd);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                int uploaded = rs.getInt(1);
+                if (uploaded < expected) {
+                    throw new IllegalArgumentException("Upload all task pages to ChapterImage before submitting (" + uploaded + "/" + expected + ")");
+                }
+            }
         }
     }
 

@@ -6,6 +6,7 @@ import manga.common.util.SessionUserUtil;
 import manga.model.AuthenticatedUser;
 import manga.model.chaptertask.PageSlotSummary;
 import manga.repository.chaptertask.ChapterRepository;
+import manga.repository.chaptertask.ChapterImageRepository;
 import manga.repository.chaptertask.PageRepository;
 import manga.repository.chaptertask.PageTaskRepository;
 import java.io.File;
@@ -33,6 +34,9 @@ public class PageApiController {
 
     @Autowired
     private ChapterRepository chapterRepository;
+
+    @Autowired
+    private ChapterImageRepository chapterImageRepository;
 
     @Autowired
     private PageTaskRepository pageTaskRepository;
@@ -77,8 +81,16 @@ public class PageApiController {
         }
         String savedPath = saveMultipart(request);
         pageRepository.markUploaded(pageId, savedPath, user.getId(), completedStage);
+        PageSlotSummary updatedPage = pageRepository.findById(pageId);
+        if (updatedPage != null && "LETTERING".equalsIgnoreCase(updatedPage.getCompletedStage())) {
+            chapterImageRepository.syncFinalPageUpload(
+                    updatedPage.getChapterId(),
+                    updatedPage.getPageNumber(),
+                    user.getId(),
+                    savedPath);
+        }
         pageTaskRepository.refreshChapterProgress(page.getChapterId());
-        return ApiResponse.ok(pageRepository.findById(pageId), "Page image uploaded");
+        return ApiResponse.ok(updatedPage, "Page image uploaded");
     }
 
     @RequestMapping(value = "/pages/{pageId}", method = RequestMethod.DELETE)

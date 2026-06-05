@@ -27,6 +27,9 @@ public class ChapterImageRepository {
         try (Connection conn = dataSource.getConnection()) {
             String normalizedType = normalizeImageType(imageType);
             validateUpload(conn, chapterId, pageTaskId, uploadedBy, normalizedType, pageNumber, fileUrl);
+            if ("PAGE".equals(normalizedType)) {
+                deactivateActivePageImages(conn, chapterId, pageNumber.intValue());
+            }
 
             long newId;
             try (PreparedStatement ps = conn.prepareStatement(insertSql, PreparedStatement.RETURN_GENERATED_KEYS)) {
@@ -70,6 +73,17 @@ public class ChapterImageRepository {
         }
     }
 
+    private void deactivateActivePageImages(Connection conn, long chapterId, int pageNumber) throws SQLException {
+        String sql =
+                "UPDATE ChapterImage SET isActive = 0 "
+                + "WHERE chapterId = ? AND pageNumber = ? AND imageType = 'PAGE' AND isActive = 1";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, chapterId);
+            ps.setInt(2, pageNumber);
+            ps.executeUpdate();
+        }
+    }
+
     public List<ChapterImageItem> listByChapter(long chapterId) {
         String sql =
             "SELECT id, chapterId, pageTaskId, uploadedBy, imageType, pageNumber, fileUrl, originalFileName, fileSizeBytes, uploadedAt, isActive, note "
@@ -93,6 +107,73 @@ public class ChapterImageRepository {
             + ") x "
             + "ORDER BY CASE WHEN pageNumber IS NULL THEN 1 ELSE 0 END, pageNumber ASC, sourceRank ASC, uploadedAt ASC";
         return list(sql, pageTaskId, pageTaskId, "Cannot list task images");
+    }
+
+    public void syncFinalPageUpload(long chapterId, int pageNumber, long uploadedBy, String fileUrl) {
+        if (fileUrl == null || fileUrl.trim().isEmpty()) {
+            return;
+        }
+        String ownerSql =
+                "SELECT s.mangakaId "
+                + "FROM Chapter c JOIN Series s ON s.id = c.seriesId "
+                + "WHERE c.id = ?";
+        String insertSql =
+                "INSERT INTO ChapterImage (chapterId, pageTaskId, uploadedBy, imageType, pageNumber, fileUrl, originalFileName, fileSizeBytes, uploadedAt, isActive, note) "
+                + "VALUES (?, NULL, ?, 'PAGE', ?, ?, ?, NULL, GETDATE(), 1, 'MANGAKA_PAGE_UPLOAD')";
+        try (Connection conn = dataSource.getConnection()) {
+            long ownerId;
+            try (PreparedStatement ps = conn.prepareStatement(ownerSql)) {
+                ps.setLong(1, chapterId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        throw new IllegalArgumentException("Chapter not found");
+                    }
+                    ownerId = rs.getLong(1);
+                }
+            }
+            if (ownerId != uploadedBy) {
+                throw new IllegalArgumentException("Only series owner Mangaka can sync final page image");
+            }
+            deactivateActivePageImages(conn, chapterId, pageNumber);
+            try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
+                ps.setLong(1, chapterId);
+                ps.setLong(2, uploadedBy);
+                ps.setInt(3, pageNumber);
+                ps.setString(4, fileUrl.trim());
+                ps.setString(5, "Chapter page " + pageNumber);
+                ps.executeUpdate();
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot sync final page image", ex);
+        }
+    }
+
+    public void backfillFinalPageUploads(long chapterId, long uploadedBy) {
+        String sql =
+                "SELECT p.pageNumber, p.imageUrl "
+                + "FROM " + PageRepository.TABLE_PAGE + " p "
+                + "WHERE p.chapterId = ? "
+                + "AND p.imageUrl IS NOT NULL "
+                + "AND UPPER(ISNULL(p.completedStage, '')) = 'LETTERING' "
+                + "AND NOT EXISTS ("
+                + "  SELECT 1 FROM ChapterImage ci "
+                + "  WHERE ci.chapterId = p.chapterId "
+                + "    AND ci.pageNumber = p.pageNumber "
+                + "    AND ci.imageType = 'PAGE' "
+                + "    AND ci.isActive = 1"
+                + ") "
+                + "ORDER BY p.pageNumber";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, chapterId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    syncFinalPageUpload(chapterId, rs.getInt("pageNumber"), uploadedBy, rs.getString("imageUrl"));
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot backfill final page images", ex);
+        }
     }
 
     private List<ChapterImageItem> list(String sql, long firstId, long secondId, String error) {

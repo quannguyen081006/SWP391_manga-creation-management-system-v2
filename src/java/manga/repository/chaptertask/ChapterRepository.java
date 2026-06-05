@@ -30,6 +30,9 @@ public class ChapterRepository {
     @Autowired
     private PageRepository pageRepository;
 
+    @Autowired
+    private ChapterImageRepository chapterImageRepository;
+
     private static final String CHAPTER_COLUMNS_LEGACY =
             "id, seriesId, chapterNumber, title, status, submissionDeadline, publicationDate, completionPct, atRisk";
     private static final String CHAPTER_COLUMNS_EXTENDED =
@@ -369,6 +372,7 @@ public class ChapterRepository {
             if (ps.executeUpdate() == 0) {
                 throw new IllegalArgumentException("Chapter must be owner-managed and 100% complete before submit-review");
             }
+            chapterImageRepository.backfillFinalPageUploads(chapterId, mangakaId);
         } catch (SQLException ex) {
             throw new RuntimeException("Cannot submit chapter for review", ex);
         }

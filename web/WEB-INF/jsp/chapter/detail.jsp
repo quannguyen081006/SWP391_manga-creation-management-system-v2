@@ -1531,11 +1531,6 @@
         var slot = findPageById(pageId);
         if (!slot) { return; }
 
-        if (slot.imageUrl && e.target.closest('img')) {
-            openPageCompare(slot);
-            return;
-        }
-
         if (e.shiftKey) {
             toggleSelectedPage(pageId, slot);
             lastSlotIndex = index;
@@ -1544,6 +1539,11 @@
         }
 
         lastSlotIndex = index;
+
+        if (slot.imageUrl && e.target.closest('img')) {
+            openPageCompare(slot);
+            return;
+        }
 
         if (!isOwner()) {
             if (slot.imageUrl || slot.taskId) {

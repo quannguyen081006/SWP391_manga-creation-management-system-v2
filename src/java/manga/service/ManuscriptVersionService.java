@@ -854,9 +854,15 @@ public class ManuscriptVersionService {
             throw new BusinessRuleException("Chapter must be in EDITORIAL_REVIEW to get candidate pages");
         }
 
-        // Query approved chapter images
-        String sql = "SELECT id, chapterId, pageNumber, fileUrl, uploadedAt " +
-                    "FROM ChapterImage WHERE chapterId = ? AND isActive = 1 AND imageType = 'PAGE' ORDER BY pageNumber ASC";
+        // Query one latest approved chapter image per page number.
+        String sql = "SELECT id, chapterId, pageNumber, fileUrl, uploadedAt "
+                    + "FROM ("
+                    + "  SELECT id, chapterId, pageNumber, fileUrl, uploadedAt, "
+                    + "         ROW_NUMBER() OVER (PARTITION BY pageNumber ORDER BY uploadedAt DESC, id DESC) AS rn "
+                    + "  FROM ChapterImage "
+                    + "  WHERE chapterId = ? AND isActive = 1 AND imageType = 'PAGE' AND pageNumber IS NOT NULL"
+                    + ") x "
+                    + "WHERE rn = 1 ORDER BY pageNumber ASC";
         List<manga.dto.chaptertask.ChapterImageDTO> results = new java.util.ArrayList<>();
         try (java.sql.Connection conn = dataSource.getConnection();
              java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
