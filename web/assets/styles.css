@@ -1915,6 +1915,12 @@ input, textarea, select {
     border-color: #a7f3d0;
 }
 
+.btn.warning-soft {
+    color: #c2410c;
+    background: #fff7ed;
+    border-color: #fed7aa;
+}
+
 .user-form {
     display: grid;
     gap: 18px;

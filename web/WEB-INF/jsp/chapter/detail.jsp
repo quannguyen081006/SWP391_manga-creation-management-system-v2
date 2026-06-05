@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <title>Chapter Detail</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css?v=20260525" />
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/chapter-detail.css?v=20260605fix3" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/chapter-detail.css?v=20260605buttons" />
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
@@ -23,9 +23,9 @@
 </div>
 
 <div class="chapter-detail-inline-7">
-    <button id="btnDelete" class="btn small chapter-detail-inline-8" type="button">Delete chapter</button>
-    <button id="btnMarkDone" class="btn primary chapter-detail-inline-9" type="button">Submit for review</button>
-    <a id="btnManuscriptWorkspace" href="#" class="btn small chapter-detail-inline-10">📝 Manuscript Workspace</a>
+    <button id="btnDelete" class="btn small chapter-detail-inline-8" type="button" style="display:none;">Delete chapter</button>
+    <button id="btnMarkDone" class="btn primary chapter-detail-inline-9" type="button" style="display:none;">Submit for review</button>
+    <a id="btnManuscriptWorkspace" href="#" class="btn small chapter-detail-inline-10" style="display:none;">📝 Manuscript Workspace</a>
 </div>
 
 <div class="chapter-workspace">
@@ -267,6 +267,57 @@
     </div>
 </div>
 
+<div id="taskOverdueDecisionModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="taskOverdueDecisionTitle">
+        <button class="modal-close" type="button" data-modal-close aria-label="Close">&times;</button>
+        <h3 id="taskOverdueDecisionTitle" class="section-title compact-title">Overdue task decision</h3>
+        <p id="taskOverdueDecisionSummary" class="section-desc"></p>
+        <div class="overdue-choice-row" role="tablist" aria-label="Overdue task action">
+            <button class="btn small overdue-choice-btn" type="button" data-overdue-action-choice="extend">Extend</button>
+            <button class="btn small overdue-choice-btn" type="button" data-overdue-action-choice="reassign">Reassign</button>
+            <button class="btn small overdue-choice-btn danger-soft" type="button" data-overdue-action-choice="delete">Delete</button>
+        </div>
+        <div class="overdue-decision-stack">
+            <form id="taskExtendForm" class="form-grid overdue-decision-panel" data-overdue-action-panel="extend">
+                <input type="hidden" id="taskExtendId" />
+                <strong>Extend deadline</strong>
+                <label class="field-label" for="taskExtendDueDate">New due date</label>
+                <input id="taskExtendDueDate" type="date" required />
+                <p id="taskExtendHint" class="section-desc"></p>
+                <label class="field-label" for="taskExtendReason">Reason</label>
+                <textarea id="taskExtendReason" rows="3" maxlength="300" placeholder="Reason for extension..."></textarea>
+                <div id="taskExtendError" class="alert error chapter-detail-inline-65"></div>
+                <button class="btn primary" type="submit">Extend task</button>
+            </form>
+            <div class="form-grid overdue-decision-panel" data-overdue-action-panel="reassign">
+                <strong>Reassign task</strong>
+                <label class="field-label" for="taskOverdueReassignAssistantId">New assistant</label>
+                <select id="taskOverdueReassignAssistantId">
+                    <option value="">Loading assistants...</option>
+                </select>
+                <label class="field-label" for="taskOverdueReassignDueDate">New due date</label>
+                <input id="taskOverdueReassignDueDate" type="date" />
+                <label class="field-label" for="taskOverdueReason">Reason</label>
+                <textarea id="taskOverdueReason" rows="3" maxlength="300" placeholder="Reason for reassign..."></textarea>
+                <div id="taskOverdueDecisionError" class="alert error chapter-detail-inline-65"></div>
+                <div class="overdue-decision-actions">
+                    <button class="btn small" type="button" id="taskOverdueReassignBtn">Reassign</button>
+                </div>
+            </div>
+            <div class="form-grid overdue-decision-panel" data-overdue-action-panel="delete">
+                <strong>Delete task</strong>
+                <p class="section-desc">This closes the overdue task and removes it from active production tracking.</p>
+                <label class="field-label" for="taskOverdueDeleteReason">Reason</label>
+                <textarea id="taskOverdueDeleteReason" rows="3" maxlength="300" placeholder="Reason for delete..."></textarea>
+                <div id="taskOverdueDeleteError" class="alert error chapter-detail-inline-65"></div>
+                <div class="overdue-decision-actions">
+                    <button class="btn small danger-soft" type="button" id="taskOverdueDeleteBtn">Delete task</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 (function () {
     var ctx = '${pageContext.request.contextPath}';
@@ -285,6 +336,7 @@
     var activePopoverType = null;
     var activePopoverTaskId = null;
     var activePopoverCell = null;
+    var activeOverdueTaskId = null;
     var taskImagesCache = {};
     var taskInlineLoaded = {};
     var metadataSaveTimer = null;
@@ -880,14 +932,15 @@
         document.getElementById('updateDeadline').value = formatDate(chapter.submissionDeadline) || '';
 
         var owner = isOwner();
-        var canSubmit = owner && progress >= 100 && String(chapter.status || '').toUpperCase() === 'COMPLETE'
+        var chapterStatus = String(chapter.status || '').toUpperCase();
+        var canSubmit = owner && progress >= 100 && (chapterStatus === 'IN_PROGRESS' || chapterStatus === 'COMPLETE')
             && seriesData && String(seriesData.status || '').toUpperCase() !== 'CANCELLED';
 
-        document.getElementById('btnDelete').style.display = (owner && String(chapter.status || '').toUpperCase() === 'PLANNING') ? '' : 'none';
+        document.getElementById('btnDelete').style.display = (owner && chapterStatus === 'PLANNING') ? '' : 'none';
         document.getElementById('btnMarkDone').style.display = canSubmit ? '' : 'none';
         
         // Show manuscript workspace button for EDITORIAL_REVIEW status
-        var isEditorialReview = String(chapter.status || '').toUpperCase() === 'EDITORIAL_REVIEW';
+        var isEditorialReview = chapterStatus === 'EDITORIAL_REVIEW';
         var btnManuscriptWorkspace = document.getElementById('btnManuscriptWorkspace');
         if (isEditorialReview) {
             btnManuscriptWorkspace.style.display = '';
@@ -953,6 +1006,9 @@
         if (isOwner() && st === 'IN_PROGRESS') {
             html += ' <button class="btn small" type="button" data-task-reassign="' + task.id + '">Reassign</button>';
             html += ' <button class="btn small danger-soft" type="button" data-task-delete="' + task.id + '">Delete</button>';
+        }
+        if (isOwner() && st === 'OVERDUE') {
+            html += ' <button class="btn small warning-soft" type="button" data-task-overdue-decision="' + task.id + '">Decide</button>';
         }
         if (isOwner() && st === 'SUBMITTED') {
             html += ' <button class="btn small success-soft" type="button" data-task-approve-pop="' + task.id + '">Approve</button>';
@@ -1102,6 +1158,7 @@
         });
         pendingUploadPageId = null;
         pendingUploadSlot = null;
+        activeOverdueTaskId = null;
         showPageUploadError('');
     }
 
@@ -1178,12 +1235,66 @@
         openModal('assignTaskModal');
     }
 
+    function openOverdueDecisionModal(taskId) {
+        var task = findTask(taskId);
+        if (!task) { return; }
+        activeOverdueTaskId = taskId;
+        document.getElementById('taskExtendId').value = taskId;
+        document.getElementById('taskOverdueDecisionTitle').textContent = 'Overdue task #' + taskId;
+        document.getElementById('taskOverdueDecisionSummary').textContent =
+            'Pages ' + task.pageRangeStart + '-' + task.pageRangeEnd + ' · '
+            + formatStatus(task.taskType) + ' · assigned to ' + (task.assistantName || ('#' + task.assistantId));
+
+        var latest = latestTaskDueDate();
+        var dueInput = document.getElementById('taskExtendDueDate');
+        dueInput.value = '';
+        dueInput.min = todayIso();
+        dueInput.removeAttribute('max');
+        if (latest) { dueInput.max = latest; }
+        document.getElementById('taskExtendHint').textContent = chapter && chapter.submissionDeadline
+            ? ('Chapter deadline: ' + formatDate(chapter.submissionDeadline) + '. Extension must be today through ' + (latest || formatDate(chapter.submissionDeadline)) + '.')
+            : 'Extension date cannot be in the past.';
+
+        document.getElementById('taskExtendReason').value = '';
+        document.getElementById('taskOverdueReason').value = '';
+        document.getElementById('taskOverdueDeleteReason').value = '';
+        document.getElementById('taskOverdueReassignAssistantId').value = '';
+        var reassignDueInput = document.getElementById('taskOverdueReassignDueDate');
+        reassignDueInput.value = '';
+        reassignDueInput.min = todayIso();
+        reassignDueInput.removeAttribute('max');
+        if (latest) { reassignDueInput.max = latest; }
+        document.getElementById('taskExtendError').style.display = 'none';
+        document.getElementById('taskExtendError').textContent = '';
+        document.getElementById('taskOverdueDecisionError').style.display = 'none';
+        document.getElementById('taskOverdueDecisionError').textContent = '';
+        document.getElementById('taskOverdueDeleteError').style.display = 'none';
+        document.getElementById('taskOverdueDeleteError').textContent = '';
+        setOverdueDecisionChoice('');
+        openModal('taskOverdueDecisionModal');
+    }
+
+    function setOverdueDecisionChoice(choice) {
+        var panels = document.querySelectorAll('[data-overdue-action-panel]');
+        for (var i = 0; i < panels.length; i++) {
+            panels[i].style.display = panels[i].getAttribute('data-overdue-action-panel') === choice ? '' : 'none';
+        }
+        var buttons = document.querySelectorAll('[data-overdue-action-choice]');
+        for (var j = 0; j < buttons.length; j++) {
+            var active = buttons[j].getAttribute('data-overdue-action-choice') === choice;
+            buttons[j].classList.toggle('is-active', active);
+            buttons[j].setAttribute('aria-pressed', active ? 'true' : 'false');
+        }
+    }
+
     async function fillAssistantSelect() {
         var select = document.getElementById('assignAssistantId');
         var reassignSelect = document.getElementById('taskReassignAssistantId');
+        var overdueReassignSelect = document.getElementById('taskOverdueReassignAssistantId');
         if (!chapter || !select) { return; }
         select.innerHTML = '<option value="">Loading assistants...</option>';
         if (reassignSelect) { reassignSelect.innerHTML = '<option value="">Loading assistants...</option>'; }
+        if (overdueReassignSelect) { overdueReassignSelect.innerHTML = '<option value="">Loading assistants...</option>'; }
         try {
             var res = await callApi('GET', '/api/v1/series/' + chapter.seriesId + '/assistants');
             var assistants = res.data || [];
@@ -1192,11 +1303,17 @@
             }).join('');
             select.innerHTML = options;
             if (reassignSelect) { reassignSelect.innerHTML = options; }
+            if (overdueReassignSelect) { overdueReassignSelect.innerHTML = options; }
         } catch (err) {
             select.innerHTML = '<option value="">Cannot load assistants</option>';
             if (reassignSelect) { reassignSelect.innerHTML = '<option value="">Cannot load assistants</option>'; }
+            if (overdueReassignSelect) { overdueReassignSelect.innerHTML = '<option value="">Cannot load assistants</option>'; }
             showError(err.message);
         }
+    }
+
+    function latestTaskDueDate() {
+        return chapter && chapter.submissionDeadline ? addDaysIso(chapter.submissionDeadline, -3) : '';
     }
 
     function updateAssignDueConstraints() {
@@ -1205,7 +1322,7 @@
         if (!dueInput) { return; }
         dueInput.min = todayIso();
         dueInput.removeAttribute('max');
-        var latest = chapter && chapter.submissionDeadline ? addDaysIso(chapter.submissionDeadline, -3) : '';
+        var latest = latestTaskDueDate();
         if (latest) {
             dueInput.max = latest;
         }
@@ -1526,7 +1643,94 @@
         }
     });
 
+    document.getElementById('taskExtendForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var errEl = document.getElementById('taskExtendError');
+        errEl.style.display = 'none';
+        errEl.textContent = '';
+        var taskId = document.getElementById('taskExtendId').value;
+        var newDueDate = document.getElementById('taskExtendDueDate').value;
+        var reason = document.getElementById('taskExtendReason').value.trim();
+        try {
+            await callApi('POST', '/api/v1/tasks/' + taskId + '/extend', {
+                newDueDate: newDueDate,
+                reason: reason
+            });
+            closeModals();
+            showError('');
+            await loadData();
+        } catch (err) {
+            errEl.style.display = 'block';
+            errEl.textContent = err.message;
+        }
+    });
+
+    document.getElementById('taskOverdueReassignBtn').addEventListener('click', async function () {
+        var errEl = document.getElementById('taskOverdueDecisionError');
+        errEl.style.display = 'none';
+        errEl.textContent = '';
+        var assistantId = document.getElementById('taskOverdueReassignAssistantId').value;
+        var newDueDate = document.getElementById('taskOverdueReassignDueDate').value;
+        var reason = document.getElementById('taskOverdueReason').value.trim();
+        if (!activeOverdueTaskId) { return; }
+        if (!assistantId) {
+            errEl.style.display = 'block';
+            errEl.textContent = 'Choose a new assistant.';
+            return;
+        }
+        if (!newDueDate) {
+            errEl.style.display = 'block';
+            errEl.textContent = 'Choose a new due date.';
+            return;
+        }
+        if (reason.length < 5) {
+            errEl.style.display = 'block';
+            errEl.textContent = 'Reason must be at least 5 characters.';
+            return;
+        }
+        try {
+            await callApi('POST', '/api/v1/tasks/' + activeOverdueTaskId + '/reassign', {
+                assistantId: assistantId,
+                newDueDate: newDueDate,
+                reason: reason
+            });
+            closeModals();
+            showError('');
+            await loadData();
+        } catch (err) {
+            errEl.style.display = 'block';
+            errEl.textContent = err.message;
+        }
+    });
+
+    document.getElementById('taskOverdueDeleteBtn').addEventListener('click', async function () {
+        var errEl = document.getElementById('taskOverdueDeleteError');
+        errEl.style.display = 'none';
+        errEl.textContent = '';
+        var reason = document.getElementById('taskOverdueDeleteReason').value.trim();
+        if (!activeOverdueTaskId) { return; }
+        if (reason.length < 5) {
+            errEl.style.display = 'block';
+            errEl.textContent = 'Reason must be at least 5 characters.';
+            return;
+        }
+        try {
+            await callApi('POST', '/api/v1/tasks/' + activeOverdueTaskId + '/delete', { reason: reason });
+            closeModals();
+            showError('');
+            await loadData();
+        } catch (err) {
+            errEl.style.display = 'block';
+            errEl.textContent = err.message;
+        }
+    });
+
     document.addEventListener('click', async function (e) {
+        var overdueChoiceBtn = e.target.closest('[data-overdue-action-choice]');
+        if (overdueChoiceBtn) {
+            setOverdueDecisionChoice(overdueChoiceBtn.getAttribute('data-overdue-action-choice'));
+            return;
+        }
         var expandBtn = e.target.closest('[data-task-expand]');
         if (expandBtn) {
             var tid = expandBtn.getAttribute('data-task-expand');
@@ -1539,6 +1743,11 @@
                     loadTaskInlinePages(Number(tid));
                 }
             }
+            return;
+        }
+        var overdueDecisionBtn = e.target.closest('[data-task-overdue-decision]');
+        if (overdueDecisionBtn) {
+            openOverdueDecisionModal(overdueDecisionBtn.getAttribute('data-task-overdue-decision'));
             return;
         }
         var approvePopBtn = e.target.closest('[data-task-approve-pop]');

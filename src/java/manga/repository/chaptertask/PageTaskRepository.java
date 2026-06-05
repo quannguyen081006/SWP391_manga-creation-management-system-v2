@@ -399,6 +399,10 @@ public class PageTaskRepository {
     }
 
     public long reassignByMangaka(long taskId, long mangakaId, long newAssistantId, String reason) {
+        return reassignByMangaka(taskId, mangakaId, newAssistantId, reason, null);
+    }
+
+    public long reassignByMangaka(long taskId, long mangakaId, long newAssistantId, String reason, Date newDueDate) {
         ensureTaskLifecycleSchemaReady();
         if (reason == null || reason.trim().length() < 5) {
             throw new IllegalArgumentException("Reassign reason must be at least 5 characters");
@@ -416,6 +420,14 @@ public class PageTaskRepository {
         }
         if (task.getAssistantId() == newAssistantId) {
             throw new IllegalArgumentException("Choose a different assistant");
+        }
+        Date dueDateForNewTask = task.getDueDate();
+        if ("OVERDUE".equals(currentStatusForReassign)) {
+            if (newDueDate == null) {
+                throw new IllegalArgumentException("newDueDate is required when reassigning an overdue task");
+            }
+            validateOverdueDecisionDueDate(task.getChapterId(), newDueDate);
+            dueDateForNewTask = newDueDate;
         }
 
         String closeSql = "UPDATE PageTask SET status = 'REASSIGNED', actionReason = ?, updatedAt = GETDATE() WHERE id = ?";
@@ -435,7 +447,7 @@ public class PageTaskRepository {
                 task.getPageRangeStart(),
                 task.getPageRangeEnd(),
                 task.getTaskType(),
-                task.getDueDate(),
+                dueDateForNewTask,
                 task.getPriority(),
                 task.getNotes());
         setPreviousAssistantAndReason(newTaskId, task.getAssistantId(), reason.trim());
@@ -1035,6 +1047,7 @@ public class PageTaskRepository {
         if (!"OVERDUE".equals(normalizeStatus(task.getStatus()))) {
             throw new IllegalArgumentException("Only OVERDUE task can be extended");
         }
+        validateOverdueDecisionDueDate(task.getChapterId(), newDueDate);
 
         String sql = "UPDATE PageTask SET dueDate = ?, status = 'IN_PROGRESS', updatedAt = GETDATE() WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -1054,6 +1067,33 @@ public class PageTaskRepository {
             msg += " Reason: " + reason.trim();
         }
         createNotification(task.getAssistantId(), "TASK_EXTENDED", msg, taskId, "TASK");
+    }
+
+    private void validateOverdueDecisionDueDate(long chapterId, Date dueDate) {
+        if (dueDate.before(Date.valueOf(LocalDate.now()))) {
+            throw new IllegalArgumentException("Task dueDate cannot be in the past");
+        }
+        Date latestDueDate = findLatestTaskDueDate(chapterId);
+        if (dueDate.after(latestDueDate)) {
+            throw new IllegalArgumentException("Task dueDate must be at least 3 days before chapter submissionDeadline (BR-34)");
+        }
+    }
+
+    private Date findLatestTaskDueDate(long chapterId) {
+        String sql = "SELECT submissionDeadline FROM Chapter WHERE id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, chapterId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalArgumentException("Chapter not found");
+                }
+                Date submissionDeadline = rs.getDate("submissionDeadline");
+                return Date.valueOf(submissionDeadline.toLocalDate().minusDays(TASK_REJECT_SERIES_DEADLINE_BUFFER_DAYS));
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot validate task due date", ex);
+        }
     }
 
     public int notifyDueSoonTasks() {

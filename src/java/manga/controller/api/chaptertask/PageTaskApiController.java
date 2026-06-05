@@ -222,10 +222,12 @@ public class PageTaskApiController {
             @PathVariable("id") long id,
             HttpSession session,
             @RequestParam("assistantId") long assistantId,
-            @RequestParam("reason") String reason) {
+            @RequestParam("reason") String reason,
+            @RequestParam(value = "newDueDate", required = false) String newDueDate) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
         SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can reassign task");
-        long newTaskId = pageTaskRepository.reassignByMangaka(id, user.getId(), assistantId, reason);
+        Date parsedDueDate = (newDueDate == null || newDueDate.trim().isEmpty()) ? null : Date.valueOf(newDueDate);
+        long newTaskId = pageTaskRepository.reassignByMangaka(id, user.getId(), assistantId, reason, parsedDueDate);
         return ApiResponse.ok(pageTaskRepository.findById(newTaskId), "Task reassigned");
     }
 

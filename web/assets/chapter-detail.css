@@ -104,6 +104,23 @@
 }
 .task-actions-cell { position: relative; vertical-align: top; }
 .task-row-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.overdue-choice-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 14px; }
+.overdue-choice-btn.is-active {
+    background: #111827; border-color: #111827; color: #fff;
+}
+.overdue-choice-btn.danger-soft.is-active {
+    background: #b91c1c; border-color: #b91c1c; color: #fff;
+}
+.overdue-decision-stack { display: grid; gap: 14px; align-items: start; }
+.overdue-decision-panel {
+    border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; background: #f9fafb;
+}
+.overdue-decision-panel strong { font-size: 13px; }
+.overdue-decision-panel textarea {
+    width: 100%; resize: vertical; border: 1px solid #e5e7eb; border-radius: 8px;
+    padding: 8px 10px; box-sizing: border-box;
+}
+.overdue-decision-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .task-action-popover {
     display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
     width: min(360px, calc(100vw - 32px)); z-index: 1200; pointer-events: auto;
@@ -192,8 +209,8 @@
 .chapter-detail-inline-5 { color: #111827; font-weight: 500; }
 .chapter-detail-inline-6 { margin-left: 6px; }
 .chapter-detail-inline-7 { display: flex; justify-content: flex-end; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 8px; }
-.chapter-detail-inline-8 { color: #ef4444; border-color: #fecaca; display: none; }
-.chapter-detail-inline-9, .chapter-detail-inline-10, .chapter-detail-inline-15, .chapter-detail-inline-51, .chapter-detail-inline-57, .chapter-detail-inline-59, .chapter-detail-inline-60 { display: none; }
+.chapter-detail-inline-8 { color: #ef4444; border-color: #fecaca; }
+.chapter-detail-inline-15, .chapter-detail-inline-51, .chapter-detail-inline-57, .chapter-detail-inline-59, .chapter-detail-inline-60 { display: none; }
 .chapter-detail-inline-51 {
     position: fixed;
     inset: 0;
