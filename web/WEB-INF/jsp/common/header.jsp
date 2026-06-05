@@ -83,7 +83,7 @@
         <a class="side-brand" href="${ctx}/main/dashboard" title="Back to Dashboard">
             <div class="brand-icon">MF</div>
             <div>
-                <div class="brand-name">MangaFlow <span style="font-size:10px; color:#aaa; margin-left:6px;">v1.6</span></div>
+                <div class="brand-name">MangaFlow <span style="font-size:10px; color:#aaa; margin-left:6px;">v1.8</span></div>
                 <div class="brand-sub">Manga Studio Ops</div>
             </div>
         </a>
