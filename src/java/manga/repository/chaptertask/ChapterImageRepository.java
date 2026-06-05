@@ -1,6 +1,6 @@
-package manga.repository;
+package manga.repository.chaptertask;
 
-import manga.model.ChapterImageItem;
+import manga.model.chaptertask.ChapterImageItem;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -28,6 +28,7 @@ public class ChapterImageRepository {
             String normalizedType = normalizeImageType(imageType);
             validateUpload(conn, chapterId, pageTaskId, uploadedBy, normalizedType, pageNumber, fileUrl);
 
+            long newId;
             try (PreparedStatement ps = conn.prepareStatement(insertSql, PreparedStatement.RETURN_GENERATED_KEYS)) {
                 ps.setLong(1, chapterId);
                 if (pageTaskId == null) {
@@ -47,12 +48,23 @@ public class ChapterImageRepository {
                 ps.setLong(8, fileSizeBytes);
                 ps.executeUpdate();
                 try (ResultSet rs = ps.getGeneratedKeys()) {
-                    if (rs.next()) {
-                        return rs.getLong(1);
+                    if (!rs.next()) {
+                        throw new IllegalStateException("Cannot upload chapter image");
                     }
+                    newId = rs.getLong(1);
                 }
             }
-            throw new IllegalStateException("Cannot upload chapter image");
+
+            if (pageTaskId != null) {
+                // Task image upload counts as real assistant progress for delayed-task detection.
+                String touchSql = "UPDATE PageTask SET lastProgressAt = GETDATE(), updatedAt = GETDATE() WHERE id = ?";
+                try (PreparedStatement touch = conn.prepareStatement(touchSql)) {
+                    touch.setLong(1, pageTaskId.longValue());
+                    touch.executeUpdate();
+                }
+            }
+
+            return newId;
         } catch (SQLException ex) {
             throw new RuntimeException("Cannot upload chapter image", ex);
         }
@@ -361,3 +373,4 @@ public class ChapterImageRepository {
         private long assistantId;
     }
 }
+

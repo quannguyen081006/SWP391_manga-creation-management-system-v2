@@ -1,13 +1,13 @@
 package manga.controller.web;
 
 import manga.model.AuthenticatedUser;
-import manga.model.ChapterSummary;
+import manga.model.chaptertask.ChapterSummary;
 import manga.model.Proposal;
 import manga.model.SeriesSummary;
-import manga.model.TaskSummary;
-import manga.repository.ChapterRepository;
+import manga.model.chaptertask.TaskSummary;
+import manga.repository.chaptertask.ChapterRepository;
 import manga.repository.DecisionRepository;
-import manga.repository.PageTaskRepository;
+import manga.repository.chaptertask.PageTaskRepository;
 import manga.repository.ProductionRepository;
 import manga.repository.RankingRepository;
 import manga.repository.UserAdminRepository;
@@ -217,6 +217,7 @@ public class ModuleWebController {
         boolean isAssignedAssistant = user.hasRole("ASSISTANT") && user.getId() == task.getAssistantId();
         boolean canAssistantUpdate = isAssignedAssistant
                 && ("IN_PROGRESS".equalsIgnoreCase(task.getStatus())
+                || "SUBMITTED".equalsIgnoreCase(task.getStatus())
                 || "REJECTED".equalsIgnoreCase(task.getStatus())
                 || "OVERDUE".equalsIgnoreCase(task.getStatus()));
         boolean canAssistantSubmit = isAssignedAssistant
@@ -1214,3 +1215,4 @@ public class ModuleWebController {
         return false;
     }
 }
+

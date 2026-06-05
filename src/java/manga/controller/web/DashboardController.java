@@ -1,11 +1,11 @@
 package manga.controller.web;
 
 import manga.model.AuthenticatedUser;
-import manga.model.ChapterSummary;
+import manga.model.chaptertask.ChapterSummary;
 import manga.model.ManuscriptSummary;
 import manga.model.Proposal;
 import manga.model.SeriesSummary;
-import manga.model.TaskSummary;
+import manga.model.chaptertask.TaskSummary;
 import manga.repository.ProductionRepository;
 import manga.service.ProposalService;
 import java.time.LocalDate;
@@ -96,6 +96,7 @@ public class DashboardController {
         return "dashboard/index";
     }
 }
+
 
 
 

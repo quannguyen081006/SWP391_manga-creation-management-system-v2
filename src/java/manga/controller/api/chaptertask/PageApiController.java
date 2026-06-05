@@ -1,12 +1,13 @@
-package manga.controller.api;
+package manga.controller.api.chaptertask;
 
+// Chapter/task API group: page slot changes refresh chapter progress through PageTaskRepository.
 import manga.common.ApiResponse;
 import manga.common.util.SessionUserUtil;
 import manga.model.AuthenticatedUser;
-import manga.model.PageSlotSummary;
-import manga.repository.ChapterRepository;
-import manga.repository.PageRepository;
-import manga.repository.PageTaskRepository;
+import manga.model.chaptertask.PageSlotSummary;
+import manga.repository.chaptertask.ChapterRepository;
+import manga.repository.chaptertask.PageRepository;
+import manga.repository.chaptertask.PageTaskRepository;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -129,3 +130,4 @@ public class PageApiController {
         }
     }
 }
+

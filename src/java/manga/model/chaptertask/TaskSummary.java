@@ -1,4 +1,4 @@
-package manga.model;
+package manga.model.chaptertask;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.sql.Date;
@@ -10,7 +10,7 @@ public class TaskSummary {
     private int pageRangeStart;
     private int pageRangeEnd;
     private String taskType;
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd", timezone = "Asia/Bangkok")
     private Date dueDate;
     private String status;
     private int rejectionCount;
@@ -67,3 +67,4 @@ public class TaskSummary {
     public Long getPreviousAssistantId() { return previousAssistantId; }
     public void setPreviousAssistantId(Long previousAssistantId) { this.previousAssistantId = previousAssistantId; }
 }
+

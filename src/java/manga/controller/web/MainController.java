@@ -4,9 +4,9 @@ import manga.common.exception.ForbiddenException;
 import manga.model.AuthenticatedUser;
 import manga.model.ManuscriptSummary;
 import manga.model.Proposal;
-import manga.model.TaskSummary;
+import manga.model.chaptertask.TaskSummary;
 import manga.common.util.SessionUserUtil;
-import manga.repository.PageTaskRepository;
+import manga.repository.chaptertask.PageTaskRepository;
 import manga.repository.ProductionRepository;
 import manga.service.ProposalService;
 import java.io.File;
@@ -389,3 +389,4 @@ public class MainController {
         return assigned;
     }
 }
+

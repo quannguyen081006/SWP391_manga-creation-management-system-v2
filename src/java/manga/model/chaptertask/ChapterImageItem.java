@@ -1,4 +1,4 @@
-package manga.model;
+package manga.model.chaptertask;
 
 import java.sql.Timestamp;
 
@@ -41,3 +41,4 @@ public class ChapterImageItem {
     public String getNote() { return note; }
     public void setNote(String note) { this.note = note; }
 }
+

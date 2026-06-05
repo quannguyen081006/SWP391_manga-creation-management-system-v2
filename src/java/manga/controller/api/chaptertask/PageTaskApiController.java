@@ -1,10 +1,11 @@
-package manga.controller.api;
+package manga.controller.api.chaptertask;
 
+// Chapter/task API group: task assignment, review, overdue, and extension endpoints live here.
 import manga.common.ApiResponse;
 import manga.common.util.SessionUserUtil;
 import manga.model.AuthenticatedUser;
-import manga.model.TaskSummary;
-import manga.repository.PageTaskRepository;
+import manga.model.chaptertask.TaskSummary;
+import manga.repository.chaptertask.PageTaskRepository;
 import java.sql.Date;
 import java.util.List;
 import javax.servlet.http.HttpSession;
@@ -227,4 +228,18 @@ public class PageTaskApiController {
         long newTaskId = pageTaskRepository.reassignByMangaka(id, user.getId(), assistantId, reason);
         return ApiResponse.ok(pageTaskRepository.findById(newTaskId), "Task reassigned");
     }
+
+    @RequestMapping(value = "/tasks/{id}/extend", method = RequestMethod.POST)
+    public ApiResponse<Object> extendTask(
+            @PathVariable("id") long id,
+            HttpSession session,
+            @RequestParam("newDueDate") String newDueDate,
+            @RequestParam(value = "reason", required = false) String reason) {
+        AuthenticatedUser user = SessionUserUtil.requireUser(session);
+        // Overdue extension is a Mangaka decision, so the repository verifies chapter ownership.
+        SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can extend task");
+        pageTaskRepository.extendOverdueTask(id, user.getId(), Date.valueOf(newDueDate), reason);
+        return ApiResponse.ok(null, "Task extended");
+    }
 }
+

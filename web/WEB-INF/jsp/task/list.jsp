@@ -6,69 +6,11 @@
     <meta charset="UTF-8">
     <title>Tasks</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css?v=20260525" />
-    <style>
-        .task-actions-cell { position: relative; vertical-align: top; }
-        .task-row-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-        .task-action-popover {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: min(360px, calc(100vw - 32px));
-            z-index: 1200;
-            pointer-events: auto;
-            background: #fff;
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            padding: 16px;
-            box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
-        }
-        .task-action-popover.open { display: block; }
-        .task-action-popover strong { display: block; font-size: 14px; margin-bottom: 10px; }
-        .task-action-popover textarea {
-            width: 100%;
-            min-height: 72px;
-            resize: vertical;
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            padding: 8px 10px;
-            font-size: 13px;
-            box-sizing: border-box;
-        }
-        .task-action-popover .popover-helper { font-size: 12px; color: #6b7280; margin: 6px 0 10px; }
-        .task-action-popover .popover-counter { font-size: 11px; color: #9ca3af; text-align: right; margin-top: 4px; }
-        .task-action-popover .popover-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
-        .task-popover-scrim {
-            display: none;
-            position: fixed;
-            inset: 0;
-            z-index: 1190;
-            background: rgba(15, 23, 42, 0.24);
-        }
-        .task-popover-scrim.open { display: block; }
-        .task-decision-label {
-            font-size: 12px;
-            font-weight: 700;
-            padding: 4px 10px;
-            border-radius: 999px;
-        }
-        .task-decision-label.approved { color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; }
-        .task-decision-label.rejected { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; }
-        .task-view-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-        .task-view-note {
-            background: #f9fafb;
-            border: 1px solid #e5e7eb;
-            border-radius: 10px;
-            padding: 10px 12px;
-            font-size: 13px;
-            color: #6b7280;
-            margin-bottom: 14px;
-        }
-    </style>
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/task-list.css?v=20260605fix3" />
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
+<%-- Chapter/task note: task table and review popover CSS is in /assets/task-list.css, not embedded in JSP. --%>
 
 <section class="metric-grid">
     <article class="metric-card"><div id="activeTasks" class="metric-value">0</div><div class="metric-label">Active</div></article>
@@ -78,9 +20,9 @@
     <article class="metric-card"><div id="completedTasks" class="metric-value metric-ok">0</div><div class="metric-label">Completed</div></article>
 </section>
 
-<div id="taskResult" class="alert error" style="display:none;"></div>
+<div id="taskResult" class="alert error task-alert-hidden"></div>
 
-<div id="taskActions" class="section-card" style="display:none;">
+<div id="taskActions" class="section-card task-actions-panel">
     <div class="section-head">
         <div>
             <h3 class="section-title">Task Actions</h3>
@@ -114,19 +56,19 @@
         </select>
         <label class="field-label" for="taskCreateDueDate">Due Date</label>
         <input id="taskCreateDueDate" name="dueDate" type="date" aria-label="Due Date" required />
-        <div id="taskCreateError" class="alert error" style="display:none;"></div>
+        <div id="taskCreateError" class="alert error task-create-error"></div>
         <button class="btn primary" type="submit">Create</button>
         </form>
     </div>
 </div>
-<div class="section-card" style="overflow:visible;">
-    <div class="section-head" style="align-items:center; gap:12px;">
-        <div style="min-width:180px;">
-            <h3 class="section-title" style="margin:0;">All Tasks</h3>
+<div class="section-card task-table-card">
+    <div class="section-head task-table-head">
+        <div class="task-table-title-wrap">
+            <h3 class="section-title task-table-title">All Tasks</h3>
         </div>
-        <div id="taskStatusPills" style="display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; width:100%;"></div>
+        <div id="taskStatusPills" class="task-status-pills"></div>
     </div>
-    <table class="data-table" style="overflow:visible;">
+    <table class="data-table task-data-table">
         <thead>
             <tr>
                 <th>ID</th>
@@ -158,7 +100,7 @@
         </tbody>
     </table>
 
-    <div id="taskPopoverHost" style="position:absolute;left:-9999px;width:0;height:0;overflow:hidden;" aria-hidden="true">
+    <div id="taskPopoverHost" class="task-popover-host" aria-hidden="true">
     <div id="taskPopoverScrim" class="task-popover-scrim" aria-hidden="true"></div>
     <div id="taskApprovePopover" class="task-action-popover" aria-hidden="true">
         <strong id="approvePopoverTitle">Approve task</strong>
@@ -190,8 +132,8 @@
         <h3 id="taskViewTitle" class="section-title compact-title">Task Detail</h3>
         <p id="taskViewSubtitle" class="section-desc"></p>
         <div id="taskViewContent"></div>
-        <div id="taskViewError" class="alert error" style="display:none;margin-top:12px;"></div>
-        <div class="detail-actions modal-actions modal-actions-bottom" style="justify-content:flex-end;gap:8px;">
+        <div id="taskViewError" class="alert error task-view-error"></div>
+        <div class="detail-actions modal-actions modal-actions-bottom task-view-actions">
             <button class="btn small" type="button" data-modal-close>Cancel</button>
             <button class="btn small primary" type="button" id="taskViewSaveBtn">Save changes</button>
         </div>
@@ -319,7 +261,17 @@
 
     function hasRole(role) {
         var roles = currentUser && currentUser.roles ? currentUser.roles : [];
-        return roles.indexOf(role) !== -1;
+        if (String(currentUser && (currentUser.role || currentUser.activeRole || currentUser.currentRole || '')).toUpperCase() === role) {
+            return true;
+        }
+        for (var i = 0; i < roles.length; i++) {
+            var value = roles[i];
+            var name = typeof value === 'string' ? value : (value && (value.name || value.role || value.authority));
+            if (String(name || '').toUpperCase() === role) {
+                return true;
+            }
+        }
+        return false;
     }
 
     function isAssignedAssistant(task) {
@@ -582,10 +534,10 @@
         var overlay = document.createElement('div');
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.72);z-index:1400;display:flex;align-items:center;justify-content:center;padding:24px;';
         overlay.innerHTML =
-            '<button type="button" aria-label="Close" style="position:absolute;right:22px;top:18px;width:36px;height:36px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;font-size:24px;cursor:pointer;">&times;</button>'
-            + '<div style="max-width:min(1100px,96vw);max-height:92vh;text-align:center;color:#fff;">'
-            + '<img src="' + escapeHtml(url) + '" alt="' + escapeHtml(title || 'Preview') + '" style="max-width:100%;max-height:84vh;object-fit:contain;border-radius:10px;background:#fff;" />'
-            + '<div style="margin-top:10px;font-size:13px;">' + escapeHtml(title || '') + '</div></div>';
+            '<button type="button" aria-label="Close" class="task-preview-close">&times;</button>'
+            + '<div class="task-preview-box">'
+            + '<img src="' + escapeHtml(url) + '" alt="' + escapeHtml(title || 'Preview') + '" class="task-preview-image" />'
+            + '<div class="task-preview-title">' + escapeHtml(title || '') + '</div></div>';
         function close() {
             overlay.remove();
             document.removeEventListener('keydown', onKey);
@@ -772,11 +724,6 @@
         renderStatusPills(counts);
     }
 
-    function canAssistantSubmit(task) {
-        var st = String(task.status || '').toUpperCase();
-        return isAssignedAssistant(task) && (st === 'IN_PROGRESS' || st === 'REJECTED' || st === 'OVERDUE');
-    }
-
     function renderViewModalContent(task) {
         var chapter = chapterById[String(task.chapterId)];
         var latestDueDate = chapter && chapter.submissionDeadline ? addDaysIso(chapter.submissionDeadline, -3) : '';
@@ -788,17 +735,17 @@
             saveBtn.style.display = canEdit ? '' : 'none';
         }
         var approvedNote = String(task.status || '').toUpperCase() === 'APPROVED'
-            ? '<div class="alert error" style="margin-bottom:12px;">Approved task cannot be edited. Create a new task instead (BR-TSK-06)</div>'
+            ? '<div class="alert error task-feedback-block">Approved task cannot be edited. Create a new task instead (BR-TSK-06)</div>'
             : '';
         var feedback = '';
         if (task.approvalComment) {
-            feedback += '<div class="alert success" style="margin-bottom:12px;"><strong>Approval comment:</strong><div style="margin-top:6px;">' + escapeHtml(task.approvalComment) + '</div></div>';
+            feedback += '<div class="alert success task-feedback-block"><strong>Approval comment:</strong><div class="task-feedback-body">' + escapeHtml(task.approvalComment) + '</div></div>';
         }
         if (task.rejectionReason) {
-            feedback += '<div class="alert error" style="margin-bottom:12px;"><strong>Revision note:</strong><div style="margin-top:6px;">' + escapeHtml(task.rejectionReason) + '</div></div>';
+            feedback += '<div class="alert error task-feedback-block"><strong>Revision note:</strong><div class="task-feedback-body">' + escapeHtml(task.rejectionReason) + '</div></div>';
         }
         if (task.actionReason && (taskStatus === 'DELETED' || taskStatus === 'REASSIGNED')) {
-            feedback += '<div class="alert warning" style="margin-bottom:12px;"><strong>' + (taskStatus === 'DELETED' ? 'Deleted reason:' : 'Reassigned reason:') + '</strong><div style="margin-top:6px;white-space:pre-wrap;">' + escapeHtml(task.actionReason) + '</div></div>';
+            feedback += '<div class="alert warning task-feedback-block"><strong>' + (taskStatus === 'DELETED' ? 'Deleted reason:' : 'Reassigned reason:') + '</strong><div class="task-feedback-body-pre">' + escapeHtml(task.actionReason) + '</div></div>';
         }
         return approvedNote
             + '<div class="task-view-chips">'
@@ -810,7 +757,7 @@
             + '<p class="task-view-note">Approve / Reject được thực hiện trực tiếp từ bảng — modal này chỉ để xem và cập nhật tiến độ.</p>'
             + feedback
             + (canEdit
-                ? ('<form id="taskViewUpdateForm" class="form-grid task-view-update-form" style="max-width:640px;">'
+                ? ('<form id="taskViewUpdateForm" class="form-grid task-view-update-form task-view-update-form-layout">'
                     + '<input name="taskId" type="hidden" value="' + task.id + '" />'
                     + '<input name="assistantId" type="hidden" value="' + task.assistantId + '" />'
                     + '<input name="pageRangeStart" type="hidden" value="' + task.pageRangeStart + '" />'
@@ -849,16 +796,14 @@
             html += ' <button class="btn small success-soft" type="button" data-task-approve-pop="' + task.id + '">Approve</button>';
             html += ' <button class="btn small danger-soft" type="button" data-task-reject-pop="' + task.id + '">Reject</button>';
         }
-        if (canAssistantSubmit(task)) {
-            html += ' <button class="btn small primary" type="button" data-task-submit-review="' + task.id + '">Submit for Review</button>';
-        }
+        // Assistant submits from the task detail/work area, not directly from the All Tasks table.
         return html;
     }
 
     function renderImageForm(task) {
         var uploadForm = '';
         if (isAssignedAssistant(task)) {
-            uploadForm = '<form class="form-grid task-image-upload-form" data-task-id="' + task.id + '" data-chapter-id="' + task.chapterId + '" style="display:grid; max-width:680px;margin-bottom:12px;">'
+            uploadForm = '<form class="form-grid task-image-upload-form task-image-upload-form-layout" data-task-id="' + task.id + '" data-chapter-id="' + task.chapterId + '">'
                 + '<strong>Upload Page Image</strong>'
                 + '<input name="imageType" type="hidden" value="PAGE" />'
                 + '<input name="pageTaskId" type="hidden" value="' + task.id + '" />'
@@ -881,15 +826,15 @@
         if (!images.length) {
             return '<p class="section-desc">No images uploaded yet.</p>';
         }
-        return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;">' + images.map(function (img) {
+        return '<div class="task-image-grid">' + images.map(function (img) {
             var url = imageUrl(img.fileUrl);
             var deleteButton = canDeleteImage(img)
                 ? '<button class="btn small danger-soft" type="button" data-task-image-delete="' + img.id + '" data-task-id="' + img.pageTaskId + '">Delete</button>'
                 : '';
             var downloadButton = '<a class="btn small" href="' + escapeHtml(url) + '" download>Download</a>';
-            return '<div class="panel" style="margin:0;padding:10px;">'
-                + '<img src="' + escapeHtml(url) + '" alt="' + escapeHtml(img.originalFileName || ('Page ' + img.pageNumber)) + '" data-preview-src="' + escapeHtml(url) + '" data-preview-title="Page ' + escapeHtml(img.pageNumber || '') + '" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;border:1px solid #e5e7eb;cursor:zoom-in;" />'
-                + '<div style="margin-top:8px;font-weight:700;">Page ' + escapeHtml(img.pageNumber || '') + '</div>'
+            return '<div class="panel task-image-card">'
+                + '<img src="' + escapeHtml(url) + '" alt="' + escapeHtml(img.originalFileName || ('Page ' + img.pageNumber)) + '" data-preview-src="' + escapeHtml(url) + '" data-preview-title="Page ' + escapeHtml(img.pageNumber || '') + '" class="task-image-thumb" />'
+                + '<div class="task-image-title">Page ' + escapeHtml(img.pageNumber || '') + '</div>'
                 + '<div class="section-desc">' + escapeHtml(img.originalFileName || '') + '</div>'
                 + downloadButton
                 + deleteButton
@@ -928,14 +873,14 @@
 
     function renderTaskDetail(task) {
         return '<strong>Task #' + task.id + ' Detail</strong>'
-            + '<div class="inline-meta" style="margin-top:10px;gap:14px;">'
+            + '<div class="inline-meta task-inline-meta-spaced">'
             + '<span>Pages: ' + task.pageRangeStart + '-' + task.pageRangeEnd + '</span>'
             + '<span>Type: ' + formatStatus(task.taskType) + '</span>'
             + '<span>Assigned: ' + escapeHtml(task.assistantName) + '</span>'
             + '<span>Status: ' + renderStatusCell(task) + '</span>'
             + '<span>Due Date: ' + formatDueDateCell(task) + '</span>'
             + '</div>'
-            + (task.notes ? '<div class="alert info" style="margin-top:12px;"><strong>Mangaka note:</strong><div style="margin-top:6px;white-space:pre-wrap;">' + escapeHtml(task.notes) + '</div></div>' : '');
+            + (task.notes ? '<div class="alert info task-note-block"><strong>Mangaka note:</strong><div class="task-feedback-body-pre">' + escapeHtml(task.notes) + '</div></div>' : '');
     }
 
     function findTask(taskId) {
@@ -1114,20 +1059,6 @@
             return;
         }
 
-        var submitReviewButton = e.target.closest ? e.target.closest('[data-task-submit-review]') : null;
-        if (submitReviewButton) {
-            try {
-                closePopovers();
-                var submitTaskId = submitReviewButton.getAttribute('data-task-submit-review');
-                await callApi('PATCH', '/api/v1/tasks/' + submitTaskId + '/status', { status: 'SUBMITTED' });
-                showMessage('Task submitted for Mangaka review.', false);
-                closeModals();
-                await loadData();
-            } catch (err) {
-                showMessage(err.message, true);
-            }
-            return;
-        }
     });
 
     document.getElementById('approvePopoverConfirm').addEventListener('click', async function () {

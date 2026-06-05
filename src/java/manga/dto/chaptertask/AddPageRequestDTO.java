@@ -1,7 +1,7 @@
-package manga.dto;
+package manga.dto.chaptertask;
 
 /**
- * DTO for adding page to manuscript requests.
+ * Chapter/task DTO for adding an approved chapter image into a manuscript version.
  */
 public class AddPageRequestDTO {
     private Long chapterImageId;

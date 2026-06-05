@@ -1,10 +1,11 @@
-package manga.controller.api;
+package manga.controller.api.chaptertask;
 
+// Chapter/task API group: handles uploaded chapter page images and keeps image workflow endpoints together.
 import manga.common.ApiResponse;
 import manga.common.util.SessionUserUtil;
 import manga.model.AuthenticatedUser;
-import manga.model.ChapterImageItem;
-import manga.repository.ChapterImageRepository;
+import manga.model.chaptertask.ChapterImageItem;
+import manga.repository.chaptertask.ChapterImageRepository;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -284,3 +285,4 @@ public class ChapterImageApiController {
         }
     }
 }
+

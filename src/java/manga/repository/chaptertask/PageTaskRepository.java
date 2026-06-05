@@ -1,8 +1,8 @@
-package manga.repository;
+package manga.repository.chaptertask;
 
 import manga.model.AuthenticatedUser;
-import manga.model.ChapterImageItem;
-import manga.model.TaskSummary;
+import manga.model.chaptertask.ChapterImageItem;
+import manga.model.chaptertask.TaskSummary;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.PreparedStatement;
@@ -23,11 +23,17 @@ import org.springframework.stereotype.Repository;
 public class PageTaskRepository {
 
     private static final int TASK_REJECT_SERIES_DEADLINE_BUFFER_DAYS = 3;
+    private static final String SQL_CLOSED_TASK_STATUSES = "'APPROVED','DELETED','REASSIGNED','CANCELLED'";
+    private static final String SQL_OVERDUE_SKIP_STATUSES = "'APPROVED','OVERDUE','CANCELLED','DELETED','REASSIGNED'";
 
+    /*
+     * Delayed is only a warning flag, not a task status transition.
+     * It is based on work progress (lastProgressAt), while OVERDUE is based on dueDate.
+     */
     private static final String SQL_IS_DELAYED =
             "CAST(CASE WHEN t.status IN ('PENDING','IN_PROGRESS','REJECTED') "
             + "AND DATEDIFF(DAY, t.assignedAt, GETDATE()) >= 3 "
-            + "AND DATEDIFF(DAY, t.updatedAt, GETDATE()) >= 3 "
+            + "AND DATEDIFF(DAY, COALESCE(t.lastProgressAt, t.assignedAt), GETDATE()) >= 3 "
             + "THEN 1 ELSE 0 END AS BIT) AS isDelayed";
 
     private static final String SQL_TASK_COLUMNS_BASE =
@@ -72,8 +78,13 @@ public class PageTaskRepository {
                 return;
             }
             try (Connection conn = dataSource.getConnection()) {
+                /*
+                 * Runtime schema guard for older local databases.
+                 * schema.sql also contains these columns/statuses for clean DB rebuilds.
+                 */
                 addColumnIfMissing(conn, "actionReason", "nvarchar(300) NULL");
                 addColumnIfMissing(conn, "previousAssistantId", "bigint NULL");
+                addColumnIfMissing(conn, "lastProgressAt", "datetime NULL");
                 String dropConstraint =
                         "IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_PageTask_status' AND parent_object_id = OBJECT_ID('dbo.PageTask')) "
                         + "ALTER TABLE [dbo].[PageTask] DROP CONSTRAINT [CK_PageTask_status]";
@@ -83,7 +94,7 @@ public class PageTaskRepository {
                 String addConstraint =
                         "IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_PageTask_status' AND parent_object_id = OBJECT_ID('dbo.PageTask')) "
                         + "ALTER TABLE [dbo].[PageTask] WITH CHECK ADD CONSTRAINT [CK_PageTask_status] CHECK "
-                        + "([status] IN ('PENDING','IN_PROGRESS','SUBMITTED','APPROVED','REJECTED','OVERDUE','DELETED','REASSIGNED'))";
+                        + "([status] IN ('PENDING','IN_PROGRESS','SUBMITTED','APPROVED','REJECTED','OVERDUE','DELETED','REASSIGNED','CANCELLED'))";
                 try (PreparedStatement ps = conn.prepareStatement(addConstraint)) {
                     ps.executeUpdate();
                 }
@@ -269,7 +280,8 @@ public class PageTaskRepository {
 
     public long create(long chapterId, long assistantId, int start, int end, String taskType, Date dueDate, String priority, String notes) {
         ensureTaskLifecycleSchemaReady();
-        String overlapSql = "SELECT COUNT(1) FROM PageTask WHERE chapterId = ? AND UPPER(status) NOT IN ('APPROVED','DELETED','REASSIGNED') AND NOT (pageRangeEnd < ? OR pageRangeStart > ?)";
+        // Only active tasks block page-range reuse; closed tasks do not block new assignment.
+        String overlapSql = "SELECT COUNT(1) FROM PageTask WHERE chapterId = ? AND UPPER(status) NOT IN (" + SQL_CLOSED_TASK_STATUSES + ") AND NOT (pageRangeEnd < ? OR pageRangeStart > ?)";
         String chapterSql = "SELECT c.submissionDeadline, c.seriesId, s.mangakaId FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?";
         String enrollmentSql = "SELECT COUNT(1) FROM MangakaAssistant WHERE mangakaId = ? AND assistantId = ?";
         String insertExtendedSql = "INSERT INTO PageTask (chapterId, assistantId, pageRangeStart, pageRangeEnd, taskType, dueDate, status, rejectionCount, priority, notes, assignedAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, 'IN_PROGRESS', 0, ?, ?, GETDATE(), GETDATE())";
@@ -355,7 +367,7 @@ public class PageTaskRepository {
                     end,
                     taskType,
                     dueDate,
-                    "SELECT COUNT(1) FROM PageTask WHERE chapterId = ? AND id <> ? AND UPPER(status) NOT IN ('APPROVED','DELETED','REASSIGNED') AND NOT (pageRangeEnd < ? OR pageRangeStart > ?)",
+                    "SELECT COUNT(1) FROM PageTask WHERE chapterId = ? AND id <> ? AND UPPER(status) NOT IN (" + SQL_CLOSED_TASK_STATUSES + ") AND NOT (pageRangeEnd < ? OR pageRangeStart > ?)",
                     "SELECT c.submissionDeadline, c.seriesId, s.mangakaId FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?",
                     "SELECT COUNT(1) FROM MangakaAssistant WHERE mangakaId = ? AND assistantId = ?");
 
@@ -398,8 +410,9 @@ public class PageTaskRepository {
         if (findChapterOwnerMangaka(task.getChapterId()) != mangakaId) {
             throw new IllegalArgumentException("Only chapter owner can reassign task");
         }
-        if (!"IN_PROGRESS".equals(normalizeStatus(task.getStatus()))) {
-            throw new IllegalArgumentException("Only IN_PROGRESS task can be reassigned");
+        String currentStatusForReassign = normalizeStatus(task.getStatus());
+        if (!"IN_PROGRESS".equals(currentStatusForReassign) && !"OVERDUE".equals(currentStatusForReassign)) {
+            throw new IllegalArgumentException("Only IN_PROGRESS or OVERDUE task can be reassigned");
         }
         if (task.getAssistantId() == newAssistantId) {
             throw new IllegalArgumentException("Choose a different assistant");
@@ -447,8 +460,9 @@ public class PageTaskRepository {
         if (findChapterOwnerMangaka(task.getChapterId()) != mangakaId) {
             throw new IllegalArgumentException("Only chapter owner can delete task");
         }
-        if (!"IN_PROGRESS".equals(normalizeStatus(task.getStatus()))) {
-            throw new IllegalArgumentException("Only IN_PROGRESS task can be deleted");
+        String currentStatusForDelete = normalizeStatus(task.getStatus());
+        if (!"IN_PROGRESS".equals(currentStatusForDelete) && !"OVERDUE".equals(currentStatusForDelete)) {
+            throw new IllegalArgumentException("Only IN_PROGRESS or OVERDUE task can be deleted");
         }
 
         String sql = "UPDATE PageTask SET status = 'DELETED', actionReason = ?, updatedAt = GETDATE() WHERE id = ?";
@@ -602,13 +616,14 @@ public class PageTaskRepository {
     }
 
     public void updateStatusByAssistant(long taskId, long assistantId, String status) {
+        ensureTaskLifecycleSchemaReady();
         String normalized = status == null ? "" : status.trim().toUpperCase();
         if (!"SUBMITTED".equals(normalized)) {
             throw new IllegalArgumentException("Assistant can only submit task for review");
         }
 
         String readSql = "SELECT chapterId, assistantId, status, taskType FROM PageTask WHERE id = ?";
-        String updateSql = "UPDATE PageTask SET status = ?, updatedAt = GETDATE() WHERE id = ?";
+        String updateSql = "UPDATE PageTask SET status = ?, updatedAt = GETDATE(), lastProgressAt = GETDATE() WHERE id = ?";
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement read = conn.prepareStatement(readSql)) {
@@ -630,6 +645,7 @@ public class PageTaskRepository {
             }
 
             String current = normalizeStatus(currentStatus);
+            // Assistants may still submit late while Mangaka is deciding what to do with an OVERDUE task.
             if (!("IN_PROGRESS".equals(current)
                     || "REJECTED".equals(current)
                     || "OVERDUE".equals(current))) {
@@ -890,12 +906,16 @@ public class PageTaskRepository {
     }
 
     public int markOverdueTasks() {
+        /*
+         * OVERDUE is a lifecycle state: due date has passed and task still needs action.
+         * It is separate from the delayed warning flag.
+         */
         String selectSql =
-            "SELECT t.id, t.chapterId, s.mangakaId "
+            "SELECT t.id, t.chapterId, t.assistantId, s.mangakaId "
             + "FROM PageTask t "
             + "JOIN Chapter c ON c.id = t.chapterId "
             + "JOIN Series s ON s.id = c.seriesId "
-            + "WHERE t.dueDate < CAST(GETDATE() AS DATE) AND t.status NOT IN ('APPROVED','OVERDUE')";
+            + "WHERE t.dueDate < CAST(GETDATE() AS DATE) AND t.status NOT IN (" + SQL_OVERDUE_SKIP_STATUSES + ")";
         String updateSql = "UPDATE PageTask SET status = 'OVERDUE', updatedAt = GETDATE() WHERE id = ?";
 
         int changed = 0;
@@ -906,7 +926,7 @@ public class PageTaskRepository {
 
             List<long[]> rows = new ArrayList<long[]>();
             while (rs.next()) {
-                rows.add(new long[] { rs.getLong("id"), rs.getLong("chapterId"), rs.getLong("mangakaId") });
+                rows.add(new long[] { rs.getLong("id"), rs.getLong("chapterId"), rs.getLong("assistantId"), rs.getLong("mangakaId") });
             }
 
             for (long[] row : rows) {
@@ -915,10 +935,18 @@ public class PageTaskRepository {
                     if (update.executeUpdate() > 0) {
                         changed++;
                         chapters.add(row[1]);
+                        // Notify mangaka: action required
+                        createNotificationIfAbsentToday(
+                                row[3],
+                                "TASK_OVERDUE_ACTION_REQUIRED",
+                                "Task #" + row[0] + " is overdue. Please decide: extend, reassign, or cancel.",
+                                row[0],
+                                "TASK");
+                        // Notify assistant
                         createNotificationIfAbsentToday(
                                 row[2],
                                 "TASK_OVERDUE",
-                                "Task #" + row[0] + " is overdue. Please update immediately.",
+                                "Task #" + row[0] + " is overdue. Please contact your Mangaka.",
                                 row[0],
                                 "TASK");
                     }
@@ -932,6 +960,100 @@ public class PageTaskRepository {
             refreshChapterProgress(chapterId.longValue());
         }
         return changed;
+    }
+
+    /**
+     * Auto-cancel tasks that have been OVERDUE for 3+ days with no mangaka decision.
+     * Runs daily at 09:00 via PageTaskScheduler.
+     */
+    public int escalatePendingOverdueDecisions() {
+        ensureTaskLifecycleSchemaReady();
+        String selectSql =
+            "SELECT t.id, t.chapterId, t.assistantId "
+            + "FROM PageTask t "
+            + "WHERE t.status = 'OVERDUE' "
+            + "AND DATEDIFF(DAY, t.updatedAt, GETDATE()) >= 3";
+        String updateSql =
+            "UPDATE PageTask SET status = 'CANCELLED', actionReason = 'Auto-cancelled: no mangaka decision within 3 days of overdue', "
+            + "updatedAt = GETDATE() WHERE id = ? AND status = 'OVERDUE'";
+
+        int cancelled = 0;
+        Set<Long> chapters = new HashSet<Long>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement select = conn.prepareStatement(selectSql);
+             ResultSet rs = select.executeQuery()) {
+
+            List<long[]> rows = new ArrayList<long[]>();
+            while (rs.next()) {
+                rows.add(new long[] { rs.getLong("id"), rs.getLong("chapterId"), rs.getLong("assistantId") });
+            }
+
+            for (long[] row : rows) {
+                try (PreparedStatement update = conn.prepareStatement(updateSql)) {
+                    update.setLong(1, row[0]);
+                    if (update.executeUpdate() > 0) {
+                        cancelled++;
+                        chapters.add(row[1]);
+                        createNotificationIfAbsentToday(
+                                row[2],
+                                "TASK_CANCELLED",
+                                "Task #" + row[0] + " has been auto-cancelled: no mangaka decision within 3 days of overdue.",
+                                row[0],
+                                "TASK");
+                    }
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot escalate overdue decisions", ex);
+        }
+
+        for (Long chapterId : chapters) {
+            refreshChapterProgress(chapterId.longValue());
+        }
+        return cancelled;
+    }
+
+    /**
+     * Extend an OVERDUE task: set new dueDate, reset status to IN_PROGRESS.
+     * Only the chapter owner Mangaka can call this.
+     */
+    public void extendOverdueTask(long taskId, long mangakaId, java.sql.Date newDueDate, String reason) {
+        ensureTaskLifecycleSchemaReady();
+        if (newDueDate == null) {
+            throw new IllegalArgumentException("newDueDate is required");
+        }
+        if (newDueDate.before(java.sql.Date.valueOf(java.time.LocalDate.now()))) {
+            throw new IllegalArgumentException("newDueDate cannot be in the past");
+        }
+        TaskSummary task = findById(taskId);
+        if (task == null) {
+            throw new IllegalArgumentException("Task not found");
+        }
+        if (findChapterOwnerMangaka(task.getChapterId()) != mangakaId) {
+            throw new IllegalArgumentException("Only chapter owner can extend task");
+        }
+        if (!"OVERDUE".equals(normalizeStatus(task.getStatus()))) {
+            throw new IllegalArgumentException("Only OVERDUE task can be extended");
+        }
+
+        String sql = "UPDATE PageTask SET dueDate = ?, status = 'IN_PROGRESS', updatedAt = GETDATE() WHERE id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setDate(1, newDueDate);
+            ps.setLong(2, taskId);
+            if (ps.executeUpdate() == 0) {
+                throw new IllegalArgumentException("Task not found");
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot extend task", ex);
+        }
+
+        refreshChapterProgress(task.getChapterId());
+        String msg = "Task #" + taskId + " deadline extended to " + newDueDate + ".";
+        if (reason != null && !reason.trim().isEmpty()) {
+            msg += " Reason: " + reason.trim();
+        }
+        createNotification(task.getAssistantId(), "TASK_EXTENDED", msg, taskId, "TASK");
     }
 
     public int notifyDueSoonTasks() {
@@ -970,7 +1092,7 @@ public class PageTaskRepository {
             + "JOIN Series s ON s.id = c.seriesId "
             + "WHERE t.status IN ('PENDING','IN_PROGRESS','REJECTED') "
             + "AND DATEDIFF(DAY, t.assignedAt, GETDATE()) >= 3 "
-            + "AND DATEDIFF(DAY, t.updatedAt, GETDATE()) >= 3";
+            + "AND DATEDIFF(DAY, COALESCE(t.lastProgressAt, t.assignedAt), GETDATE()) >= 3";
 
         int sent = 0;
         try (Connection conn = dataSource.getConnection();
@@ -1080,7 +1202,11 @@ public class PageTaskRepository {
     }
 
     public boolean areAllTasksApproved(long chapterId) {
-        String sql = "SELECT CASE WHEN COUNT(1) = 0 THEN 0 ELSE SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) END AS approvedCount, COUNT(1) AS totalCount FROM PageTask WHERE chapterId = ?";
+        // Closed tasks are excluded from the active denominator so they do not block completion.
+        String sql = "SELECT "
+                + "SUM(CASE WHEN UPPER(status) = 'APPROVED' THEN 1 ELSE 0 END) AS approvedCount, "
+                + "SUM(CASE WHEN UPPER(status) NOT IN ('DELETED','REASSIGNED','CANCELLED') THEN 1 ELSE 0 END) AS totalCount "
+                + "FROM PageTask WHERE chapterId = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, chapterId);
@@ -1174,6 +1300,15 @@ public class PageTaskRepository {
         }
         if ("TASK_OVERDUE".equals(normalized)) {
             return "Task overdue";
+        }
+        if ("TASK_OVERDUE_ACTION_REQUIRED".equals(normalized)) {
+            return "Task overdue - action required";
+        }
+        if ("TASK_EXTENDED".equals(normalized)) {
+            return "Task deadline extended";
+        }
+        if ("TASK_CANCELLED".equals(normalized)) {
+            return "Task cancelled";
         }
         if ("TASK_ESCALATED".equals(normalized)) {
             return "Task escalated";
@@ -1320,3 +1455,4 @@ public class PageTaskRepository {
         return normalized;
     }
 }
+

@@ -6,6 +6,7 @@
     <meta charset="UTF-8">
     <title>Task Detail</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/task-list.css?v=20260605fix3" />
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
@@ -19,18 +20,18 @@
     <div><span class="detail-label">Due Date</span><strong>${task.dueDate}</strong></div>
     <div><span class="detail-label">Status</span>
         <span class="status-chip ${task.status=='APPROVED' ? 'status-approved' : (task.status=='OVERDUE' ? 'status-overdue' : 'status-progress')}">${task.status}</span>
-        <c:if test="${task.delayed}"><span class="status-chip status-delayed" style="margin-left:6px;">Delayed</span></c:if>
+        <c:if test="${task.delayed}"><span class="status-chip status-delayed task-detail-delayed-chip">Delayed</span></c:if>
     </div>
 </div>
 
 <c:if test="${task.status == 'DELETED' || task.status == 'REASSIGNED'}">
     <div class="section-card">
         <h3 class="section-title compact-title">${task.status == 'DELETED' ? 'Task Deleted' : 'Task Reassigned'}</h3>
-        <div class="alert warning" style="margin-bottom:0;">
+        <div class="alert warning task-detail-alert-flat">
             <div>This task is no longer editable.</div>
             <c:if test="${not empty task.actionReason}">
                 <strong>Reason:</strong>
-                <div style="margin-top:6px;white-space:pre-wrap;"><c:out value="${task.actionReason}" /></div>
+                <div class="task-detail-preline-note"><c:out value="${task.actionReason}" /></div>
             </c:if>
         </div>
     </div>
@@ -39,7 +40,7 @@
 <c:if test="${not empty task.notes}">
     <div class="section-card">
         <h3 class="section-title compact-title">Mangaka Note</h3>
-        <div style="white-space:pre-wrap;"><c:out value="${task.notes}" /></div>
+        <div class="task-detail-notes"><c:out value="${task.notes}" /></div>
     </div>
 </c:if>
 
@@ -47,15 +48,15 @@
     <div class="section-card">
         <h3 class="section-title compact-title">Mangaka Feedback</h3>
         <c:if test="${not empty task.approvalComment}">
-            <div class="alert success" style="margin-bottom:0;">
+            <div class="alert success task-detail-alert-flat">
                 <strong>Approval comment:</strong>
-                <div style="margin-top:6px;"><c:out value="${task.approvalComment}" /></div>
+                <div class="task-detail-feedback-body"><c:out value="${task.approvalComment}" /></div>
             </div>
         </c:if>
         <c:if test="${not empty task.rejectionReason}">
-            <div class="alert error" style="margin-bottom:0;">
+            <div class="alert error task-detail-alert-flat">
                 <strong>Revision note:</strong>
-                <div style="margin-top:6px;"><c:out value="${task.rejectionReason}" /></div>
+                <div class="task-detail-feedback-body"><c:out value="${task.rejectionReason}" /></div>
             </div>
         </c:if>
     </div>
@@ -97,7 +98,9 @@
 
 <div id="stickySubmitBar"></div>
 <div id="toastContainer"></div>
-<input type="file" id="pageFileInput" accept="image/*" style="display:none" />
+<c:if test="${canAssistantUpdate}">
+    <input type="file" id="pageFileInput" accept="image/*" class="task-detail-hidden-file" hidden />
+</c:if>
 
 <a class="btn" href="${pageContext.request.contextPath}/main/tasks">Back to Tasks</a>
 
@@ -114,7 +117,7 @@ const PAGE_TASK = {
     ctx: '${pageContext.request.contextPath}'
 };
 </script>
-<script src="${pageContext.request.contextPath}/assets/page-submission.js"></script>
+<script src="${pageContext.request.contextPath}/assets/page-submission.js?v=20260605fix1"></script>
 
 <jsp:include page="../common/footer.jsp" />
 </body>

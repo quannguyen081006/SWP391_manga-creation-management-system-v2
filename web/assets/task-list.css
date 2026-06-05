@@ -1,0 +1,89 @@
+/* Task list page styles: task table actions, review popovers, and task view modal helpers. */
+.task-actions-cell { position: relative; vertical-align: top; }
+.task-row-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.task-action-popover {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(360px, calc(100vw - 32px));
+    z-index: 1200;
+    pointer-events: auto;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+}
+.task-action-popover.open { display: block; }
+.task-action-popover strong { display: block; font-size: 14px; margin-bottom: 10px; }
+.task-action-popover textarea {
+    width: 100%;
+    min-height: 72px;
+    resize: vertical;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+    box-sizing: border-box;
+}
+.task-action-popover .popover-helper { font-size: 12px; color: #6b7280; margin: 6px 0 10px; }
+.task-action-popover .popover-counter { font-size: 11px; color: #9ca3af; text-align: right; margin-top: 4px; }
+.task-action-popover .popover-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.task-popover-scrim {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1190;
+    background: rgba(15, 23, 42, 0.24);
+}
+.task-popover-scrim.open { display: block; }
+.task-decision-label {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+}
+.task-decision-label.approved { color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; }
+.task-decision-label.rejected { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; }
+.task-view-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.task-view-note {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 13px;
+    color: #6b7280;
+    margin-bottom: 14px;
+}
+/* Task page layout helpers: semantic classes replace old inline JSP CSS. */
+.task-alert-hidden, .task-actions-panel, .task-create-error, .task-detail-hidden-file { display: none; }
+.task-table-card, .task-data-table { overflow: visible; }
+.task-table-head { align-items: center; gap: 12px; }
+.task-table-title-wrap { min-width: 180px; }
+.task-table-title { margin: 0; }
+.task-status-pills { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; width: 100%; }
+.task-popover-host { position: absolute; left: -9999px; width: 0; height: 0; overflow: hidden; }
+.task-view-error { display: none; margin-top: 12px; }
+.task-view-actions { justify-content: flex-end; gap: 8px; }
+.task-preview-close { position: absolute; right: 22px; top: 18px; width: 36px; height: 36px; border-radius: 50%; border: 1px solid #e5e7eb; background: #fff; font-size: 24px; cursor: pointer; }
+.task-preview-box { max-width: min(1100px, 96vw); max-height: 92vh; text-align: center; color: #fff; }
+.task-preview-image { max-width: 100%; max-height: 84vh; object-fit: contain; border-radius: 10px; background: #fff; }
+.task-preview-title { margin-top: 10px; font-size: 13px; }
+.task-feedback-block { margin-bottom: 12px; }
+.task-feedback-body { margin-top: 6px; }
+.task-feedback-body-pre { margin-top: 6px; white-space: pre-wrap; }
+.task-view-update-form-layout { max-width: 640px; }
+.task-image-upload-form-layout { display: grid; max-width: 680px; margin-bottom: 12px; }
+.task-image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.task-image-card { margin: 0; padding: 10px; }
+.task-image-thumb { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; border: 1px solid #e5e7eb; cursor: zoom-in; }
+.task-image-title { margin-top: 8px; font-weight: 700; }
+.task-inline-meta-spaced { margin-top: 10px; gap: 14px; }
+.task-note-block { margin-top: 12px; }
+.task-detail-delayed-chip { margin-left: 6px; }
+.task-detail-alert-flat { margin-bottom: 0; }
+.task-detail-preline-note { margin-top: 6px; white-space: pre-wrap; }
+.task-detail-notes { white-space: pre-wrap; }
+.task-detail-feedback-body { margin-top: 6px; }

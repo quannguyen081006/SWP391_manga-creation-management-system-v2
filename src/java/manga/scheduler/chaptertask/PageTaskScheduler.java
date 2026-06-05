@@ -1,6 +1,7 @@
-package manga.service;
+package manga.scheduler.chaptertask;
 
-import manga.repository.PageTaskRepository;
+// Chapter/task scheduler group: task lifecycle jobs call repository methods so rules stay in one place.
+import manga.repository.chaptertask.PageTaskRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -28,4 +29,11 @@ public class PageTaskScheduler {
     public void detectDelayedTasks() {
         pageTaskRepository.markDelayedTasks();
     }
+
+    // Auto-cancel OVERDUE tasks with no mangaka decision for 3+ days
+    @Scheduled(cron = "0 0 9 * * *")
+    public void escalatePendingOverdueDecisions() {
+        pageTaskRepository.escalatePendingOverdueDecisions();
+    }
 }
+

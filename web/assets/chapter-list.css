@@ -1,0 +1,77 @@
+/* Chapter tracker page styles: table layout, filters, and grouped chapter rows. */
+.chapter-page-intro { margin-bottom: 28px; }
+.chapter-page-intro .page-sub { margin: 10px 0 0; font-size: 15px; line-height: 1.5; }
+.chapter-page-intro #chapterFilterSubtitle { margin: 8px 0 0; font-size: 14px; line-height: 1.5; }
+#chapterResult { margin-bottom: 16px; }
+.data-table th.th-sortable { white-space: nowrap; }
+.data-table th.th-sortable .th-sort-inner {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+.data-table th.th-sortable .chapter-sort-btn {
+    flex-shrink: 0;
+    padding: 2px 6px;
+    line-height: 1;
+}
+.data-table th.th-sort-no { min-width: 72px; }
+/* Fixed column widths so all 3 tables align identically */
+.chapter-tracker-table {
+    table-layout: fixed;
+    width: 100%;
+}
+.chapter-tracker-table .col-no     { width: 60px; }
+.chapter-tracker-table .col-series { width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chapter-tracker-table .col-title  { width: auto; }
+.chapter-tracker-table .col-status { width: 120px; }
+.chapter-tracker-table .col-deadline{ width: 230px; }
+.chapter-tracker-table .col-progress{ width: 170px; }
+.chapter-tracker-table .col-atrisk { width: 90px; }
+.chapter-tracker-table .col-actions{ width: 80px; }
+.chapter-tracker-table td { overflow: hidden; }
+/* Chapter tracker layout helpers: semantic classes replace old inline JSP CSS. */
+.chapter-alert-hidden { display: none; }
+.chapter-layout-grid { display: grid; grid-template-columns: 1fr; gap: 20px; align-items: start; margin-top: 4px; }
+.chapter-section-head { margin-bottom: 8px; }
+.chapter-section-title { margin: 0; }
+.chapter-section-desc { margin: 6px 0 0; }
+.chapter-status-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.chapter-group { margin-bottom: 20px; }
+.chapter-group-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.chapter-group-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+.chapter-group-dot-overdue { background: #ef4444; }
+.chapter-group-dot-progress { background: #f59e0b; }
+.chapter-group-dot-complete { background: #10b981; }
+.chapter-group-label { font-size: 13px; font-weight: 600; color: #6b7280; }
+.chapter-group-count { font-size: 11px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 999px; padding: 1px 8px; color: #6b7280; }
+.chapter-empty-cell { color: #9ca3af; font-size: 13px; }
+.chapter-empty-muted { color: #9ca3af; }
+.chapter-toggle-completed { margin-left: auto; }
+.chapter-completed-body { display: none; }
+.chapter-create-sidebar { display: none; }
+.chapter-create-panel { margin-bottom: 16px; }
+.chapter-create-sub { margin: 4px 0 12px; }
+.chapter-create-hint { margin: 0 0 12px; }
+.chapter-create-error { display: none; margin-bottom: 8px; }
+.chapter-page-total-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.chapter-page-total-input { width: 80px; text-align: center; }
+.chapter-create-submit { margin-top: 4px; }
+.chapter-overview-stats { margin-top: 12px; }
+.chapter-overview-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+.chapter-overview-row-compact { font-size: 13px; margin-bottom: 4px; }
+.chapter-overview-row-last { display: flex; justify-content: space-between; font-size: 13px; }
+.chapter-overview-label { font-size: 13px; color: #6b7280; }
+.chapter-overview-value { font-size: 13px; font-weight: 600; }
+.chapter-overview-value-complete { color: #10b981; font-weight: 500; }
+.chapter-overview-value-progress { color: #f59e0b; font-weight: 500; }
+.chapter-overview-value-overdue { color: #ef4444; font-weight: 500; }
+.chapter-overview-progress { margin-bottom: 12px; }
+.chapter-series-cell { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chapter-number-cell { color: #9ca3af; }
+.chapter-title-cell { font-weight: 500; }
+.chapter-progress-cell { min-width: 140px; }
+.chapter-progress-meta { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.chapter-progress-percent { font-size: 12px; color: #6b7280; }
+.chapter-progress-bar { margin-top: 0; }
+.chapter-progress-fill { display: block; height: 100%; border-radius: inherit; }

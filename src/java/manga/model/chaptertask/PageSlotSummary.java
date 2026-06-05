@@ -1,4 +1,4 @@
-package manga.model;
+package manga.model.chaptertask;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.sql.Timestamp;
@@ -46,3 +46,4 @@ public class PageSlotSummary {
     public String getAssistantName() { return assistantName; }
     public void setAssistantName(String assistantName) { this.assistantName = assistantName; }
 }
+

@@ -1,6 +1,6 @@
-package manga.repository;
+package manga.repository.chaptertask;
 
-import manga.model.PageSlotSummary;
+import manga.model.chaptertask.PageSlotSummary;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -18,6 +18,7 @@ import org.springframework.stereotype.Repository;
 public class PageRepository {
 
     public static final String TABLE_PAGE = "[dbo].[Page]";
+    private static final String SQL_CLOSED_TASK_STATUSES = "'APPROVED','DELETED','REASSIGNED','CANCELLED'";
     private static final List<String> PAGE_STAGES = Arrays.asList(
             "SKETCHING", "INKING", "COLORING", "SCREENTONE", "LETTERING");
 
@@ -98,7 +99,7 @@ public class PageRepository {
             + "  FROM PageTask pt "
             + "  WHERE pt.chapterId = p.chapterId "
             + "    AND p.pageNumber BETWEEN pt.pageRangeStart AND pt.pageRangeEnd "
-            + "    AND UPPER(pt.status) NOT IN ('APPROVED','DELETED','REASSIGNED') "
+            + "    AND UPPER(pt.status) NOT IN (" + SQL_CLOSED_TASK_STATUSES + ") "
             + "  ORDER BY pt.updatedAt DESC "
             + ") t "
             + "LEFT JOIN [User] u ON u.id = t.assistantId "
@@ -246,7 +247,7 @@ public class PageRepository {
     public void delete(long pageId) {
         requirePageTableReady();
         String readSql = "SELECT chapterId, pageNumber FROM " + TABLE_PAGE + " WHERE id = ?";
-        String taskSql = "SELECT COUNT(1) FROM PageTask WHERE chapterId = ? AND ? BETWEEN pageRangeStart AND pageRangeEnd AND UPPER(status) NOT IN ('APPROVED','DELETED','REASSIGNED')";
+        String taskSql = "SELECT COUNT(1) FROM PageTask WHERE chapterId = ? AND ? BETWEEN pageRangeStart AND pageRangeEnd AND UPPER(status) NOT IN (" + SQL_CLOSED_TASK_STATUSES + ")";
         String deleteSql = "DELETE FROM " + TABLE_PAGE + " WHERE id = ?";
         try (Connection conn = dataSource.getConnection()) {
             long chapterId;
@@ -552,3 +553,4 @@ public class PageRepository {
         }
     }
 }
+

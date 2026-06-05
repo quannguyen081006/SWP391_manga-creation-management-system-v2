@@ -7,7 +7,7 @@ import manga.enums.AnnotationStatus;
 import manga.enums.ManuscriptStatus;
 import manga.model.AuthenticatedUser;
 import manga.model.Annotation;
-import manga.repository.ChapterRepository;
+import manga.repository.chaptertask.ChapterRepository;
 import manga.repository.ManuscriptVersionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -466,3 +466,4 @@ public class AnnotationServiceV2 {
         return summary;
     }
 }
+

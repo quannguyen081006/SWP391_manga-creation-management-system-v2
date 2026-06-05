@@ -1,8 +1,9 @@
-package manga.scheduler;
+package manga.scheduler.chaptertask;
 
-import manga.model.ChapterSummary;
-import manga.repository.ChapterRepository;
-import manga.repository.PageTaskRepository;
+// Chapter/task scheduler group: chapter deadline jobs are isolated from ranking/proposal schedulers.
+import manga.model.chaptertask.ChapterSummary;
+import manga.repository.chaptertask.ChapterRepository;
+import manga.repository.chaptertask.PageTaskRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -58,3 +59,4 @@ public class ChapterDeadlineScheduler {
         }
     }
 }
+

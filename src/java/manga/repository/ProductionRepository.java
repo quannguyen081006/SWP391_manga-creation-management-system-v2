@@ -1,10 +1,10 @@
 package manga.repository;
 
 import manga.model.AuthenticatedUser;
-import manga.model.ChapterSummary;
+import manga.model.chaptertask.ChapterSummary;
 import manga.model.ManuscriptSummary;
 import manga.model.SeriesSummary;
-import manga.model.TaskSummary;
+import manga.model.chaptertask.TaskSummary;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.PreparedStatement;
@@ -416,5 +416,6 @@ public class ProductionRepository {
         return sb.toString();
     }
 }
+
 
 

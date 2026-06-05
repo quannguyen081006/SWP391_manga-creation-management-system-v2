@@ -3,7 +3,7 @@ package manga.service;
 import manga.common.exception.BusinessRuleException;
 import manga.model.AuthenticatedUser;
 import manga.model.ReviewTask;
-import manga.repository.ChapterRepository;
+import manga.repository.chaptertask.ChapterRepository;
 import manga.repository.ManuscriptVersionRepository;
 import manga.repository.ReviewTaskRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -189,3 +189,4 @@ public class ReviewTaskService {
         reviewTaskRepository.deleteByVersionId(manuscriptVersionId);
     }
 }
+

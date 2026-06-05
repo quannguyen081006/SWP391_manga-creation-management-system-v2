@@ -5,135 +5,148 @@
     <meta charset="UTF-8">
     <title>Chapters</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css?v=20260525" />
-    <style>
-        .chapter-page-intro { margin-bottom: 28px; }
-        .chapter-page-intro .page-sub { margin: 10px 0 0; font-size: 15px; line-height: 1.5; }
-        .chapter-page-intro #chapterFilterSubtitle { margin: 8px 0 0; font-size: 14px; line-height: 1.5; }
-        #chapterResult { margin-bottom: 16px; }
-        .data-table th.th-sortable { white-space: nowrap; }
-        .data-table th.th-sortable .th-sort-inner {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            white-space: nowrap;
-        }
-        .data-table th.th-sortable .chapter-sort-btn {
-            flex-shrink: 0;
-            padding: 2px 6px;
-            line-height: 1;
-        }
-        .data-table th.th-sort-no { min-width: 72px; }
-    </style>
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/chapter-list.css?v=20260605fix3" />
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
+<%-- Chapter/task note: tracker-specific CSS is in /assets/chapter-list.css; chapter grouping logic stays in this JSP. --%>
 
-<div id="chapterResult" class="alert error" style="display:none;"></div>
+<div id="chapterResult" class="alert error chapter-alert-hidden"></div>
 
-<div id="chapterLayoutGrid" style="display:grid;grid-template-columns:1fr;gap:20px;align-items:start;margin-top:4px;">
+<div id="chapterLayoutGrid" class="chapter-layout-grid">
 
     <div class="section-card">
-        <div class="section-head" style="margin-bottom:8px;">
+        <div class="section-head chapter-section-head">
             <div>
-                <h3 class="section-title" style="margin:0;">Chapter Tracker</h3>
-                <p class="section-desc" style="margin:6px 0 0;">Current chapter progress across your series</p>
+                <h3 class="section-title chapter-section-title">Chapter Tracker</h3>
+                <p class="section-desc chapter-section-desc">Current chapter progress across your series</p>
             </div>
         </div>
-        <div id="chapterStatusPills" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;"></div>
+        <div id="chapterStatusPills" class="chapter-status-pills"></div>
 
-        <div id="groupOverdue" style="margin-bottom:20px;">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;"></span>
-                <span style="font-size:13px;font-weight:600;color:#6b7280;">Overdue</span>
-                <span id="countOverdue" style="font-size:11px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:999px;padding:1px 8px;color:#6b7280;">0</span>
+        <div id="groupOverdue" class="chapter-group">
+            <div class="chapter-group-head">
+                <span class="chapter-group-dot chapter-group-dot-overdue"></span>
+                <span class="chapter-group-label">Overdue</span>
+                <span id="countOverdue" class="chapter-group-count">0</span>
             </div>
-            <table class="data-table" id="tableOverdue">
+            <table class="data-table chapter-tracker-table" id="tableOverdue">
+                <colgroup>
+                    <col class="col-no">
+                    <col class="col-series">
+                    <col class="col-title">
+                    <col class="col-status">
+                    <col class="col-deadline">
+                    <col class="col-progress">
+                    <col class="col-atrisk">
+                    <col class="col-actions">
+                </colgroup>
                 <thead><tr>
-                    <th class="th-sortable th-sort-no"><span class="th-sort-inner">No.<button class="btn small chapter-sort-btn" type="button" data-sort="no" title="Sort by chapter number" aria-label="Sort by chapter number">↕</button></span></th>
+                    <th class="th-sortable col-no"><span class="th-sort-inner">No.<button class="btn small chapter-sort-btn" type="button" data-sort="no" title="Sort by chapter number" aria-label="Sort by chapter number">↕</button></span></th>
                     <th class="col-series">Series</th>
-                    <th class="th-sortable"><span class="th-sort-inner">Title<button class="btn small chapter-sort-btn" type="button" data-sort="title" title="Sort by title" aria-label="Sort by title">↕</button></span></th>
-                    <th class="th-sortable" style="min-width:96px;"><span class="th-sort-inner">Status<button class="btn small chapter-sort-btn" type="button" data-sort="status" title="Sort by status" aria-label="Sort by status">↕</button></span></th>
-                    <th class="th-sortable" style="min-width:110px;"><span class="th-sort-inner">Deadline<button class="btn small chapter-sort-btn" type="button" data-sort="deadline" title="Sort by deadline" aria-label="Sort by deadline">↕</button></span></th>
-                    <th style="width:160px;">Progress</th>
-                    <th style="width:88px;">At Risk</th>
-                    <th style="width:80px;" id="chapterActionHeader">Actions</th>
+                    <th class="th-sortable col-title"><span class="th-sort-inner">Title<button class="btn small chapter-sort-btn" type="button" data-sort="title" title="Sort by title" aria-label="Sort by title">↕</button></span></th>
+                    <th class="th-sortable col-status"><span class="th-sort-inner">Status<button class="btn small chapter-sort-btn" type="button" data-sort="status" title="Sort by status" aria-label="Sort by status">↕</button></span></th>
+                    <th class="th-sortable col-deadline"><span class="th-sort-inner">Deadline<button class="btn small chapter-sort-btn" type="button" data-sort="deadline" title="Sort by deadline" aria-label="Sort by deadline">↕</button></span></th>
+                    <th class="col-progress">Progress</th>
+                    <th class="col-atrisk">At Risk</th>
+                    <th class="col-actions" id="chapterActionHeader">Actions</th>
                 </tr></thead>
-                <tbody id="rowsOverdue"><tr><td colspan="8" style="color:#9ca3af;font-size:13px;">Loading...</td></tr></tbody>
+                <tbody id="rowsOverdue"><tr><td colspan="8" class="chapter-empty-cell">Loading...</td></tr></tbody>
             </table>
         </div>
 
-        <div id="groupInProgress" style="margin-bottom:20px;">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;"></span>
-                <span style="font-size:13px;font-weight:600;color:#6b7280;">In progress</span>
-                <span id="countInProgress" style="font-size:11px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:999px;padding:1px 8px;color:#6b7280;">0</span>
+        <div id="groupInProgress" class="chapter-group">
+            <div class="chapter-group-head">
+                <span class="chapter-group-dot chapter-group-dot-progress"></span>
+                <span class="chapter-group-label">In progress</span>
+                <span id="countInProgress" class="chapter-group-count">0</span>
             </div>
-            <table class="data-table" id="tableInProgress">
+            <table class="data-table chapter-tracker-table" id="tableInProgress">
+                <colgroup>
+                    <col class="col-no">
+                    <col class="col-series">
+                    <col class="col-title">
+                    <col class="col-status">
+                    <col class="col-deadline">
+                    <col class="col-progress">
+                    <col class="col-atrisk">
+                    <col class="col-actions">
+                </colgroup>
                 <thead><tr>
-                    <th class="th-sortable th-sort-no"><span class="th-sort-inner">No.<button class="btn small chapter-sort-btn" type="button" data-sort="no" title="Sort by chapter number" aria-label="Sort by chapter number">↕</button></span></th>
+                    <th class="th-sortable col-no"><span class="th-sort-inner">No.<button class="btn small chapter-sort-btn" type="button" data-sort="no" title="Sort by chapter number" aria-label="Sort by chapter number">↕</button></span></th>
                     <th class="col-series">Series</th>
-                    <th class="th-sortable"><span class="th-sort-inner">Title<button class="btn small chapter-sort-btn" type="button" data-sort="title" title="Sort by title" aria-label="Sort by title">↕</button></span></th>
-                    <th class="th-sortable" style="min-width:96px;"><span class="th-sort-inner">Status<button class="btn small chapter-sort-btn" type="button" data-sort="status" title="Sort by status" aria-label="Sort by status">↕</button></span></th>
-                    <th class="th-sortable" style="min-width:110px;"><span class="th-sort-inner">Deadline<button class="btn small chapter-sort-btn" type="button" data-sort="deadline" title="Sort by deadline" aria-label="Sort by deadline">↕</button></span></th>
-                    <th style="width:160px;">Progress</th>
-                    <th style="width:88px;">At Risk</th>
-                    <th style="width:80px;">Actions</th>
+                    <th class="th-sortable col-title"><span class="th-sort-inner">Title<button class="btn small chapter-sort-btn" type="button" data-sort="title" title="Sort by title" aria-label="Sort by title">↕</button></span></th>
+                    <th class="th-sortable col-status"><span class="th-sort-inner">Status<button class="btn small chapter-sort-btn" type="button" data-sort="status" title="Sort by status" aria-label="Sort by status">↕</button></span></th>
+                    <th class="th-sortable col-deadline"><span class="th-sort-inner">Deadline<button class="btn small chapter-sort-btn" type="button" data-sort="deadline" title="Sort by deadline" aria-label="Sort by deadline">↕</button></span></th>
+                    <th class="col-progress">Progress</th>
+                    <th class="col-atrisk">At Risk</th>
+                    <th class="col-actions">Actions</th>
                 </tr></thead>
-                <tbody id="rowsInProgress"><tr><td colspan="8" style="color:#9ca3af;font-size:13px;">Loading...</td></tr></tbody>
+                <tbody id="rowsInProgress"><tr><td colspan="8" class="chapter-empty-cell">Loading...</td></tr></tbody>
             </table>
         </div>
 
         <div id="groupCompleted">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#10b981;"></span>
-                <span style="font-size:13px;font-weight:600;color:#6b7280;">Completed</span>
-                <span id="countCompleted" style="font-size:11px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:999px;padding:1px 8px;color:#6b7280;">0</span>
-                <button class="btn small" type="button" id="toggleCompleted" style="margin-left:auto;">Show</button>
+            <div class="chapter-group-head">
+                <span class="chapter-group-dot chapter-group-dot-complete"></span>
+                <span class="chapter-group-label">Completed</span>
+                <span id="countCompleted" class="chapter-group-count">0</span>
+                <button class="btn small chapter-toggle-completed" type="button" id="toggleCompleted">Show</button>
             </div>
-            <div id="completedBody" style="display:none;">
-                <table class="data-table" id="tableCompleted">
+            <div id="completedBody" class="chapter-completed-body">
+                <table class="data-table chapter-tracker-table" id="tableCompleted">
+                    <colgroup>
+                        <col class="col-no">
+                        <col class="col-series">
+                        <col class="col-title">
+                        <col class="col-status">
+                        <col class="col-deadline">
+                        <col class="col-progress">
+                        <col class="col-atrisk">
+                        <col class="col-actions">
+                    </colgroup>
                     <thead><tr>
-                        <th class="th-sortable th-sort-no"><span class="th-sort-inner">No.<button class="btn small chapter-sort-btn" type="button" data-sort="no" title="Sort by chapter number" aria-label="Sort by chapter number">↕</button></span></th>
+                        <th class="th-sortable col-no"><span class="th-sort-inner">No.<button class="btn small chapter-sort-btn" type="button" data-sort="no" title="Sort by chapter number" aria-label="Sort by chapter number">↕</button></span></th>
                         <th class="col-series">Series</th>
-                        <th class="th-sortable"><span class="th-sort-inner">Title<button class="btn small chapter-sort-btn" type="button" data-sort="title" title="Sort by title" aria-label="Sort by title">↕</button></span></th>
-                        <th class="th-sortable" style="min-width:96px;"><span class="th-sort-inner">Status<button class="btn small chapter-sort-btn" type="button" data-sort="status" title="Sort by status" aria-label="Sort by status">↕</button></span></th>
-                        <th class="th-sortable" style="min-width:110px;"><span class="th-sort-inner">Deadline<button class="btn small chapter-sort-btn" type="button" data-sort="deadline" title="Sort by deadline" aria-label="Sort by deadline">↕</button></span></th>
-                        <th style="width:160px;">Progress</th>
-                        <th style="width:88px;">At Risk</th>
-                        <th style="width:80px;">Actions</th>
+                        <th class="th-sortable col-title"><span class="th-sort-inner">Title<button class="btn small chapter-sort-btn" type="button" data-sort="title" title="Sort by title" aria-label="Sort by title">↕</button></span></th>
+                        <th class="th-sortable col-status"><span class="th-sort-inner">Status<button class="btn small chapter-sort-btn" type="button" data-sort="status" title="Sort by status" aria-label="Sort by status">↕</button></span></th>
+                        <th class="th-sortable col-deadline"><span class="th-sort-inner">Deadline<button class="btn small chapter-sort-btn" type="button" data-sort="deadline" title="Sort by deadline" aria-label="Sort by deadline">↕</button></span></th>
+                        <th class="col-progress">Progress</th>
+                        <th class="col-atrisk">At Risk</th>
+                        <th class="col-actions">Actions</th>
                     </tr></thead>
-                    <tbody id="rowsCompleted"><tr><td colspan="8" style="color:#9ca3af;font-size:13px;">None</td></tr></tbody>
+                    <tbody id="rowsCompleted"><tr><td colspan="8" class="chapter-empty-cell">None</td></tr></tbody>
                 </table>
             </div>
         </div>
     </div>
 
-    <div id="createSidebar" style="display:none;">
-        <div class="panel" style="margin-bottom:16px;">
+    <div id="createSidebar" class="chapter-create-sidebar">
+        <div class="panel chapter-create-panel">
             <strong id="createSidebarTitle">New chapter</strong>
-            <p class="section-desc" id="createSidebarSub" style="margin:4px 0 12px;"></p>
-            <p class="section-desc" id="createSeriesDeadlineHint" style="margin:0 0 12px;"></p>
-            <div id="createErrorBox" class="alert error" style="display:none;margin-bottom:8px;"></div>
+            <p class="section-desc chapter-create-sub" id="createSidebarSub"></p>
+            <p class="section-desc chapter-create-hint" id="createSeriesDeadlineHint"></p>
+            <div id="createErrorBox" class="alert error chapter-create-error"></div>
             <form id="chapterCreateForm" class="form-grid">
                 <label class="field-label" for="chapterCreateTitle">Title</label>
                 <input id="chapterCreateTitle" name="title" type="text" placeholder="Chapter title" required />
                 <label class="field-label" for="chapterCreateTotalPages">Số trang dự kiến</label>
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <div class="chapter-page-total-controls">
                     <button class="btn small" type="button" data-total-pages-delta="-5">−5</button>
                     <button class="btn small" type="button" data-total-pages-delta="-1">−1</button>
-                    <input id="chapterCreateTotalPages" name="totalPages" type="number" min="1" value="24" required style="width:80px;text-align:center;" />
+                    <input id="chapterCreateTotalPages" name="totalPages" type="number" min="1" value="24" required class="chapter-page-total-input" />
                     <button class="btn small" type="button" data-total-pages-delta="1">+1</button>
                     <button class="btn small" type="button" data-total-pages-delta="5">+5</button>
                 </div>
                 <label class="field-label" for="chapterCreateDeadline">Submission deadline</label>
                 <input id="chapterCreateDeadline" name="submissionDeadline" type="date" required />
-                <button class="btn primary" type="submit" style="margin-top:4px;">Create chapter</button>
+                <button class="btn primary chapter-create-submit" type="submit">Create chapter</button>
             </form>
         </div>
 
         <div class="panel">
             <strong>Series overview</strong>
-            <div id="seriesOverviewStats" style="margin-top:12px;"></div>
+            <div id="seriesOverviewStats" class="chapter-overview-stats"></div>
         </div>
     </div>
 
@@ -152,6 +165,7 @@
     var sortDir = 'asc';
     var completedVisible = false;
     var chapterStatusFilter = 'ALL';
+    var serverCanCreateChapter = ${sessionScope.AUTH_USER != null && sessionScope.AUTH_USER.hasRole('MANGAKA') ? 'true' : 'false'};
 
     function escapeHtml(value) {
         if (value === null || value === undefined) { return ''; }
@@ -204,7 +218,7 @@
 
     function formatDeadlineCell(dateValue, isDone, isOverdue) {
         var formatted = formatDate(dateValue);
-        if (!formatted) { return '<span style="color:#9ca3af;">—</span>'; }
+        if (!formatted) { return '<span class="chapter-empty-muted">—</span>'; }
         var daysLeft = daysUntilDate(dateValue);
         if (!isDone && !isOverdue && daysLeft !== null && daysLeft < 0) {
             isOverdue = true;
@@ -241,6 +255,16 @@
         return '';
     }
 
+    function applyChapterProgressStyles(root) {
+        var scope = root || document;
+        var fills = scope.querySelectorAll('[data-chapter-progress]');
+        for (var i = 0; i < fills.length; i++) {
+            var fill = fills[i];
+            fill.style.width = fill.getAttribute('data-chapter-progress') + '%';
+            fill.style.background = fill.getAttribute('data-chapter-progress-color') || '#8b5cf6';
+        }
+    }
+
     function todayIso() {
         var date = new Date();
         var month = String(date.getMonth() + 1);
@@ -263,7 +287,17 @@
 
     function hasRole(role) {
         var roles = currentUser && currentUser.roles ? currentUser.roles : [];
-        return roles.indexOf(role) !== -1;
+        if (String(currentUser && (currentUser.role || currentUser.activeRole || currentUser.currentRole || '')).toUpperCase() === role) {
+            return true;
+        }
+        for (var i = 0; i < roles.length; i++) {
+            var value = roles[i];
+            var name = typeof value === 'string' ? value : (value && (value.name || value.role || value.authority));
+            if (String(name || '').toUpperCase() === role) {
+                return true;
+            }
+        }
+        return false;
     }
 
     function formatStatus(status) {
@@ -480,7 +514,7 @@
 
     function setTrackerLoading(msg) {
         var colspan = trackerColspan();
-        var html = '<tr><td colspan="' + colspan + '" style="color:#9ca3af;font-size:13px;">' + escapeHtml(msg) + '</td></tr>';
+        var html = '<tr><td colspan="' + colspan + '" class="chapter-empty-cell">' + escapeHtml(msg) + '</td></tr>';
         document.getElementById('rowsOverdue').innerHTML = html;
         document.getElementById('rowsInProgress').innerHTML = html;
         document.getElementById('rowsCompleted').innerHTML = html;
@@ -490,7 +524,7 @@
         var header = document.getElementById('chapterActionHeader');
         var layout = document.getElementById('chapterLayoutGrid');
         var sidebar = document.getElementById('createSidebar');
-        var showActions = hasRole('MANGAKA');
+        var showActions = serverCanCreateChapter || hasRole('MANGAKA');
 
         if (header) {
             header.style.display = showActions ? '' : 'none';
@@ -535,16 +569,17 @@
 
         var overallPct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
         document.getElementById('seriesOverviewStats').innerHTML = ''
-            + '<div style="display:flex;justify-content:space-between;margin-bottom:6px;">'
-            + '<span style="font-size:13px;color:#6b7280;">Overall progress</span>'
-            + '<span style="font-size:13px;font-weight:600;">' + overallPct + '%</span></div>'
-            + '<div class="progress" style="margin-bottom:12px;"><span style="width:' + overallPct + '%;background:#8b5cf6;"></span></div>'
-            + '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">'
-            + '<span style="color:#6b7280;">Completed</span><span style="color:#10b981;font-weight:500;">' + doneCount + '</span></div>'
-            + '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">'
-            + '<span style="color:#6b7280;">In progress</span><span style="color:#f59e0b;font-weight:500;">' + inProgressCount + '</span></div>'
-            + '<div style="display:flex;justify-content:space-between;font-size:13px;">'
-            + '<span style="color:#6b7280;">Overdue</span><span style="color:#ef4444;font-weight:500;">' + overdueCount + '</span></div>';
+            + '<div class="chapter-overview-row">'
+            + '<span class="chapter-overview-label">Overall progress</span>'
+            + '<span class="chapter-overview-value">' + overallPct + '%</span></div>'
+            + '<div class="progress chapter-overview-progress"><span class="chapter-progress-fill" data-chapter-progress="' + overallPct + '" data-chapter-progress-color="#8b5cf6"></span></div>'
+            + '<div class="chapter-overview-row chapter-overview-row-compact">'
+            + '<span class="chapter-overview-label">Completed</span><span class="chapter-overview-value-complete">' + doneCount + '</span></div>'
+            + '<div class="chapter-overview-row chapter-overview-row-compact">'
+            + '<span class="chapter-overview-label">In progress</span><span class="chapter-overview-value-progress">' + inProgressCount + '</span></div>'
+            + '<div class="chapter-overview-row chapter-overview-row-last">'
+            + '<span class="chapter-overview-label">Overdue</span><span class="chapter-overview-value-overdue">' + overdueCount + '</span></div>';
+        applyChapterProgressStyles(document.getElementById('seriesOverviewStats'));
     }
 
     function renderGroup(tbodyId, list, isOverdueGroup) {
@@ -552,10 +587,10 @@
         var colspan = trackerColspan();
         if (!list.length) {
             var emptyMsg = chapterStatusFilter === 'ALL' ? 'None' : 'No chapters match this filter.';
-            tbody.innerHTML = '<tr><td colspan="' + colspan + '" style="color:#9ca3af;font-size:13px;">' + emptyMsg + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="' + colspan + '" class="chapter-empty-cell">' + emptyMsg + '</td></tr>';
             return;
         }
-        var showActions = hasRole('MANGAKA');
+        var showActions = serverCanCreateChapter || hasRole('MANGAKA');
         var showSeries = !filterSeriesId;
         tbody.innerHTML = list.map(function (ch) {
             var progress = Math.max(0, Math.min(100, Number(ch.completionPct || 0)));
@@ -564,30 +599,30 @@
             var deadlineText = formatDeadlineCell(ch.submissionDeadline, done, overdue);
             var seriesName = (seriesById[String(ch.seriesId)] || {}).title || ('#' + ch.seriesId);
             var progressColor = progress >= 100 ? '#10b981' : (progress >= 50 ? '#f59e0b' : '#ef4444');
-            var rowBg = isOverdueGroup ? 'background:rgba(239,68,68,0.04);' : '';
             var seriesCell = showSeries
-                ? '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeHtml(seriesName) + '">' + escapeHtml(seriesName) + '</td>'
+                ? '<td class="chapter-series-cell" title="' + escapeHtml(seriesName) + '">' + escapeHtml(seriesName) + '</td>'
                 : '';
             var actionsCell = showActions
                 ? '<td><a class="btn small" href="' + ctx + '/main/chapters/detail?id=' + ch.id + '">View</a></td>'
                 : '<td></td>';
-            return '<tr' + chapterRowClass(ch, isOverdueGroup) + ' style="' + rowBg + '">'
-                + '<td style="color:#9ca3af;">' + ch.chapterNumber + '</td>'
+            return '<tr' + chapterRowClass(ch, isOverdueGroup) + '>'
+                + '<td class="chapter-number-cell">' + ch.chapterNumber + '</td>'
                 + seriesCell
-                + '<td style="font-weight:500;">' + escapeHtml(ch.title) + '</td>'
+                + '<td class="chapter-title-cell">' + escapeHtml(ch.title) + '</td>'
                 + '<td>' + renderChapterStatusCell(ch) + '</td>'
                 + '<td>' + deadlineText + '</td>'
-                + '<td style="min-width:140px;">'
-                + '<div style="display:flex;justify-content:space-between;margin-bottom:4px;">'
-                + '<span style="font-size:12px;color:#6b7280;">' + Math.round(progress) + '%</span>'
+                + '<td class="chapter-progress-cell">'
+                + '<div class="chapter-progress-meta">'
+                + '<span class="chapter-progress-percent">' + Math.round(progress) + '%</span>'
                 + '</div>'
-                + '<div class="progress' + (progress < 40 ? ' red' : '') + '" style="margin-top:0;">'
-                + '<span style="width:' + progress + '%;background:' + progressColor + ';"></span></div>'
+                + '<div class="progress chapter-progress-bar' + (progress < 40 ? ' red' : '') + '">'
+                + '<span class="chapter-progress-fill" data-chapter-progress="' + progress + '" data-chapter-progress-color="' + progressColor + '"></span></div>'
                 + '</td>'
                 + '<td>' + renderAtRiskCell(ch) + '</td>'
                 + actionsCell
                 + '</tr>';
         }).join('');
+        applyChapterProgressStyles(tbody);
     }
 
     function renderChapters() {

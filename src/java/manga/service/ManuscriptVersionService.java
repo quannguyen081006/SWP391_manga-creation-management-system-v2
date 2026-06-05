@@ -6,11 +6,11 @@ import manga.model.AuthenticatedUser;
 import manga.model.ManuscriptPage;
 import manga.model.ManuscriptProductionLock;
 import manga.model.ManuscriptVersion;
-import manga.repository.ChapterRepository;
+import manga.repository.chaptertask.ChapterRepository;
 import manga.repository.ManuscriptPageRepository;
 import manga.repository.ManuscriptProductionLockRepository;
 import manga.repository.ManuscriptVersionRepository;
-import manga.repository.PageTaskRepository;
+import manga.repository.chaptertask.PageTaskRepository;
 import manga.repository.ReviewDecisionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -21,7 +21,6 @@ import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import manga.repository.ChapterRepository;
 
 /**
  * Service for ManuscriptVersion entity.
@@ -179,7 +178,7 @@ public class ManuscriptVersionService {
         }
 
         // Get all chapter images ordered by displayOrder
-        List<manga.dto.ChapterImageDTO> chapterImages = getCandidatePages(chapterId);
+        List<manga.dto.chaptertask.ChapterImageDTO> chapterImages = getCandidatePages(chapterId);
         if (chapterImages.isEmpty()) {
             throw new BusinessRuleException("No chapter pages found to import");
         }
@@ -187,7 +186,7 @@ public class ManuscriptVersionService {
         List<ManuscriptPage> importedPages = new ArrayList<>();
         int displayOrder = 1;
 
-        for (manga.dto.ChapterImageDTO chapterImage : chapterImages) {
+        for (manga.dto.chaptertask.ChapterImageDTO chapterImage : chapterImages) {
             // Create immutable snapshot for each page
             String imageUrl = chapterImage.getImageUrl();
             String snapshotUrl = createImmutableSnapshot(imageUrl);
@@ -848,7 +847,7 @@ public class ManuscriptVersionService {
      * Get candidate chapter images for manuscript builder.
      * Returns approved chapter images that can be used to build manuscript pages.
      */
-    public List<manga.dto.ChapterImageDTO> getCandidatePages(Long chapterId) {
+    public List<manga.dto.chaptertask.ChapterImageDTO> getCandidatePages(Long chapterId) {
         // Validate chapter is in EDITORIAL_REVIEW
         String chapterStatus = chapterRepository.getChapterStatus(chapterId);
         if (!"EDITORIAL_REVIEW".equals(chapterStatus)) {
@@ -858,13 +857,13 @@ public class ManuscriptVersionService {
         // Query approved chapter images
         String sql = "SELECT id, chapterId, pageNumber, fileUrl, uploadedAt " +
                     "FROM ChapterImage WHERE chapterId = ? AND isActive = 1 AND imageType = 'PAGE' ORDER BY pageNumber ASC";
-        List<manga.dto.ChapterImageDTO> results = new java.util.ArrayList<>();
+        List<manga.dto.chaptertask.ChapterImageDTO> results = new java.util.ArrayList<>();
         try (java.sql.Connection conn = dataSource.getConnection();
              java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, chapterId);
             try (java.sql.ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    manga.dto.ChapterImageDTO dto = new manga.dto.ChapterImageDTO();
+                    manga.dto.chaptertask.ChapterImageDTO dto = new manga.dto.chaptertask.ChapterImageDTO();
                     dto.setId(rs.getLong("id"));
                     dto.setChapterId(rs.getLong("chapterId"));
                     dto.setDisplayOrder(rs.getInt("pageNumber"));
@@ -926,3 +925,4 @@ public class ManuscriptVersionService {
         return "placeholder-checksum-" + System.currentTimeMillis();
     }
 }
+

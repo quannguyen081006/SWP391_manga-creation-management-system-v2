@@ -2,9 +2,9 @@ package manga.controller.web;
 
 import manga.model.AuthenticatedUser;
 import manga.model.ManuscriptSummary;
-import manga.model.TaskSummary;
+import manga.model.chaptertask.TaskSummary;
 import manga.common.util.SessionUserUtil;
-import manga.repository.PageTaskRepository;
+import manga.repository.chaptertask.PageTaskRepository;
 import manga.repository.ProductionRepository;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -115,3 +115,4 @@ public class ProductionController {
         return "manuscript/list";
     }
 }
+

@@ -5,257 +5,76 @@
     <meta charset="UTF-8">
     <title>Chapter Detail</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css?v=20260525" />
-    <style>
-        .chapter-workspace { display: grid; grid-template-columns: 3fr 1fr; gap: 20px; align-items: start; }
-        @media (max-width: 960px) { .chapter-workspace { grid-template-columns: 1fr; } }
-        .chapter-main-card { padding: 0; overflow: hidden; }
-        .chapter-tab-bar { display: flex; border-bottom: 1px solid #e5e7eb; }
-        .chapter-tab-btn {
-            padding: 12px 18px; font-size: 14px; background: none; border: none; cursor: pointer;
-            border-bottom: 2px solid transparent; color: #6b7280;
-        }
-        .chapter-tab-btn.active { border-bottom-color: #e11d48; color: #111827; font-weight: 500; }
-        .chapter-tab-panel { padding: 20px; }
-        .pages-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-        .pages-hint {
-            background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px; padding: 10px 14px;
-            font-size: 13px; color: #0369a1; margin-bottom: 12px;
-        }
-        .pages-selection-bar {
-            display: none; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
-            background: #f5f3ff; border: 1px solid #c4b5fd; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px;
-        }
-        .pages-selection-bar.visible { display: flex; }
-        .page-slot-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 16px; }
-        @media (max-width: 1100px) { .page-slot-grid { grid-template-columns: repeat(4, 1fr); } }
-        @media (max-width: 720px) { .page-slot-grid { grid-template-columns: repeat(3, 1fr); } }
-        .page-slot {
-            position: relative; aspect-ratio: 3/4; border-radius: 10px; cursor: pointer;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            overflow: hidden; box-sizing: border-box; transition: box-shadow 0.15s, border-color 0.15s;
-        }
-        .page-slot-num { position: absolute; top: 6px; left: 8px; font-size: 11px; font-weight: 700; color: #374151; z-index: 2; }
-        .page-slot.state-empty { border: 3px dashed #d1d5db; background: #f9fafb; color: #9ca3af; }
-        .page-slot.state-empty:hover { border-color: #9ca3af; background: #f3f4f6; }
-        .page-slot.state-uploaded { border: 3px solid #3b82f6; background: #eff6ff; }
-        .page-slot.state-selected { box-shadow: 0 0 0 3px #8b5cf6; border-color: #7c3aed !important; }
-        .page-slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .page-slot-initials {
-            position: absolute; bottom: 34px; right: 8px; width: 28px; height: 28px; border-radius: 50%;
-            background: #059669; color: #fff; font-size: 10px; font-weight: 700;
-            display: flex; align-items: center; justify-content: center; z-index: 6;
-        }
-        .page-slot-add {
-            border: 2px dashed #e11d48; background: #fff1f2; color: #e11d48; font-size: 24px; font-weight: 300;
-        }
-        .page-slot-add:hover { background: #ffe4e6; }
-        .page-slot-upload-label { font-size: 11px; text-align: center; padding: 8px; }
-        .page-download-btn {
-            position: absolute; right: 36px; top: 6px; z-index: 5;
-            width: 24px; height: 24px; border-radius: 50%; background: rgba(255,255,255,0.92);
-            border: 1px solid #d1d5db; color: #111827; display: flex; align-items: center; justify-content: center;
-            font-size: 13px; text-decoration: none; box-shadow: 0 2px 8px rgba(15,23,42,0.12);
-        }
-        .page-download-btn:hover { background: #fff; border-color: #9ca3af; }
-        .page-stage-track {
-            position: absolute; left: 6px; right: 6px; bottom: 6px; z-index: 3;
-            display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px;
-            background: rgba(255,255,255,0.82); border-radius: 999px; padding: 3px;
-        }
-        .page-stage-dot {
-            height: 18px; border-radius: 999px; display: flex; align-items: center; justify-content: center;
-            font-size: 9px; font-weight: 800; color: #9ca3af; background: #e5e7eb;
-        }
-        .page-stage-dot.done { color: #fff; background: #059669; }
-        .page-stage-dot.current { color: #92400e; background: #fde68a; opacity: 0.72; }
-        .page-stage-picker {
-            display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
-            padding: 5px 8px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff;
-        }
-        .page-stage-picker label { display: flex; gap: 4px; align-items: center; font-size: 11px; font-weight: 700; color: #4b5563; }
-        .page-stage-picker input { margin: 0; }
-        .page-upload-preview {
-            min-height: 220px; border: 1px solid #e5e7eb; border-radius: 10px;
-            display: flex; align-items: center; justify-content: center; background: #f9fafb; overflow: hidden;
-        }
-        .page-upload-preview img { width: 100%; max-height: 48vh; object-fit: contain; display: block; }
-        .page-upload-modal-actions { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
-        .page-status-legend { display: grid; gap: 9px; margin-top: 12px; }
-        .legend-row { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: center; font-size: 12px; color: #4b5563; }
-        .legend-row strong { display: block; font-size: 12px; color: #111827; margin-bottom: 1px; }
-        .legend-swatch {
-            width: 24px; height: 24px; border-radius: 7px; background: #f9fafb; box-sizing: border-box;
-            box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.04);
-        }
-        .legend-empty { border: 3px dashed #d1d5db; }
-        .legend-uploaded { border: 3px solid #3b82f6; background: #eff6ff; }
-        .legend-selected { border: 3px solid #7c3aed; background: #f5f3ff; box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.22); }
-        .legend-complete {
-            border: 3px solid transparent;
-            background:
-                linear-gradient(#fff, #fff) padding-box,
-                conic-gradient(#ef4444, #f59e0b, #22c55e, #06b6d4, #6366f1, #ec4899, #ef4444) border-box;
-        }
-        .sidebar-task-mini { font-size: 12px; padding: 8px 0; border-bottom: 1px solid #f3f4f6; }
-        .sidebar-task-mini:last-child { border-bottom: none; }
-        .assign-chips, .assign-stage-summary {
-            display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; max-height: 86px;
-            overflow-y: auto; align-content: flex-start;
-        }
-        .assign-chip {
-            background: #ede9fe; border: 1px solid #c4b5fd; color: #5b21b6; border-radius: 999px;
-            padding: 4px 10px; font-size: 12px; font-weight: 600; line-height: 1.25;
-            max-width: 100%; overflow-wrap: anywhere;
-        }
-        .task-actions-cell { position: relative; vertical-align: top; }
-        .task-row-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-        .task-action-popover {
-            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: min(360px, calc(100vw - 32px)); z-index: 1200; pointer-events: auto;
-            background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
-            padding: 16px; box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
-        }
-        .task-action-popover.open { display: block; }
-        .task-action-popover strong { display: block; font-size: 14px; margin-bottom: 10px; }
-        .task-action-popover textarea {
-            width: 100%; min-height: 72px; resize: vertical; border: 1px solid #e5e7eb;
-            border-radius: 8px; padding: 8px 10px; font-size: 13px; box-sizing: border-box;
-        }
-        .task-action-popover .popover-helper { font-size: 12px; color: #6b7280; margin: 6px 0 10px; }
-        .task-action-popover .popover-counter { font-size: 11px; color: #9ca3af; text-align: right; margin-top: 4px; }
-        .task-action-popover .popover-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
-        .task-popover-scrim {
-            display: none; position: fixed; inset: 0; z-index: 1190;
-            background: rgba(15, 23, 42, 0.24);
-        }
-        .task-popover-scrim.open { display: block; }
-        .task-decision-label { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
-        .task-decision-label.approved { color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; }
-        .task-decision-label.rejected { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; }
-        #chapterTaskTableWrap { overflow: visible; }
-        .page-slot.task-in-progress { border: 3px solid #e11d48 !important; }
-        .page-slot.task-submitted { border: 3px solid #f59e0b !important; }
-        .page-slot.stage-complete {
-            border: 3px solid transparent !important;
-            background:
-                linear-gradient(#fff, #fff) padding-box,
-                conic-gradient(#ef4444, #f59e0b, #22c55e, #06b6d4, #6366f1, #ec4899, #ef4444) border-box;
-            box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.18);
-        }
-        .page-slot-status-icon {
-            position: absolute; top: 5px; right: 6px;
-            width: 16px; height: 16px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 8px; z-index: 3; cursor: default;
-        }
-        .page-slot-status-icon.icon-in-progress { background: #e11d48; color: #fff; }
-        .page-slot-status-icon.icon-submitted { background: #f59e0b; color: #fff; }
-        .page-slot-status-icon.icon-approved { background: #3b82f6; color: #fff; }
-        .page-slot-status-icon .icon-tooltip {
-            display: none; position: absolute; top: 20px; right: 0;
-            background: #1f2937; color: #fff; font-size: 10px;
-            padding: 3px 7px; border-radius: 5px; white-space: nowrap; z-index: 20;
-        }
-        .page-slot-status-icon:hover .icon-tooltip { display: block; }
-        .legend-progress { border: 3px solid #e11d48; background: #fff1f2; }
-        .legend-submitted { border: 3px solid #f59e0b; background: #fffbeb; }
-        .page-slot-lock {
-            position: absolute; top: 4px; left: 20px;
-            font-size: 10px; z-index: 4; line-height: 1;
-            pointer-events: none; opacity: 0.7;
-        }
-        .task-expand-btn {
-            background: none; border: 1px solid #e5e7eb; cursor: pointer;
-            font-size: 11px; color: #6b7280; padding: 2px 8px; border-radius: 5px; margin-left: 6px;
-        }
-        .task-expand-btn:hover { background: #f3f4f6; }
-        .task-inline-row td { padding: 0 !important; }
-        .task-inline-body {
-            padding: 12px 16px; background: #f8fafc; border-top: 1px solid #e5e7eb;
-            display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start;
-        }
-        .task-page-mini {
-            width: 72px; text-align: center; font-size: 10px; color: #6b7280;
-        }
-        .task-page-mini img {
-            width: 72px; aspect-ratio: 3/4; object-fit: cover;
-            border-radius: 6px; border: 1.5px solid #e5e7eb; display: block;
-            margin-bottom: 3px;
-        }
-        .task-page-mini .no-thumb {
-            width: 72px; aspect-ratio: 3/4; display: flex; align-items: center;
-            justify-content: center; background: #f1f5f9; border-radius: 6px;
-            border: 1.5px dashed #cbd5e1; color: #94a3b8; font-size: 18px; margin-bottom: 3px;
-        }
-    </style>
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/chapter-detail.css?v=20260605fix3" />
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
+<%-- Chapter/task note: page-specific CSS is in /assets/chapter-detail.css; this JSP keeps markup and data hooks only. --%>
 
-<div id="detailResult" class="alert error" style="display:none;margin-bottom:12px;"></div>
+<div id="detailResult" class="alert error chapter-detail-inline-1"></div>
 
-<div id="breadcrumb" style="font-size:14px;color:#6b7280;margin-bottom:16px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-    <a href="${pageContext.request.contextPath}/main/series" style="color:#6b7280;">My Series</a>
+<div id="breadcrumb" class="chapter-detail-inline-2">
+    <a href="${pageContext.request.contextPath}/main/series" class="chapter-detail-inline-3">My Series</a>
     <span>›</span>
-    <a id="breadcrumbSeries" href="#" style="color:#6b7280;"></a>
+    <a id="breadcrumbSeries" href="#" class="chapter-detail-inline-4"></a>
     <span>›</span>
-    <span id="breadcrumbChapter" style="color:#111827;font-weight:500;"></span>
-    <span id="breadcrumbStatusPill" style="margin-left:6px;"></span>
+    <span id="breadcrumbChapter" class="chapter-detail-inline-5"></span>
+    <span id="breadcrumbStatusPill" class="chapter-detail-inline-6"></span>
 </div>
 
-<div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:8px;">
-    <button id="btnDelete" class="btn small" type="button" style="color:#ef4444;border-color:#fecaca;display:none;">Delete chapter</button>
-    <button id="btnMarkDone" class="btn primary" type="button" style="display:none;">Submit for review</button>
-    <a id="btnManuscriptWorkspace" href="#" class="btn small" style="display:none;">📝 Manuscript Workspace</a>
+<div class="chapter-detail-inline-7">
+    <button id="btnDelete" class="btn small chapter-detail-inline-8" type="button">Delete chapter</button>
+    <button id="btnMarkDone" class="btn primary chapter-detail-inline-9" type="button">Submit for review</button>
+    <a id="btnManuscriptWorkspace" href="#" class="btn small chapter-detail-inline-10">📝 Manuscript Workspace</a>
 </div>
 
 <div class="chapter-workspace">
     <div class="section-card chapter-main-card">
         <div id="tabBar" class="chapter-tab-bar">
             <button class="chapter-tab-btn active" type="button" data-tab="pages">
-                Pages <span id="tabPageCount" class="status-chip" style="font-size:11px;margin-left:4px;">0</span>
+                Pages <span id="tabPageCount" class="status-chip chapter-detail-inline-11">0</span>
             </button>
             <button class="chapter-tab-btn" type="button" data-tab="tasks">
-                Tasks <span id="tabTaskCount" class="status-chip" style="font-size:11px;margin-left:4px;">0</span>
+                Tasks <span id="tabTaskCount" class="status-chip chapter-detail-inline-12">0</span>
             </button>
             <button class="chapter-tab-btn" type="button" data-tab="edit">Edit details</button>
         </div>
 
         <div id="tabPages" class="chapter-tab-panel">
             <div class="pages-toolbar">
-                <span id="pageCountLabel" style="font-size:13px;color:#6b7280;font-weight:500;">Đang tải...</span>
-                <div id="pagesOwnerActions" style="display:none;gap:8px;">
+                <span id="pageCountLabel" class="chapter-detail-inline-13">Đang tải...</span>
+                <div id="pagesOwnerActions" class="chapter-detail-inline-14">
                     <button class="btn small primary" type="button" id="btnAddPage">+ Thêm trang</button>
-                    <input id="singleFileInput" type="file" accept="image/*" style="display:none;" />
+                    <input id="singleFileInput" type="file" accept="image/*" class="chapter-detail-inline-15" />
                 </div>
             </div>
-            <div class="pages-hint" id="pagesHint">
-                Nhấp ô trang để upload/thay ảnh và chọn stage đã hoàn thành.
-                Giữ <strong>Shift</strong> + nhấp để chọn dải trang, rồi <strong>Gán task</strong>.
-                Ảnh lưu đường dẫn trên database; file nằm <code>web/img/chapter/</code> (không đi theo git pull).
+
+            <div id="pagesHint" class="pages-hint chapter-detail-inline-16">
+                Chọn các trang trống hoặc đã upload để gán task cho assistant.
             </div>
+
             <div id="selectionBar" class="pages-selection-bar">
-                <span id="selectionLabel" style="font-size:13px;font-weight:500;color:#5b21b6;">0 trang đã chọn</span>
-                <div style="display:flex;gap:8px;">
+                <span id="selectionLabel" class="chapter-detail-inline-17">0 trang đã chọn</span>
+                <div class="chapter-detail-inline-18">
                     <button class="btn small primary" type="button" id="btnAssignFromSelection">Gán task</button>
                     <button class="btn small" type="button" id="btnClearSelection">Bỏ chọn</button>
                 </div>
             </div>
             <div id="pageSlotGrid" class="page-slot-grid">
-                <p style="color:#9ca3af;grid-column:1/-1;font-size:13px;">Đang tải trang...</p>
+                <p class="chapter-detail-inline-19">Đang tải trang...</p>
             </div>
             <div id="progressSection">
-                <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
-                    <span style="color:#6b7280;">Tiến độ page</span>
-                    <span id="progressLabel" style="font-weight:500;"></span>
+                <div class="chapter-detail-inline-20">
+                    <span class="chapter-detail-inline-21">Tiến độ page</span>
+                    <span id="progressLabel" class="chapter-detail-inline-22"></span>
                 </div>
-                <div class="progress"><span id="progressFill" style="width:0%;background:#8b5cf6;"></span></div>
+                <div class="progress"><span id="progressFill" class="chapter-detail-inline-23"></span></div>
             </div>
         </div>
 
-        <div id="tabTasks" class="chapter-tab-panel" style="display:none;">
-            <div id="chapterTaskTableWrap" class="section-card" style="padding:0;overflow:visible;border:none;box-shadow:none;">
-                <table class="data-table" style="overflow:visible;">
+        <div id="tabTasks" class="chapter-tab-panel chapter-detail-inline-24">
+            <div id="chapterTaskTableWrap" class="section-card chapter-detail-inline-25">
+                <table class="data-table chapter-detail-inline-26">
                     <thead>
                         <tr>
                             <th>ID</th>
@@ -272,7 +91,7 @@
                     </tbody>
                 </table>
             </div>
-            <div id="taskPopoverHost" style="position:absolute;left:-9999px;width:0;height:0;overflow:hidden;" aria-hidden="true">
+            <div id="taskPopoverHost" class="chapter-detail-inline-27" aria-hidden="true">
                 <div id="taskPopoverScrim" class="task-popover-scrim" aria-hidden="true"></div>
                 <div id="taskApprovePopover" class="task-action-popover" aria-hidden="true">
                     <strong id="approvePopoverTitle">Approve task</strong>
@@ -298,56 +117,48 @@
             </div>
         </div>
 
-        <div id="tabEdit" class="chapter-tab-panel" style="display:none;">
+        <div id="tabEdit" class="chapter-tab-panel chapter-detail-inline-28">
             <form id="chapterUpdateForm" class="form-grid chapter-inline-update-form" onsubmit="return false;">
                 <input name="chapterId" type="hidden" id="updateChapterId" />
                 <label class="field-label" for="updateTitle">Title</label>
                 <input id="updateTitle" name="title" type="text" required />
                 <label class="field-label" for="updateDeadline">Submission deadline</label>
                 <input id="updateDeadline" name="submissionDeadline" type="date" required />
-                <div id="updateError" class="alert error" style="display:none;"></div>
+                <div id="updateError" class="alert error chapter-detail-inline-29"></div>
             </form>
         </div>
     </div>
 
     <aside>
-        <div class="panel" style="margin-bottom:14px;">
-            <strong id="panelChapterTitle" style="font-size:15px;"></strong>
-            <p id="panelSeriesName" class="section-desc" style="margin:4px 0 14px;"></p>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px;">
-                    <div style="font-size:11px;color:#9ca3af;margin-bottom:3px;">Deadline</div>
+        <div class="panel chapter-detail-inline-30">
+            <strong id="panelChapterTitle" class="chapter-detail-inline-31"></strong>
+            <p id="panelSeriesName" class="section-desc chapter-detail-inline-32"></p>
+            <div class="chapter-detail-inline-33">
+                <div class="chapter-detail-inline-34">
+                    <div class="chapter-detail-inline-35">Deadline</div>
                     <div id="metaDeadline"></div>
-                    <div id="metaDeadlineSub" style="font-size:11px;margin-top:4px;"></div>
+                    <div id="metaDeadlineSub" class="chapter-detail-inline-36"></div>
                 </div>
-                <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px;">
-                    <div style="font-size:11px;color:#9ca3af;margin-bottom:3px;">Pages</div>
-                    <div id="metaPages" style="font-size:14px;font-weight:600;"></div>
+                <div class="chapter-detail-inline-37">
+                    <div class="chapter-detail-inline-38">Pages</div>
+                    <div id="metaPages" class="chapter-detail-inline-39"></div>
                 </div>
-                <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px;">
-                    <div style="font-size:11px;color:#9ca3af;margin-bottom:3px;">Status</div>
-                    <div id="metaStatus" style="margin-top:4px;"></div>
+                <div class="chapter-detail-inline-40">
+                    <div class="chapter-detail-inline-41">Status</div>
+                    <div id="metaStatus" class="chapter-detail-inline-42"></div>
                 </div>
-                <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px;">
-                    <div style="font-size:11px;color:#9ca3af;margin-bottom:3px;">Page progress</div>
-                    <div id="metaProgress" style="font-size:14px;font-weight:600;"></div>
+                <div class="chapter-detail-inline-43">
+                    <div class="chapter-detail-inline-44">Page progress</div>
+                    <div id="metaProgress" class="chapter-detail-inline-45"></div>
                 </div>
             </div>
         </div>
-        <div class="panel" style="margin-bottom:14px;">
-            <strong style="font-size:13px;">Chú thích trạng thái trang</strong>
+        <div class="panel chapter-detail-inline-46">
+            <strong class="chapter-detail-inline-47">Chú thích trạng thái trang</strong>
             <div class="page-status-legend">
                 <div class="legend-row">
                     <span class="legend-swatch legend-empty"></span>
                     <span><strong>Trống</strong>Chưa có ảnh page.</span>
-                </div>
-                <div class="legend-row">
-                    <span class="legend-swatch legend-uploaded"></span>
-                    <span><strong>Đã upload</strong>Có ảnh, chưa gán task.</span>
-                </div>
-                <div class="legend-row">
-                    <span class="legend-swatch legend-selected"></span>
-                    <span><strong>&#272;ang ch&#7885;n &#273;&#7875; giao task</strong>Ch&#7881; l&#224; page &#273;ang &#273;&#432;&#7907;c ch&#7885;n, ch&#432;a t&#7841;o task.</span>
                 </div>
                 <div class="legend-row">
                     <span class="legend-swatch legend-progress"></span>
@@ -358,24 +169,24 @@
                     <span><strong>Chờ duyệt</strong>Assistant đã submit task.</span>
                 </div>
                 <div class="legend-row">
-                    <span class="legend-swatch legend-complete"></span>
+                    <span class="legend-swatch legend-complete-solid"></span>
                     <span><strong>Hoàn tất</strong>Page đã xong đủ 5 stage.</span>
                 </div>
             </div>
         </div>
         <div class="panel">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                <strong style="font-size:13px;">Tasks</strong>
+            <div class="chapter-detail-inline-48">
+                <strong class="chapter-detail-inline-49">Tasks</strong>
             </div>
-            <div id="sidebarTaskList"><p class="section-desc" style="margin:0;">Loading...</p></div>
+            <div id="sidebarTaskList"><p class="section-desc chapter-detail-inline-50">Loading...</p></div>
         </div>
     </aside>
 </div>
 
-<div id="pageCompareModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;align-items:center;justify-content:center;">
-  <div style="background:#fff;border-radius:14px;padding:22px;max-width:860px;width:95vw;max-height:90vh;overflow-y:auto;position:relative;">
-    <button id="pageCompareClose" style="position:absolute;top:12px;right:16px;background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;">&times;</button>
-    <div id="pageCompareTitle" style="font-size:15px;font-weight:700;margin-bottom:14px;"></div>
+<div id="pageCompareModal" class="chapter-detail-inline-51">
+  <div class="chapter-detail-inline-52">
+    <button id="pageCompareClose" class="chapter-detail-inline-53">&times;</button>
+    <div id="pageCompareTitle" class="chapter-detail-inline-54"></div>
     <div id="pageCompareBody"></div>
   </div>
 </div>
@@ -386,9 +197,9 @@
         <h3 id="pageUploadTitle" class="section-title compact-title">Upload page</h3>
         <p id="pageUploadSubtitle" class="section-desc"></p>
         <div id="pageUploadPreview" class="page-upload-preview"></div>
-        <label class="field-label" for="pageModalFileInput" style="margin-top:12px;">Image file</label>
+        <label class="field-label chapter-detail-inline-55" for="pageModalFileInput">Image file</label>
         <input id="pageModalFileInput" type="file" accept="image/*" />
-        <label class="field-label" style="margin-top:12px;">Stages completed</label>
+        <label class="field-label chapter-detail-inline-56">Stages completed</label>
         <div id="pageUploadStagePicker" class="page-stage-picker" title="Tick stages completed by this page image">
             <label><input type="checkbox" value="SKETCHING" />Sketching</label>
             <label><input type="checkbox" value="INKING" />Inking</label>
@@ -396,11 +207,11 @@
             <label><input type="checkbox" value="SCREENTONE" />Screentone</label>
             <label><input type="checkbox" value="LETTERING" />Lettering</label>
         </div>
-        <div id="pageUploadError" class="alert error" style="display:none;margin-top:12px;"></div>
-        <div class="page-upload-modal-actions" style="margin-top:14px;">
-            <a id="pageUploadDownload" class="btn small" href="#" download style="display:none;">Download current</a>
-            <button class="btn small danger-soft" type="button" id="pageUploadDelete" style="display:none;">Delete page</button>
-            <div style="display:flex;gap:8px;margin-left:auto;">
+        <div id="pageUploadError" class="alert error chapter-detail-inline-57"></div>
+        <div class="page-upload-modal-actions chapter-detail-inline-58">
+            <a id="pageUploadDownload" class="btn small chapter-detail-inline-59" href="#" download>Download current</a>
+            <button class="btn small danger-soft chapter-detail-inline-60" type="button" id="pageUploadDelete">Delete page</button>
+            <div class="chapter-detail-inline-61">
                 <button class="btn small" type="button" data-modal-close>Cancel</button>
                 <button class="btn small primary" type="button" id="pageUploadSave">Save page</button>
             </div>
@@ -414,9 +225,9 @@
         <h3 id="assignTaskTitle" class="section-title compact-title">Gán task cho trang</h3>
         <form id="assignTaskForm" class="form-grid">
             <label class="field-label">Trang đã chọn</label>
-            <div id="assignPageChips" class="assign-chips"><span class="section-desc" style="margin:0;">Chưa chọn trang — chọn trên lưới Pages hoặc mở từ sidebar sau khi chọn.</span></div>
+            <div id="assignPageChips" class="assign-chips"><span class="section-desc chapter-detail-inline-62">Chưa chọn trang — chọn trên lưới Pages hoặc mở từ sidebar sau khi chọn.</span></div>
             <label class="field-label">Work to do</label>
-            <div id="assignTaskTypeSummary" class="assign-stage-summary section-desc" style="margin:0;">Tự tính theo stage tiếp theo của từng trang.</div>
+            <div id="assignTaskTypeSummary" class="assign-stage-summary section-desc chapter-detail-inline-63">Tự tính theo stage tiếp theo của từng trang.</div>
             <label class="field-label" for="assignAssistantId">Assistant</label>
             <select id="assignAssistantId" name="assistantId" required>
                 <option value="">Loading assistants...</option>
@@ -432,7 +243,7 @@
             </select>
             <label class="field-label" for="assignNotes">Notes</label>
             <textarea id="assignNotes" name="notes" rows="3" placeholder="Hướng dẫn cho assistant..."></textarea>
-            <div id="assignTaskError" class="alert error" style="display:none;"></div>
+            <div id="assignTaskError" class="alert error chapter-detail-inline-64"></div>
             <button class="btn primary" type="submit" id="assignTaskSubmit">Tạo task</button>
         </form>
     </div>
@@ -450,7 +261,7 @@
             </select>
             <label class="field-label" for="taskReassignReason">Reason</label>
             <textarea id="taskReassignReason" rows="3" maxlength="300" required placeholder="Lý do reassign..."></textarea>
-            <div id="taskReassignError" class="alert error" style="display:none;"></div>
+            <div id="taskReassignError" class="alert error chapter-detail-inline-65"></div>
             <button class="btn primary" type="submit">Confirm reassign</button>
         </form>
     </div>
@@ -539,7 +350,19 @@
     }
 
     function hasRole(role) {
-        return currentUser && currentUser.roles && currentUser.roles.indexOf(role) !== -1;
+        if (!currentUser) { return false; }
+        if (String(currentUser.role || currentUser.activeRole || currentUser.currentRole || '').toUpperCase() === role) {
+            return true;
+        }
+        var roles = currentUser.roles || [];
+        for (var i = 0; i < roles.length; i++) {
+            var value = roles[i];
+            var name = typeof value === 'string' ? value : (value && (value.name || value.role || value.authority));
+            if (String(name || '').toUpperCase() === role) {
+                return true;
+            }
+        }
+        return false;
     }
 
     function isOwner() {
@@ -780,7 +603,7 @@
 
     function formatDeadlineCell(dateValue, isDone, isOverdue) {
         var formatted = formatDate(dateValue);
-        if (!formatted) { return '<span style="color:#9ca3af;">—</span>'; }
+        if (!formatted) { return '<span class="chapter-detail-inline-66">—</span>'; }
         var daysLeft = daysUntilDate(dateValue);
         if (!isDone && !isOverdue && daysLeft !== null && daysLeft < 0) { isOverdue = true; }
         var suffix = deadlineSuffixText(daysLeft, isDone, isOverdue);
@@ -890,7 +713,7 @@
         var el = document.getElementById('assignPageChips');
         var selected = getSelectedPages();
         if (!selected.length) {
-            el.innerHTML = '<span class="section-desc" style="margin:0;">Chưa chọn trang — chọn trên lưới Pages trước khi gán.</span>';
+            el.innerHTML = '<span class="section-desc chapter-detail-inline-67">Chưa chọn trang — chọn trên lưới Pages trước khi gán.</span>';
             document.getElementById('assignTaskSubmit').disabled = true;
             return;
         }
@@ -955,9 +778,9 @@
         var grid = document.getElementById('pageSlotGrid');
         var owner = isOwner();
         if (!pageSlots.length) {
-            grid.innerHTML = '<p style="color:#9ca3af;grid-column:1/-1;font-size:13px;">Chưa có ô trang. '
+            grid.innerHTML = '<p class="chapter-detail-inline-68">Chưa có ô trang. '
                 + (owner ? 'Nhấn + Thêm trang để bắt đầu.' : 'No page slots yet.') + '</p>'
-                + (owner ? '<div class="page-slot page-slot-add" data-add-page="1" title="Thêm trang" style="grid-column:span 1;">+</div>' : '');
+                + (owner ? '<div class="page-slot page-slot-add chapter-detail-inline-69" data-add-page="1" title="Thêm trang">+</div>' : '');
             return;
         }
 
@@ -1017,7 +840,7 @@
     function renderSidebarTasks() {
         var el = document.getElementById('sidebarTaskList');
         if (!chapterTasks.length) {
-            el.innerHTML = '<p class="section-desc" style="margin:0;">Chưa có task.</p>';
+            el.innerHTML = '<p class="section-desc chapter-detail-inline-70">Chưa có task.</p>';
             return;
         }
         var preview = chapterTasks.slice(0, 5);
@@ -1025,10 +848,10 @@
             return '<div class="sidebar-task-mini">'
                 + '<strong>#' + t.id + '</strong> p.' + t.pageRangeStart + '-' + t.pageRangeEnd
                 + ' · ' + escapeHtml(formatStatus(t.taskType))
-                + '<br/><span class="status-chip ' + taskStatusClass(t.status) + '" style="font-size:10px;">' + formatStatus(t.status) + '</span>'
+                + '<br/><span class="status-chip ' + taskStatusClass(t.status) + ' chapter-detail-inline-71">' + formatStatus(t.status) + '</span>'
                 + '</div>';
         }).join('')
-            + (chapterTasks.length > 5 ? '<p class="section-desc" style="margin:8px 0 0;">+' + (chapterTasks.length - 5) + ' task khác — xem tab Tasks</p>' : '');
+            + (chapterTasks.length > 5 ? '<p class="section-desc chapter-detail-inline-72">+' + (chapterTasks.length - 5) + ' task khác — xem tab Tasks</p>' : '');
     }
 
     function renderMeta() {
@@ -1156,7 +979,7 @@
                 + '<td>' + formatDueDateCell(task) + '</td>'
                 + '<td class="task-actions-cell"><div class="task-row-actions">' + renderTaskRowActions(task) + '</div></td>'
                 + '</tr>'
-                + '<tr class="task-inline-row" id="task-inline-' + task.id + '" style="display:none;">'
+                + '<tr class="task-inline-row chapter-detail-inline-73" id="task-inline-' + task.id + '">'
                 + '<td colspan="7"><div class="task-inline-body" id="task-inline-body-' + task.id + '">Đang tải...</div></td>'
                 + '</tr>';
         }).join('');
@@ -1169,7 +992,7 @@
         var bodyEl = document.getElementById('task-inline-body-' + taskId);
         if (!bodyEl) { return; }
         if (!taskInlineLoaded[taskId]) {
-            bodyEl.innerHTML = '<span style="color:#9ca3af;font-size:12px;">Đang tải...</span>';
+            bodyEl.innerHTML = '<span class="chapter-detail-inline-74">Đang tải...</span>';
             try {
                 var res = await callApi('GET', '/api/v1/tasks/' + taskId + '/images');
                 var imgs = res.data || res || [];
@@ -1187,10 +1010,10 @@
                     }
                     html += '<div>Trang ' + p + '</div></div>';
                 }
-                bodyEl.innerHTML = html || '<span style="color:#9ca3af;font-size:12px;">Chưa có ảnh nào.</span>';
+                bodyEl.innerHTML = html || '<span class="chapter-detail-inline-75">Chưa có ảnh nào.</span>';
                 taskInlineLoaded[taskId] = true;
             } catch (e) {
-                bodyEl.innerHTML = '<span style="color:#ef4444;font-size:12px;">' + escapeHtml(e.message) + '</span>';
+                bodyEl.innerHTML = '<span class="chapter-detail-inline-76">' + escapeHtml(e.message) + '</span>';
             }
         }
     }
@@ -1205,9 +1028,9 @@
         var origUrl = slot.imageUrl ? imageUrl(slot.imageUrl) : null;
         if (!slot.taskId || (ts !== 'SUBMITTED' && ts !== 'APPROVED')) {
             body.innerHTML = origUrl
-                ? (isOwner() && !slot.taskId ? '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;"><button class="btn small primary" type="button" id="pageCompareEdit">Upload / replace</button></div>' : '')
-                    + '<img src="' + escapeHtml(origUrl) + '" style="width:100%;border-radius:8px;max-height:70vh;object-fit:contain;" />'
-                : '<div style="color:#9ca3af;text-align:center;padding:40px;">Chưa có ảnh</div>';
+                ? (isOwner() && !slot.taskId ? '<div class="chapter-detail-inline-77"><button class="btn small primary" type="button" id="pageCompareEdit">Upload / replace</button></div>' : '')
+                    + '<img src="' + escapeHtml(origUrl) + '" class="chapter-detail-inline-78" />'
+                : '<div class="chapter-detail-inline-79">Chưa có ảnh</div>';
             var editBtn = document.getElementById('pageCompareEdit');
             if (editBtn) {
                 editBtn.addEventListener('click', function () {
@@ -1219,7 +1042,7 @@
         }
         var taskImgs = taskImagesCache[slot.taskId];
         if (!taskImgs) {
-            body.innerHTML = '<div style="padding:30px;text-align:center;color:#6b7280;">Đang tải ảnh...</div>';
+            body.innerHTML = '<div class="chapter-detail-inline-80">Đang tải ảnh...</div>';
             try {
                 var res = await callApi('GET', '/api/v1/tasks/' + slot.taskId + '/images');
                 taskImgs = res.data || res || [];
@@ -1239,20 +1062,20 @@
         var assistantUrl = assistantImg ? imageUrl(assistantImg.fileUrl) : null;
         if (ts === 'SUBMITTED') {
             body.innerHTML =
-                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">'
-                + '<div><div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:6px;">Bản gốc (Mangaka)</div>'
-                + (origUrl ? '<img src="' + escapeHtml(origUrl) + '" style="width:100%;border-radius:8px;border:1px solid #e5e7eb;object-fit:contain;max-height:60vh;" />' : '<div style="height:180px;display:flex;align-items:center;justify-content:center;background:#f9fafb;border-radius:8px;border:1.5px dashed #d1d5db;color:#9ca3af;">Không có ảnh gốc</div>')
+                '<div class="chapter-detail-inline-81">'
+                + '<div><div class="chapter-detail-inline-82">Bản gốc (Mangaka)</div>'
+                + (origUrl ? '<img src="' + escapeHtml(origUrl) + '" class="chapter-detail-inline-83" />' : '<div class="chapter-detail-inline-84">Không có ảnh gốc</div>')
                 + '</div>'
-                + '<div><div style="font-size:11px;font-weight:700;color:#f59e0b;text-transform:uppercase;margin-bottom:6px;">Bản assistant nộp</div>'
-                + (assistantUrl ? '<img src="' + escapeHtml(assistantUrl) + '" style="width:100%;border-radius:8px;border:2px solid #f59e0b;object-fit:contain;max-height:60vh;" />' : '<div style="height:180px;display:flex;align-items:center;justify-content:center;background:#f9fafb;border-radius:8px;border:1.5px dashed #d1d5db;color:#9ca3af;">Chưa có ảnh</div>')
+                + '<div><div class="chapter-detail-inline-85">Bản assistant nộp</div>'
+                + (assistantUrl ? '<img src="' + escapeHtml(assistantUrl) + '" class="chapter-detail-inline-86" />' : '<div class="chapter-detail-inline-87">Chưa có ảnh</div>')
                 + '</div></div>';
             return;
         }
         var finalUrl = assistantUrl || origUrl;
         body.innerHTML = finalUrl
-            ? '<div style="text-align:center;margin-bottom:8px;"><span style="background:#dbeafe;color:#1d4ed8;font-size:11px;padding:3px 10px;border-radius:999px;font-weight:600;">✓ Đã được duyệt</span></div>'
-                + '<img src="' + escapeHtml(finalUrl) + '" style="width:100%;border-radius:8px;border:2px solid #3b82f6;object-fit:contain;max-height:65vh;" />'
-            : '<div style="color:#9ca3af;text-align:center;padding:40px;">Không có ảnh</div>';
+            ? '<div class="chapter-detail-inline-88"><span class="chapter-detail-inline-89">✓ Đã được duyệt</span></div>'
+                + '<img src="' + escapeHtml(finalUrl) + '" class="chapter-detail-inline-90" />'
+            : '<div class="chapter-detail-inline-91">Không có ảnh</div>';
     }
 
     function switchTab(tab) {
@@ -1591,6 +1414,11 @@
         var slot = findPageById(pageId);
         if (!slot) { return; }
 
+        if (slot.imageUrl && e.target.closest('img')) {
+            openPageCompare(slot);
+            return;
+        }
+
         if (e.shiftKey) {
             toggleSelectedPage(pageId, slot);
             lastSlotIndex = index;
@@ -1601,6 +1429,9 @@
         lastSlotIndex = index;
 
         if (!isOwner()) {
+            if (slot.imageUrl || slot.taskId) {
+                openPageCompare(slot);
+            }
             return;
         }
 
@@ -1811,6 +1642,7 @@
         showError(decodeURIComponent(urlError));
     }
 
+    switchTab('pages');
     loadData();
 })();
 </script>

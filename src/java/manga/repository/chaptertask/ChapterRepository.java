@@ -1,7 +1,7 @@
-package manga.repository;
+package manga.repository.chaptertask;
 
 import manga.model.AuthenticatedUser;
-import manga.model.ChapterSummary;
+import manga.model.chaptertask.ChapterSummary;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.PreparedStatement;
@@ -667,5 +667,6 @@ public class ChapterRepository {
         }
     }
 }
+
 
 

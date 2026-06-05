@@ -1,9 +1,9 @@
-package manga.dto;
+package manga.dto.chaptertask;
 
 import java.time.LocalDateTime;
 
 /**
- * DTO for ChapterImage API responses.
+ * Chapter/task DTO for ChapterImage API responses.
  * Used for manuscript builder to show candidate pages.
  */
 public class ChapterImageDTO {

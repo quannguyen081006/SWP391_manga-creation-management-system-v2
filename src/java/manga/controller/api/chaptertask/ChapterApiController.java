@@ -1,10 +1,11 @@
-package manga.controller.api;
+package manga.controller.api.chaptertask;
 
-import manga.repository.ChapterRepository;
+// Chapter/task API group: chapter CRUD endpoints are kept separate from general APIs for easier tracing.
+import manga.repository.chaptertask.ChapterRepository;
 import manga.common.ApiResponse;
 import manga.common.util.SessionUserUtil;
 import manga.model.AuthenticatedUser;
-import manga.model.ChapterSummary;
+import manga.model.chaptertask.ChapterSummary;
 import java.sql.Date;
 import java.util.List;
 import javax.servlet.http.HttpSession;
@@ -119,3 +120,4 @@ public class ChapterApiController {
         return ApiResponse.ok(null, "Chapter deleted");
     }
 }
+

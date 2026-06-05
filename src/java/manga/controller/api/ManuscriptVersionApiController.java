@@ -1,7 +1,7 @@
 package manga.controller.api;
 
 import manga.common.ApiResponse;
-import manga.dto.AddPageRequestDTO;
+import manga.dto.chaptertask.AddPageRequestDTO;
 import manga.dto.ManuscriptApprovalRequestDTO;
 import manga.dto.ManuscriptPageDTO;
 import manga.dto.ManuscriptVersionDTO;
@@ -259,11 +259,11 @@ public class ManuscriptVersionApiController {
      * GET /api/v1/manuscript-versions/candidate-pages?chapterId={chapterId}
      */
     @GetMapping("/candidate-pages")
-    public ApiResponse<List<manga.dto.ChapterImageDTO>> getCandidatePages(
+    public ApiResponse<List<manga.dto.chaptertask.ChapterImageDTO>> getCandidatePages(
             @RequestParam Long chapterId,
             @ModelAttribute AuthenticatedUser user) {
 
-        List<manga.dto.ChapterImageDTO> candidatePages = manuscriptVersionService.getCandidatePages(chapterId);
+        List<manga.dto.chaptertask.ChapterImageDTO> candidatePages = manuscriptVersionService.getCandidatePages(chapterId);
         return ApiResponse.success(candidatePages);
     }
 
