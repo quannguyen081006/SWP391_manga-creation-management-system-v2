@@ -11,8 +11,8 @@ public class CreateAnnotationRequestDTO {
     private String category;
     private String severity;
     private String content;
-    private Double xCoordinatePercent;
-    private Double yCoordinatePercent;
+    private Double xPercent;
+    private Double yPercent;
     private Double widthPercent;
     private Double heightPercent;
     private Long parentAnnotationId;
@@ -66,20 +66,20 @@ public class CreateAnnotationRequestDTO {
         this.content = content;
     }
 
-    public Double getxCoordinatePercent() {
-        return xCoordinatePercent;
+    public Double getxPercent() {
+        return xPercent;
     }
 
-    public void setxCoordinatePercent(Double xCoordinatePercent) {
-        this.xCoordinatePercent = xCoordinatePercent;
+    public void setxPercent(Double xPercent) {
+        this.xPercent = xPercent;
     }
 
-    public Double getyCoordinatePercent() {
-        return yCoordinatePercent;
+    public Double getyPercent() {
+        return yPercent;
     }
 
-    public void setyCoordinatePercent(Double yCoordinatePercent) {
-        this.yCoordinatePercent = yCoordinatePercent;
+    public void setyPercent(Double yPercent) {
+        this.yPercent = yPercent;
     }
 
     public Double getWidthPercent() {
@@ -114,8 +114,8 @@ public class CreateAnnotationRequestDTO {
                 + ", category='" + category + '\''
                 + ", severity='" + severity + '\''
                 + ", content='" + content + '\''
-                + ", xCoordinatePercent=" + xCoordinatePercent
-                + ", yCoordinatePercent=" + yCoordinatePercent
+                + ", xCoordinatePercent=" + xPercent
+                + ", yCoordinatePercent=" + yPercent
                 + ", widthPercent=" + widthPercent
                 + ", heightPercent=" + heightPercent
                 + ", parentAnnotationId=" + parentAnnotationId

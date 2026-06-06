@@ -43,8 +43,8 @@ public class AnnotationApiController {
         System.out.println("=== CONTROLLER DEBUG ===");
         System.out.println("request = " + request);
 
-        System.out.println("x = " + request.getxCoordinatePercent());
-        System.out.println("y = " + request.getyCoordinatePercent());
+        System.out.println("x = " + request.getxPercent());
+        System.out.println("y = " + request.getyPercent());
         System.out.println("w = " + request.getWidthPercent());
         System.out.println("h = " + request.getHeightPercent());
 
@@ -57,8 +57,8 @@ public class AnnotationApiController {
                 ? manga.enums.AnnotationSeverity.valueOf(request.getSeverity())
                 : null,
                 request.getContent(),
-                request.getxCoordinatePercent(),
-                request.getyCoordinatePercent(),
+                request.getxPercent(),
+                request.getyPercent(),
                 request.getWidthPercent(),
                 request.getHeightPercent(),
                 request.getParentAnnotationId(),
@@ -204,16 +204,4 @@ public class AnnotationApiController {
         return "OK";
 
     }
-
-    @PostMapping
-    public ApiResponse<Long> addAnnotation(
-            @RequestBody String rawJson,
-            @ModelAttribute AuthenticatedUser user) {
-
-        System.out.println("RAW JSON:");
-        System.out.println(rawJson);
-
-        return ApiResponse.success(1L);
-    }
-
 }

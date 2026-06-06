@@ -293,7 +293,7 @@ public class ModuleWebController {
         AuthenticatedUser user = requireUser(session);
         model.addAttribute("periods", rankingRepository.listPeriods());
         model.addAttribute("seriesList", productionRepository.listSeries());
-        
+
         // BR-RNK-06: Track which periods the current board member has already submitted for
         if (user.hasRole("EDITORIAL_BOARD")) {
             java.util.Set<Long> submittedPeriodIds = new java.util.HashSet<Long>();
@@ -307,7 +307,7 @@ public class ModuleWebController {
         } else {
             model.addAttribute("submittedRankingPeriodIds", new java.util.HashSet<Long>());
         }
-        
+
         return "ranking/period";
     }
 
@@ -839,6 +839,16 @@ public class ModuleWebController {
         if (annotations == null) {
             annotations = new java.util.ArrayList<>();
         }
+        // DEBUG
+        if (!annotations.isEmpty()) {
+            manga.model.AnnotationSummary a = annotations.get(0);
+
+            System.out.println("=================================");
+            System.out.println("CLASS = " + a.getClass().getName());
+            System.out.println("DEBUG = " + a.debugVersion());
+            System.out.println("X = " + a.getXPercent());
+            System.out.println("=================================");
+        }
 
         // Get review dashboard data - ensure never null
         manga.dto.ReviewDashboardDTO dashboard = manuscriptVersionService.getReviewDashboard(id);
@@ -861,8 +871,8 @@ public class ModuleWebController {
 
         // Readonly mode: approved, rejected, and published versions are readonly
         boolean isReadonly = version.getStatus() == ManuscriptStatus.APPROVED
-        || version.getStatus() == ManuscriptStatus.REJECTED
-        || version.getStatus() == ManuscriptStatus.PUBLISHED;
+                || version.getStatus() == ManuscriptStatus.REJECTED
+                || version.getStatus() == ManuscriptStatus.PUBLISHED;
 
         // Format LocalDateTime fields for JSP compatibility (Tomcat/JSTL doesn't support LocalDateTime with fmt:formatDate)
         java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -1005,8 +1015,9 @@ public class ModuleWebController {
     }
 
     /**
-     * View version history for chapter.
-     * Redirects to the most recent version's workspace since version history is now integrated into the workspace sidebar.
+     * View version history for chapter. Redirects to the most recent version's
+     * workspace since version history is now integrated into the workspace
+     * sidebar.
      */
     @RequestMapping(value = "/chapters/{chapterId}/manuscript-workspace/history", method = RequestMethod.GET)
     public String manuscriptWorkspaceHistory(@PathVariable("chapterId") long chapterId, HttpSession session, Model model) {
@@ -1087,37 +1098,37 @@ public class ModuleWebController {
 
     /**
      * Tantou Review Inbox - Show all manuscripts waiting for Tantou review.
-     * Tantou only sees manuscripts from their assigned series.
-     * Admin sees all under-review manuscripts.
+     * Tantou only sees manuscripts from their assigned series. Admin sees all
+     * under-review manuscripts.
      */
     @RequestMapping(value = "/manuscript-review", method = RequestMethod.GET)
     public String manuscriptReviewInbox(HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
-        
+
         if (!user.hasRole("TANTOU_EDITOR") && !user.hasRole("ADMIN")) {
             throw new IllegalArgumentException("Only TANTOU_EDITOR or ADMIN can access review inbox");
         }
-        
+
         boolean isAdmin = user.hasRole("ADMIN");
-        List<manga.model.ManuscriptVersion> underReviewVersions = 
-            manuscriptVersionService.findUnderReviewForTantou(user.getId(), isAdmin);
-        
+        List<manga.model.ManuscriptVersion> underReviewVersions
+                = manuscriptVersionService.findUnderReviewForTantou(user.getId(), isAdmin);
+
         if (underReviewVersions == null) {
             underReviewVersions = new java.util.ArrayList<>();
         }
-        
+
         // Load chapter and series information for each version
         java.util.Map<Long, ChapterSummary> chapterMap = new java.util.HashMap<>();
         java.util.Map<Long, String> mangakaNames = new java.util.HashMap<>();
         java.util.Map<Long, String> submittedAtMap = new java.util.HashMap<>();
-        
+
         java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-        
+
         for (manga.model.ManuscriptVersion version : underReviewVersions) {
             ChapterSummary chapter = chapterRepository.findById(version.getChapterId());
             if (chapter != null) {
                 chapterMap.put(version.getId(), chapter);
-                
+
                 // Get mangaka name using UserAdminRepository
                 long mangakaId = chapterRepository.findOwnerMangakaByChapter(version.getChapterId());
                 String mangakaName = userAdminRepository.getFullNameById(mangakaId);
@@ -1126,7 +1137,7 @@ public class ModuleWebController {
                 }
                 mangakaNames.put(version.getId(), mangakaName);
             }
-            
+
             // Format submittedAt
             if (version.getSubmittedAt() != null) {
                 submittedAtMap.put(version.getId(), version.getSubmittedAt().format(formatter));
@@ -1141,10 +1152,15 @@ public class ModuleWebController {
                     String urgency;
                     long s24 = 24 * 3600;
                     long s12 = 12 * 3600;
-                    if (remaining <= 0) { urgency = "OVERDUE"; }
-                    else if (remaining <= s12) { urgency = "RED"; }
-                    else if (remaining <= s24) { urgency = "YELLOW"; }
-                    else { urgency = "GREEN"; }
+                    if (remaining <= 0) {
+                        urgency = "OVERDUE";
+                    } else if (remaining <= s12) {
+                        urgency = "RED";
+                    } else if (remaining <= s24) {
+                        urgency = "YELLOW";
+                    } else {
+                        urgency = "GREEN";
+                    }
 
                     // put into maps for JSP
                     // Format timestamps for display
@@ -1159,10 +1175,10 @@ public class ModuleWebController {
             }
         }
         // Build SLA maps
-        java.util.Map<Long,Long> remainingSecondsMap = new java.util.HashMap<>();
-        java.util.Map<Long,String> urgencyMap = new java.util.HashMap<>();
-        java.util.Map<Long,String> dueAtMap = new java.util.HashMap<>();
-        java.util.Map<Long,String> assignedAtMap = new java.util.HashMap<>();
+        java.util.Map<Long, Long> remainingSecondsMap = new java.util.HashMap<>();
+        java.util.Map<Long, String> urgencyMap = new java.util.HashMap<>();
+        java.util.Map<Long, String> dueAtMap = new java.util.HashMap<>();
+        java.util.Map<Long, String> assignedAtMap = new java.util.HashMap<>();
 
         for (manga.model.ManuscriptVersion version : underReviewVersions) {
             manga.model.ReviewTask task = reviewTaskService.getReviewTask(version.getId());
@@ -1173,10 +1189,15 @@ public class ModuleWebController {
                 String urgency;
                 long s24 = 24 * 3600;
                 long s12 = 12 * 3600;
-                if (remaining <= 0) { urgency = "OVERDUE"; }
-                else if (remaining <= s12) { urgency = "RED"; }
-                else if (remaining <= s24) { urgency = "YELLOW"; }
-                else { urgency = "GREEN"; }
+                if (remaining <= 0) {
+                    urgency = "OVERDUE";
+                } else if (remaining <= s12) {
+                    urgency = "RED";
+                } else if (remaining <= s24) {
+                    urgency = "YELLOW";
+                } else {
+                    urgency = "GREEN";
+                }
 
                 remainingSecondsMap.put(version.getId(), remaining);
                 urgencyMap.put(version.getId(), urgency);
@@ -1196,7 +1217,7 @@ public class ModuleWebController {
         model.addAttribute("assignedAtMap", assignedAtMap);
         model.addAttribute("currentUser", user);
         model.addAttribute("isAdmin", isAdmin);
-        
+
         return "manuscript-version/review-inbox";
     }
 
@@ -1215,4 +1236,3 @@ public class ModuleWebController {
         return false;
     }
 }
-

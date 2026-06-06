@@ -119,7 +119,7 @@
         }
         
         .btn-primary { 
-            background: #2563eb; 
+            background: #2563eb;  
             border-color: #2563eb;
             color: #ffffff;
         }

@@ -329,8 +329,8 @@ async function handleAnnotationSubmit(event) {
         severity: formData.get('severity'),
         content: formData.get('content'),
 
-        xCoordinatePercent: Number(form.dataset.xPercent),
-        yCoordinatePercent: Number(form.dataset.yPercent),
+        xPercent: Number(form.dataset.xPercent),
+        yPercent: Number(form.dataset.yPercent),
 
         widthPercent: Number(formData.get('widthPercent') || 10),
         heightPercent: Number(formData.get('heightPercent') || 10),
@@ -348,8 +348,8 @@ async function handleAnnotationSubmit(event) {
         console.log('Annotation Request JSON:');
         console.log(JSON.stringify(request, null, 2));
         if (
-                isNaN(request.xCoordinatePercent) ||
-                isNaN(request.yCoordinatePercent) ||
+                isNaN(request.xPercent) ||
+                isNaN(request.yPercent) ||
                 isNaN(request.widthPercent) ||
                 isNaN(request.heightPercent)
                 ) {
@@ -494,4 +494,152 @@ async function addReply(annotationId) {
         console.error('Error adding reply:', error);
         alert('Error adding reply. Please try again.');
     }
+    function focusAnnotation(
+            annotationId,
+            content,
+            category,
+            severity
+            ) {
+
+        document
+                .querySelectorAll('.annotation-marker')
+                .forEach(marker => {
+                    marker.classList.remove('active');
+                });
+
+        const marker = document.querySelector(
+                '[data-annotation-id="' +
+                annotationId +
+                '"]'
+                );
+
+        if (!marker) {
+
+            console.error(
+                    'Marker not found:',
+                    annotationId
+                    );
+
+            return;
+        }
+
+        marker.classList.add('active');
+
+        marker.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+        });
+
+        const popup =
+                document.getElementById(
+                        'annotationPopup'
+                        );
+
+        const popupContent =
+                document.getElementById(
+                        'annotationPopupContent'
+                        );
+
+        popupContent.innerHTML = `
+        <div style="font-weight:bold">
+            ${category}
+        </div>
+
+        <div style="margin-top:8px">
+            ${content}
+        </div>
+
+        <div style="
+            margin-top:8px;
+            color:#6b7280;
+            font-size:12px;
+        ">
+            Severity: ${severity}
+        </div>
+    `;
+
+        const rect =
+                marker.getBoundingClientRect();
+
+        popup.style.left =
+                (rect.right + 20) + 'px';
+
+        popup.style.top =
+                rect.top + 'px';
+
+        popup.classList.add('show');
+    }
+    function showAnnotationPopup(
+            marker,
+            category,
+            content,
+            severity
+            ) {
+
+        const popup =
+                document.getElementById(
+                        'annotationPopup'
+                        );
+
+        const popupContent =
+                document.getElementById(
+                        'annotationPopupContent'
+                        );
+
+        popupContent.innerHTML = `
+        <div style="
+            font-weight:600;
+            margin-bottom:8px;
+        ">
+            ${category}
+        </div>
+
+        <div>
+            ${content}
+        </div>
+
+        <div style="
+            margin-top:10px;
+            color:#6b7280;
+            font-size:12px;
+        ">
+            Severity:
+            ${severity}
+        </div>
+    `;
+
+        const rect =
+                marker.getBoundingClientRect();
+
+        popup.style.left =
+                (rect.right + 20) + 'px';
+
+        popup.style.top =
+                rect.top + 'px';
+
+        popup.classList.add('show');
+    }
+
+    document.addEventListener(
+            'click',
+            function (event) {
+
+                const popup =
+                        document.getElementById(
+                                'annotationPopup'
+                                );
+
+                if (!popup) {
+                    return;
+                }
+
+                if (
+                        !popup.contains(event.target) &&
+                        !event.target.closest('.annotation-item')
+                        ) {
+
+                    popup.classList.remove('show');
+                }
+            }
+    );
 }

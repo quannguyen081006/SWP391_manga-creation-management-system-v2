@@ -38,7 +38,7 @@ public class ManuscriptVersion {
     
     // Child entities
     private List<ManuscriptPage> pages = new ArrayList<>();
-    private List<Annotation> annotations = new ArrayList<>();
+    private List<AnnotationSummary> annotations = new ArrayList<>();
     
     // Getters and Setters
     public Long getId() {
@@ -185,11 +185,11 @@ public class ManuscriptVersion {
         this.pages = pages;
     }
     
-    public List<Annotation> getAnnotations() {
+    public List<AnnotationSummary> getAnnotations() {
         return annotations;
     }
     
-    public void setAnnotations(List<Annotation> annotations) {
+    public void setAnnotations(List<AnnotationSummary> annotations) {
         this.annotations = annotations;
     }
     

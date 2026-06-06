@@ -671,7 +671,6 @@
                 </form>
             </div>
         </div>
-
         <script>
             window.contextPath = '${pageContext.request.contextPath}';
 
@@ -721,20 +720,20 @@
             })();
 
             // Render annotation markers on pages
-            <c:forEach var="annotation" items="${annotations}">
-                <c:if test="${annotation.manuscriptPageId != null}">
-            var pageImg = document.getElementById('img-${annotation.manuscriptPageId}');
+            <c:forEach var="ann" items="${annotations}">
+                <c:if test="${ann.manuscriptPageId != null}">
+            var pageImg = document.getElementById('img-${ann.manuscriptPageId}');
             if (pageImg) {
                 var container = pageImg.parentElement;
                 var marker = document.createElement('div');
-                marker.className = 'annotation-marker ${annotation.status == 'RESOLVED' ? 'resolved' : annotation.status == 'DISMISSED' ? 'dismissed' : ''}';
-                marker.style.left = '${annotation.xPercent}%';
-                marker.style.top = '${annotation.yPercent}%';
-                marker.style.width = '${annotation.widthPercent}%';
-                marker.style.height = '${annotation.heightPercent}%';
-                marker.title = '${annotation.category}: ${annotation.content}';
+                marker.className = 'annotation-marker ${ann.status == 'RESOLVED' ? 'resolved' : ann.status == 'DISMISSED' ? 'dismissed' : ''}';
+                marker.style.left = '${ann.getXPercent()}%';
+                marker.style.top = '${ann.getYPercent()}%';
+                marker.style.width = '${ann.getWidthPercent()}%';
+                marker.style.height = '${ann.getHeightPercent()}%';
+                marker.title = '${ann.category}: ${ann.content}';
                         marker.onclick = function () {
-                            alert('${annotation.category}: ${annotation.content}\nStatus: ${annotation.status}\nSeverity: ${annotation.severity}');
+                            alert('${ann.category}: ${ann.content}\nStatus: ${ann.status}\nSeverity: ${ann.severity}');
                                     };
                                     container.appendChild(marker);
                                 }

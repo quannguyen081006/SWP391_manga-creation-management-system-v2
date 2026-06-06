@@ -48,6 +48,7 @@ public class AnnotationSummary {
     
     // New getters and setters
     public Double getXPercent() { return xPercent; }
+    
     public void setXPercent(Double xPercent) { this.xPercent = xPercent; }
     public Double getYPercent() { return yPercent; }
     public void setYPercent(Double yPercent) { this.yPercent = yPercent; }
@@ -67,4 +68,9 @@ public class AnnotationSummary {
     public void setManuscriptVersionId(Long manuscriptVersionId) { this.manuscriptVersionId = manuscriptVersionId; }
     public Long getManuscriptPageId() { return manuscriptPageId; }
     public void setManuscriptPageId(Long manuscriptPageId) { this.manuscriptPageId = manuscriptPageId; }
+    
+    public String debugVersion() {
+    return "ANNOTATION_SUMMARY_V2";
 }
+}
+
