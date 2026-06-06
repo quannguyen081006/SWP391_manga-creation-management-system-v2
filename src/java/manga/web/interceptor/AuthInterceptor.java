@@ -27,12 +27,7 @@ public class AuthInterceptor implements HandlerInterceptor {
         String uri = request.getRequestURI();
         String context = request.getContextPath();
 
-        // Auth API endpoints must remain public so a session can be created or destroyed.
-        if (uri.endsWith("/api/v1/auth/login") || uri.endsWith("/api/v1/auth/logout")) {
-            return true;
-        }
-
-        // Static assets and web auth helpers are not protected by RBAC.
+        // login -> pass
         if (uri.endsWith("/login") || uri.endsWith("/logout") || uri.endsWith("/switch-role")
                 || uri.contains("/assets/") || uri.endsWith("/redirect.jsp")) {
             return true;

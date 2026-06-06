@@ -20,12 +20,6 @@ public class NotificationViewAdvice {
     @Autowired
     private NotificationRepository notificationRepository;
 
-    /**
-     * Provides the unread notification count for the header badge.
-     *
-     * @param session current HTTP session
-     * @return unread count, or {@code 0} when no authenticated user exists
-     */
     @ModelAttribute("headerUnreadNotificationCount")
     public int unreadCount(HttpSession session) {
         AuthenticatedUser user = getUser(session);
