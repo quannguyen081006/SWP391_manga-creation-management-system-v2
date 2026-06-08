@@ -26,11 +26,11 @@
     <meta charset="UTF-8">
     <title>Tasks</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css?v=20260525" />
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/task-list.css?v=20260605fix3" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/chaptertask/task-list.css?v=20260605fix3" />
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
-<%-- Chapter/task note: task table and review popover CSS is in /assets/task-list.css, not embedded in JSP. --%>
+<%-- Chapter/task note: task table and review popover CSS is in /assets/css/chaptertask/task-list.css, not embedded in JSP. --%>
 
 <%--
     [2] METRIC CARDS: 5 card tóm tắt số lượng task theo trạng thái
@@ -208,7 +208,7 @@ window.TASK_LIST_CONFIG = {
     contextPath: '${pageContext.request.contextPath}'
 };
 </script>
-<script src="${pageContext.request.contextPath}/assets/task-list.js?v=20260608split"></script>
+<script src="${pageContext.request.contextPath}/assets/js/chaptertask/task-list.js?v=20260608split"></script>
 
 <jsp:include page="../common/footer.jsp" />
 </body>

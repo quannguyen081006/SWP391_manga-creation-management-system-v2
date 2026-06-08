@@ -26,11 +26,11 @@
     <meta charset="UTF-8">
     <title>Chapters</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css?v=20260525" />
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/chapter-list.css?v=20260605fix3" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/chaptertask/chapter-list.css?v=20260605fix3" />
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
-<%-- Chapter/task note: tracker-specific CSS is in /assets/chapter-list.css; chapter grouping logic stays in this JSP. --%>
+<%-- Chapter/task note: tracker-specific CSS is in /assets/css/chaptertask/chapter-list.css; chapter grouping logic stays in this JSP. --%>
 
 <%-- [2] ALERT BOX: hiển thị lỗi API inline, JS show/hide tuỳ tình huống --%>
 <div id="chapterResult" class="alert error chapter-alert-hidden"></div>
@@ -209,7 +209,7 @@ window.CHAPTER_LIST_CONFIG = {
     canCreateChapter: ${sessionScope.AUTH_USER != null && sessionScope.AUTH_USER.hasRole('MANGAKA') ? 'true' : 'false'}
 };
 </script>
-<script src="${pageContext.request.contextPath}/assets/chapter-list.js?v=20260608split"></script>
+<script src="${pageContext.request.contextPath}/assets/js/chaptertask/chapter-list.js?v=20260608split"></script>
 
 <jsp:include page="../common/footer.jsp" />
 </body>

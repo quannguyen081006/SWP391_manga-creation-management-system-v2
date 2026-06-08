@@ -15,10 +15,46 @@ import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
+/**
+ * Repository quản lý Chapter.
+ *
+ * Mục lục:
+ *  1.  listAll()                          - Lấy tất cả chapter (không filter)
+ *  2.  listAll(user)                      - Lấy chapter theo role: ADMIN=all, MANGAKA=seri mình, TANTOU=seri phụ trách
+ *  3.  listBySeries()                     - Lấy chapter theo seriesId
+ *  4.  findById()                         - Tìm chapter theo ID
+ *  5.  create()                           - Tạo chapter với chapterNumber chỉ định (legacy)
+ *  6.  createNext()                       - Tạo chapter tiếp theo, tự tăng chapterNumber + tạo page slots nếu schema sẵn sàng
+ *  7.  createNextWithPageSlots()          - Tạo chapter + bulk create Page slots trong 1 transaction
+ *  8.  createNextLegacy()                 - Tạo chapter không có Page slots (fallback khi schema chưa có)
+ *  9.  isPageSchemaReady()                - Kiểm tra DB có cột totalPages và bảng Page chưa (cache volatile)
+ * 10.  updateChapterMetadata()            - Cập nhật title + submissionDeadline + tính lại publicationDate
+ * 11.  updateChapterTitle()               - Cập nhật chỉ title
+ * 12.  submitForReview()                  - Chuyển chapter sang EDITORIAL_REVIEW (chỉ khi completionPct = 100%)
+ * 13.  deleteChapter()                    - Xóa chapter PLANNING chưa có task
+ * 14.  findChaptersWithDeadlineInDays()   - Tìm chapter deadline sau N ngày (dùng cho scheduler cảnh báo)
+ * 15.  findMissedSubmissionDeadlineChapters() - Tìm chapter trễ deadline chưa hoàn thành
+ * 16.  findSeriesOwnerMangaka()           - Lấy mangakaId chủ seri
+ * 17.  findOwnerMangakaByChapter()        - Lấy mangakaId chủ seri qua chapterId
+ * 18.  getChapterStatus()                 - Lấy status của chapter
+ * 19.  updateChapterStatus()              - Cập nhật status chapter (dùng bởi ManuscriptVersionService)
+ * 20.  getSeriesStatus()                  - Lấy status của seri qua chapterId
+ * 21.  findSeriesTantou()                 - Lấy tantouEditorId của seri
+ * 22.  getChapterMangaka()                - Lấy mangakaId qua chapterId (alias ngắn)
+ * 23.  getChapterTantou()                 - Lấy tantouEditorId qua chapterId (alias ngắn)
+ *
+ * Quy tắc deadline:
+ *  - submissionDeadline không được là ngày quá khứ
+ *  - submissionDeadline phải trước seriesDeadline ít nhất CHAPTER_SERIES_DEADLINE_BUFFER_DAYS (7 ngày)
+ *  - publicationDate = submissionDeadline + CHAPTER_PUBLICATION_OFFSET_DAYS (14 ngày), tự tính khi create/update
+ */
 @Repository
 public class ChapterRepository {
 
+    /** Số ngày cộng thêm vào submissionDeadline để tính publicationDate. */
     private static final int CHAPTER_PUBLICATION_OFFSET_DAYS = 14;
+
+    /** Chapter deadline phải trước series deadline ít nhất bao nhiêu ngày. */
     private static final int CHAPTER_SERIES_DEADLINE_BUFFER_DAYS = 7;
 
     @Autowired
@@ -38,8 +74,10 @@ public class ChapterRepository {
     private static final String CHAPTER_COLUMNS_EXTENDED =
             CHAPTER_COLUMNS_LEGACY + ", totalPages";
 
+    /** Cache volatile: null=chưa check, TRUE/FALSE=kết quả đã check. */
     private volatile Boolean pageSchemaReady;
 
+    /** Lấy tất cả chapter, sắp xếp mới nhất trước. */
     public List<ChapterSummary> listAll() {
         String sql = "SELECT " + chapterSelectColumns(null) + " FROM Chapter ORDER BY createdAt DESC";
         List<ChapterSummary> rows = new ArrayList<ChapterSummary>();
@@ -55,6 +93,13 @@ public class ChapterRepository {
         return rows;
     }
 
+    /**
+     * Lấy chapter theo role của user:
+     *  - ADMIN: toàn bộ chapter
+     *  - MANGAKA: chỉ chapter thuộc seri mình sở hữu
+     *  - TANTOU_EDITOR: chỉ chapter thuộc seri mình phụ trách
+     *  - Khác: trả danh sách rỗng
+     */
     public List<ChapterSummary> listAll(AuthenticatedUser user) {
         String sql;
         List<Object> params = new ArrayList<Object>();
@@ -92,6 +137,7 @@ public class ChapterRepository {
         return rows;
     }
 
+    /** Lấy danh sách chapter theo seriesId, sắp xếp theo chapterNumber ASC. */
     public List<ChapterSummary> listBySeries(long seriesId) {
         String sql = "SELECT " + chapterSelectColumns(null) + " FROM Chapter WHERE seriesId = ? ORDER BY chapterNumber";
         List<ChapterSummary> rows = new ArrayList<ChapterSummary>();
@@ -109,6 +155,7 @@ public class ChapterRepository {
         return rows;
     }
 
+    /** Tìm chapter theo ID, trả null nếu không tồn tại. */
     public ChapterSummary findById(long chapterId) {
         String sql = "SELECT " + chapterSelectColumns(null) + " FROM Chapter WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -125,6 +172,10 @@ public class ChapterRepository {
         }
     }
 
+    /**
+     * Tạo chapter với chapterNumber chỉ định (legacy, không tự tăng).
+     * publicationDate tự tính = submissionDeadline + 14 ngày.
+     */
     public long create(long seriesId, int chapterNumber, String title, Date submissionDeadline) {
         String sql = "INSERT INTO Chapter (seriesId, chapterNumber, title, status, submissionDeadline, publicationDate, completionPct, atRisk, createdAt) VALUES (?, ?, ?, 'PLANNING', ?, ?, 0.00, 0, GETDATE())";
         try (Connection conn = dataSource.getConnection();
@@ -147,6 +198,11 @@ public class ChapterRepository {
         }
     }
 
+    /**
+     * Tạo chapter tiếp theo với chapterNumber tự tăng.
+     * Nếu schema sẵn sàng (có bảng Page + cột totalPages) và totalPages > 0 → tạo kèm page slots.
+     * Nếu schema chưa sẵn sàng → fallback về createNextLegacy().
+     */
     public long createNext(long seriesId, String title, Date submissionDeadline, int totalPages) {
         if (totalPages < 0) {
             throw new IllegalArgumentException("totalPages cannot be negative");
@@ -166,6 +222,10 @@ public class ChapterRepository {
         }
     }
 
+    /**
+     * Tạo chapter + bulk create Page slots trong 1 transaction.
+     * Dùng UPDLOCK/HOLDLOCK để tránh race condition khi tính chapterNumber.
+     */
     private long createNextWithPageSlots(long seriesId, String title, Date submissionDeadline, int totalPages) {
         String nextSql = "SELECT ISNULL(MAX(chapterNumber), 0) + 1 FROM Chapter WITH (UPDLOCK, HOLDLOCK) WHERE seriesId = ?";
         String insertSql = "INSERT INTO Chapter (seriesId, chapterNumber, title, status, submissionDeadline, publicationDate, completionPct, atRisk, totalPages, createdAt) VALUES (?, ?, ?, 'PLANNING', ?, ?, 0.00, 0, ?, GETDATE())";
@@ -220,6 +280,10 @@ public class ChapterRepository {
         }
     }
 
+    /**
+     * Tạo chapter không có Page slots (fallback khi DB chưa có bảng Page/cột totalPages).
+     * Dùng UPDLOCK/HOLDLOCK để tránh race condition khi tính chapterNumber.
+     */
     private long createNextLegacy(long seriesId, String title, Date submissionDeadline) {
         String nextSql = "SELECT ISNULL(MAX(chapterNumber), 0) + 1 FROM Chapter WITH (UPDLOCK, HOLDLOCK) WHERE seriesId = ?";
         String insertSql = "INSERT INTO Chapter (seriesId, chapterNumber, title, status, submissionDeadline, publicationDate, completionPct, atRisk, createdAt) VALUES (?, ?, ?, 'PLANNING', ?, ?, 0.00, 0, GETDATE())";
@@ -272,6 +336,10 @@ public class ChapterRepository {
         }
     }
 
+    /**
+     * Kiểm tra DB có cột totalPages trong Chapter và bảng Page chưa.
+     * Kết quả được cache bằng volatile Boolean để chỉ query 1 lần, thread-safe.
+     */
     private boolean isPageSchemaReady() {
         if (pageSchemaReady != null) {
             return pageSchemaReady.booleanValue();
@@ -297,6 +365,7 @@ public class ChapterRepository {
         }
     }
 
+    /** Kiểm tra exception có phải do thiếu schema Page/totalPages không (để fallback). */
     private boolean isMissingPageSchema(Throwable ex) {
         while (ex != null) {
             String msg = ex.getMessage();
@@ -311,6 +380,10 @@ public class ChapterRepository {
         return false;
     }
 
+    /**
+     * Trả về danh sách cột SELECT phù hợp với schema hiện tại.
+     * tablePrefix != null → thêm prefix vào từng cột (dùng khi JOIN).
+     */
     private String chapterSelectColumns(String tablePrefix) {
         String cols = isPageSchemaReady() ? CHAPTER_COLUMNS_EXTENDED : CHAPTER_COLUMNS_LEGACY;
         if (tablePrefix == null || tablePrefix.isEmpty()) {
@@ -327,6 +400,10 @@ public class ChapterRepository {
         return sb.toString();
     }
 
+    /**
+     * Cập nhật title + submissionDeadline, tính lại publicationDate.
+     * Sau khi update → refresh lại completionPct của chapter qua PageTaskRepository.
+     */
     public void updateChapterMetadata(long chapterId, String title, Date submissionDeadline) {
         String sql = "UPDATE Chapter SET title = ?, publicationDate = ?, submissionDeadline = ? WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -345,6 +422,7 @@ public class ChapterRepository {
         }
     }
 
+    /** Cập nhật chỉ title của chapter. */
     public void updateChapterTitle(long chapterId, String title) {
         String sql = "UPDATE Chapter SET title = ? WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -359,6 +437,11 @@ public class ChapterRepository {
         }
     }
 
+    /**
+     * Chuyển chapter sang EDITORIAL_REVIEW.
+     * Điều kiện: chapter phải thuộc seri của mangakaId, completionPct = 100%, status IN_PROGRESS hoặc COMPLETE.
+     * Sau khi chuyển → backfill toàn bộ ảnh page đã hoàn thành vào ChapterImage.
+     */
     public void submitForReview(long chapterId, long mangakaId) {
         String sql =
             "UPDATE c SET c.status = 'EDITORIAL_REVIEW' "
@@ -378,6 +461,12 @@ public class ChapterRepository {
         }
     }
 
+    /**
+     * Xóa chapter. Chỉ cho phép khi:
+     *  - Người gọi là Mangaka chủ seri
+     *  - Chapter ở trạng thái PLANNING
+     *  - Chapter chưa có PageTask nào
+     */
     public void deleteChapter(long chapterId, long mangakaId) {
         long ownerId = findOwnerMangakaByChapter(chapterId);
         if (ownerId != mangakaId) {
@@ -416,6 +505,10 @@ public class ChapterRepository {
         }
     }
 
+    /**
+     * Tìm chapter có deadline đúng bằng N ngày kể từ hôm nay, status PLANNING hoặc IN_PROGRESS.
+     * Dùng bởi ChapterDeadlineScheduler để gửi cảnh báo sắp đến hạn.
+     */
     public List<ChapterSummary> findChaptersWithDeadlineInDays(int days) {
         String sql =
             "SELECT " + chapterSelectColumns(null) + " "
@@ -437,6 +530,10 @@ public class ChapterRepository {
         return rows;
     }
 
+    /**
+     * Tìm chapter đã trễ deadline nhưng chưa hoàn thành (chưa vào EDITORIAL_REVIEW hoặc COMPLETE).
+     * Dùng bởi scheduler SLA để đánh dấu atRisk.
+     */
     public List<ChapterSummary> findMissedSubmissionDeadlineChapters() {
         String sql =
             "SELECT " + chapterSelectColumns(null) + " "
@@ -456,6 +553,7 @@ public class ChapterRepository {
         return rows;
     }
 
+    /** Lấy mangakaId chủ seri theo seriesId. */
     public long findSeriesOwnerMangaka(long seriesId) {
         String sql = "SELECT mangakaId FROM Series WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -472,6 +570,7 @@ public class ChapterRepository {
         }
     }
 
+    /** Lấy mangakaId chủ seri qua chapterId (JOIN Chapter → Series). */
     public long findOwnerMangakaByChapter(long chapterId) {
         String sql = "SELECT s.mangakaId FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -488,6 +587,7 @@ public class ChapterRepository {
         }
     }
 
+    /** Lấy status hiện tại của chapter. */
     public String getChapterStatus(long chapterId) {
         String sql = "SELECT status FROM Chapter WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -504,6 +604,10 @@ public class ChapterRepository {
         }
     }
 
+    /**
+     * Cập nhật status chapter.
+     * Gọi bởi ManuscriptVersionService khi manuscript được approve (→ APPROVED).
+     */
     public void updateChapterStatus(long chapterId, String status) {
         String sql = "UPDATE Chapter SET status = ? WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -518,6 +622,7 @@ public class ChapterRepository {
         }
     }
 
+    /** Lấy status của seri chứa chapter (JOIN Chapter → Series). */
     public String getSeriesStatus(long chapterId) {
         String sql = "SELECT s.status FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -534,6 +639,7 @@ public class ChapterRepository {
         }
     }
 
+    /** Lấy tantouEditorId của seri theo seriesId. */
     public long findSeriesTantou(long seriesId) {
         String sql = "SELECT tantouEditorId FROM Series WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -550,6 +656,11 @@ public class ChapterRepository {
         }
     }
 
+    /**
+     * Map ResultSet → ChapterSummary.
+     * atRisk = true nếu DB đánh dấu HOẶC deadline đã qua mà chưa đủ 100% (tính real-time).
+     * totalPages đọc có điều kiện (chỉ khi schema sẵn sàng).
+     */
     private ChapterSummary mapChapter(ResultSet rs) throws SQLException {
         ChapterSummary c = new ChapterSummary();
         c.setId(rs.getLong("id"));
@@ -575,6 +686,7 @@ public class ChapterRepository {
         return c;
     }
 
+    /** Kiểm tra ResultSet có cột tên label không (dùng để đọc totalPages an toàn). */
     private boolean hasColumn(ResultSet rs, String label) throws SQLException {
         ResultSetMetaData md = rs.getMetaData();
         for (int i = 1; i <= md.getColumnCount(); i++) {
@@ -585,6 +697,7 @@ public class ChapterRepository {
         return false;
     }
 
+    /** Tính publicationDate = submissionDeadline + 14 ngày. */
     private Date publicationDateFor(Date submissionDeadline) {
         if (submissionDeadline == null) {
             throw new IllegalArgumentException("submissionDeadline is required");
@@ -592,6 +705,7 @@ public class ChapterRepository {
         return Date.valueOf(submissionDeadline.toLocalDate().plusDays(CHAPTER_PUBLICATION_OFFSET_DAYS));
     }
 
+    /** Kiểm tra date không null và không phải quá khứ. */
     private void validateNotPast(Date date, String fieldName) {
         if (date == null) {
             throw new IllegalArgumentException(fieldName + " is required");
@@ -601,6 +715,7 @@ public class ChapterRepository {
         }
     }
 
+    /** Validate deadline khi tạo chapter mới: không quá khứ + phải trước series deadline 7 ngày. */
     private void validateChapterDeadlineForSeries(Connection conn, long seriesId, Date submissionDeadline) throws SQLException {
         validateNotPast(submissionDeadline, "submissionDeadline");
         String sql = "SELECT publicationDate FROM Series WHERE id = ?";
@@ -615,6 +730,7 @@ public class ChapterRepository {
         }
     }
 
+    /** Validate deadline khi update chapter: không quá khứ + phải trước series deadline 7 ngày. */
     private void validateChapterDeadlineForChapter(Connection conn, long chapterId, Date submissionDeadline) throws SQLException {
         validateNotPast(submissionDeadline, "submissionDeadline");
         String sql = "SELECT s.publicationDate FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?";
@@ -629,6 +745,7 @@ public class ChapterRepository {
         }
     }
 
+    /** Ném exception nếu submissionDeadline không đủ sớm hơn seriesDeadline 7 ngày. */
     private void validateBeforeSeriesDeadline(Date submissionDeadline, Date seriesDeadline) {
         if (seriesDeadline == null) {
             throw new IllegalArgumentException("Series deadline must be set by assigned Tantou before creating or updating chapters");
@@ -639,6 +756,7 @@ public class ChapterRepository {
         }
     }
 
+    /** Lấy mangakaId chủ seri qua chapterId (alias ngắn, dùng bởi ManuscriptVersionService). */
     public long getChapterMangaka(long chapterId) {
         String sql = "SELECT s.mangakaId FROM Chapter c JOIN Series s ON s.id=c.seriesId WHERE c.id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -655,6 +773,7 @@ public class ChapterRepository {
         }
     }
 
+    /** Lấy tantouEditorId phụ trách chapter (alias ngắn, dùng bởi ManuscriptVersionService). */
     public long getChapterTantou(long chapterId) {
         String sql = "SELECT s.tantouEditorId FROM Chapter c JOIN Series s ON s.id=c.seriesId WHERE c.id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -671,6 +790,3 @@ public class ChapterRepository {
         }
     }
 }
-
-
-

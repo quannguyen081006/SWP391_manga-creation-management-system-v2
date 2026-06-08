@@ -1,5 +1,13 @@
-
 package manga.controller.web;
+
+// ============================================================
+// MỤC LỤC (TABLE OF CONTENTS)
+// ============================================================
+// [3] DANH SÁCH SERIES
+// [4] DANH SÁCH CHAPTER          
+// [5] DANH SÁCH TASK             
+// [6] DANH SÁCH MANUSCRIPT      
+// ============================================================
 
 import manga.common.exception.ForbiddenException;
 import manga.model.AuthenticatedUser;
@@ -7,13 +15,12 @@ import manga.model.ManuscriptSummary;
 import manga.model.Proposal;
 import manga.model.chaptertask.TaskSummary;
 import manga.common.util.SessionUserUtil;
-import manga.repository.chaptertask.PageTaskRepository;
 import manga.repository.ProductionRepository;
+import manga.service.chaptertask.PageTaskService;
 import manga.service.ProposalService;
 import java.io.File;
 import java.io.IOException;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -27,6 +34,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
+
+// ============================================================
+// [1] KHAI BÁO CLASS & INJECT DEPENDENCIES
+// ============================================================
 
 @Controller
 @RequestMapping("/main")
@@ -45,8 +56,13 @@ public class MainController {
     private ProductionRepository productionRepository;
 
     @Autowired
-    private PageTaskRepository pageTaskRepository;
+    private PageTaskService pageTaskService;
 
+    // ============================================================
+    // [2] ĐIỀU HƯỚNG CHUNG
+    // ============================================================
+
+    /** GET /main → redirect về dashboard. */
     @RequestMapping(value = "", method = RequestMethod.GET)
     public String root() {
         return "redirect:/main/dashboard";
@@ -84,6 +100,13 @@ public class MainController {
         return dashboardController.dashboard(session, model);
     }
 
+    // ============================================================
+    // [3] DANH SÁCH SERIES
+    // ============================================================
+
+    /**
+     * GET /main/series – Hiển thị danh sách series mà user có thể thấy.
+     */
     @RequestMapping(value = "/series", method = RequestMethod.GET)
     public String series(HttpSession session, Model model) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
@@ -91,17 +114,35 @@ public class MainController {
         return "series/list";
     }
 
+    // ============================================================
+    // [4] DANH SÁCH CHAPTER
+    // ============================================================
+
     @RequestMapping(value = "/chapters", method = RequestMethod.GET)
     public String chapters(HttpSession session, Model model) {
+        // Không load dữ liệu server-side ở đây.
+        // Frontend tự gọi REST API để lấy danh sách chapter theo seriesId.
         return "chapter/list";
     }
 
+    // ============================================================
+    // [5] DANH SÁCH TASK
+    // ============================================================
+
+    /**
+     * GET /main/tasks – Hiển thị danh sách task vẽ trang (PageTask).
+     */
     @RequestMapping(value = "/tasks", method = RequestMethod.GET)
     public String tasks(HttpSession session, Model model) {
+        // Lấy user từ session (có thể null nếu chưa đăng nhập – không có guard ở đây,
+        // AuthInterceptor chặn trước khi vào controller nên tạm ổn).
         AuthenticatedUser user = (AuthenticatedUser) session.getAttribute("AUTH_USER");
-        pageTaskRepository.markDelayedTasks();
-        pageTaskRepository.markOverdueTasks();
-        List<TaskSummary> tasks = visibleTasks(user, productionRepository.listTasks());
+
+        // Bước 1: Lấy toàn bộ task (gồm thông tin chapter/series/assistant).
+        // Bước 2: Lọc theo role – ASSISTANT chỉ thấy task của mình.
+        List<TaskSummary> tasks = pageTaskService.listForWebTaskPage(user, productionRepository.listTasks());
+
+        // --- Tính counter thống kê để hiển thị trên header/badge ---
         int active = 0;
         int submitted = 0;
         int completed = 0;
@@ -110,20 +151,33 @@ public class MainController {
 
         for (TaskSummary task : tasks) {
             String st = task.getStatus() == null ? "" : task.getStatus().toUpperCase();
+
+            // "Active" = đang trong quá trình làm (chưa nộp, chưa xong)
             if ("PENDING".equals(st) || "IN_PROGRESS".equals(st)) {
                 active++;
             }
+
+            // Task đã nộp, đang chờ Mangaka review
             if ("SUBMITTED".equals(st)) {
                 submitted++;
             }
+
+            // Task đã được Mangaka approve (hoàn thành)
             if ("APPROVED".equals(st)) {
                 completed++;
             }
-            if ("OVERDUE".equals(st) || (task.getDueDate() != null && task.getDueDate().toLocalDate().isBefore(now) && !"APPROVED".equals(st))) {
+
+            // Overdue: status đã là OVERDUE HOẶC dueDate đã qua mà chưa APPROVED.
+            // Lưu ý: task SUBMITTED quá hạn cũng bị tính vào đây.
+            if ("OVERDUE".equals(st)
+                    || (task.getDueDate() != null
+                        && task.getDueDate().toLocalDate().isBefore(now)
+                        && !"APPROVED".equals(st))) {
                 overdue++;
             }
         }
 
+        // Đẩy dữ liệu vào model để Thymeleaf render
         model.addAttribute("tasks", tasks);
         model.addAttribute("activeTasks", active);
         model.addAttribute("submittedTasks", submitted);
@@ -132,28 +186,40 @@ public class MainController {
         return "task/list";
     }
 
+    // ============================================================
+    // [6] DANH SÁCH MANUSCRIPT (liên quan chapter & SLA deadline)
+    // ============================================================
+
     @RequestMapping(value = "/manuscripts", method = RequestMethod.GET)
     public String manuscripts(
             HttpSession session,
             @RequestParam(value = "seriesId", required = false) Long seriesId,
             Model model) {
         AuthenticatedUser user = (AuthenticatedUser) session.getAttribute("AUTH_USER");
+
         List<ManuscriptSummary> manuscripts = productionRepository.listManuscripts(user, seriesId);
+
+        // --- Tính counter SLA ---
         int pendingReview = 0;
         int urgent = 0;
         int breached = 0;
 
         for (ManuscriptSummary manuscript : manuscripts) {
             String st = manuscript.getStatus() == null ? "" : manuscript.getStatus().toUpperCase();
+
+            // Đang chờ review (chưa có quyết định approve/reject)
             if ("SUBMITTED".equals(st) || "UNDER_REVIEW".equals(st)) {
                 pendingReview++;
             }
+
+            // Kiểm tra SLA dựa trên reviewDeadline (lấy từ bảng Manuscript)
             if (manuscript.getReviewDeadline() != null) {
-                long hoursLeft = (manuscript.getReviewDeadline().getTime() - System.currentTimeMillis()) / (1000L * 60L * 60L);
+                long hoursLeft = (manuscript.getReviewDeadline().getTime() - System.currentTimeMillis())
+                        / (1000L * 60L * 60L);
                 if (hoursLeft < 0) {
-                    breached++;
+                    breached++;          // Đã vượt deadline
                 } else if (hoursLeft <= 12) {
-                    urgent++;
+                    urgent++;            // Còn dưới 12h – cần review gấp
                 }
             }
         }
@@ -163,11 +229,17 @@ public class MainController {
         model.addAttribute("urgentManuscripts", urgent);
         model.addAttribute("slaBreached", breached);
         model.addAttribute("currentUser", user);
+        // Dùng để ẩn/hiện nút "Tạo manuscript" trên view
         model.addAttribute("isMangaka", user != null && user.hasRole("MANGAKA"));
+        // Dùng cho dropdown lọc theo series
         model.addAttribute("seriesList", productionRepository.listSeries(user));
         model.addAttribute("selectedSeriesId", seriesId);
         return "manuscript/list";
     }
+
+    // ============================================================
+    // [7] PROPOSAL – DANH SÁCH & TẠO MỚI
+    // ============================================================
 
     @RequestMapping(value = "/proposals", method = RequestMethod.GET)
     public String proposals(HttpSession session, Model model) {
@@ -207,6 +279,7 @@ public class MainController {
                     upload.path, upload.originalName, approximateChapter);
             return "redirect:/main/proposals/" + id;
         } catch (IllegalArgumentException ex) {
+            // Validation từ service (thiếu field, genre không hợp lệ, v.v.)
             model.addAttribute("error", ex.getMessage());
             model.addAttribute("title", title);
             model.addAttribute("genre", genre);
@@ -225,6 +298,10 @@ public class MainController {
         }
     }
 
+    // ============================================================
+    // [8] PROPOSAL – CHI TIẾT, VOTE, NỘP FILE, SUBMIT, REVIEW
+    // ============================================================
+
     @RequestMapping(value = "/proposals/{id}", method = RequestMethod.GET)
     public String proposalDetail(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = (AuthenticatedUser) session.getAttribute("AUTH_USER");
@@ -232,13 +309,19 @@ public class MainController {
         model.addAttribute("proposal", proposal);
         model.addAttribute("history", proposalService.listHistory(user, id));
         model.addAttribute("user", user);
-        boolean editableStatus = "DRAFT".equalsIgnoreCase(proposal.getStatus()) || "REVISION_REQUESTED".equalsIgnoreCase(proposal.getStatus());
-        boolean canEditDraft = user.hasRole("MANGAKA") && proposal.getMangakaId() == user.getId()
-                && editableStatus && proposal.getSubmitAttemptCount() < ProposalService.MAX_SUBMIT_ATTEMPTS;
+
+        boolean editableStatus = "DRAFT".equalsIgnoreCase(proposal.getStatus())
+                || "REVISION_REQUESTED".equalsIgnoreCase(proposal.getStatus());
+        boolean canEditDraft = user.hasRole("MANGAKA")
+                && proposal.getMangakaId() == user.getId()
+                && editableStatus
+                && proposal.getSubmitAttemptCount() < ProposalService.MAX_SUBMIT_ATTEMPTS;
         model.addAttribute("canEdit", canEditDraft);
         model.addAttribute("canSubmit", canEditDraft);
-        model.addAttribute("canReview", user.hasRole("TANTOU_EDITOR") && proposal.getAssignedEditorId() != null
-                && proposal.getAssignedEditorId().longValue() == user.getId() && "UNDER_REVIEW".equalsIgnoreCase(proposal.getStatus()));
+        model.addAttribute("canReview", user.hasRole("TANTOU_EDITOR")
+                && proposal.getAssignedEditorId() != null
+                && proposal.getAssignedEditorId().longValue() == user.getId()
+                && "UNDER_REVIEW".equalsIgnoreCase(proposal.getStatus()));
         model.addAttribute("isTantou", user.hasRole("TANTOU_EDITOR"));
         model.addAttribute("isBoard", user.hasRole("EDITORIAL_BOARD"));
         model.addAttribute("boardVoters", proposalService.listBoardRoundVoters(user, id));
@@ -282,6 +365,7 @@ public class MainController {
         java.nio.file.Files.copy(file.toPath(), response.getOutputStream());
     }
 
+    /** POST /main/proposals/{id}/submit – MANGAKA nộp proposal để Tantou review. */
     @RequestMapping(value = "/proposals/{id}/submit", method = RequestMethod.POST)
     public String submitProposal(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = (AuthenticatedUser) session.getAttribute("AUTH_USER");
@@ -293,6 +377,7 @@ public class MainController {
         }
     }
 
+    /** POST /main/proposals/{id}/review – TANTOU_EDITOR quyết định APPROVE/REJECT/REVISE. */
     @RequestMapping(value = "/proposals/{id}/review", method = RequestMethod.POST)
     public String reviewProposal(
             @PathVariable("id") long id,
@@ -309,6 +394,7 @@ public class MainController {
         }
     }
 
+    /** POST /main/proposals/{id}/board-vote – EDITORIAL_BOARD bỏ phiếu APPROVE/REVISE/REJECT. */
     @RequestMapping(value = "/proposals/{id}/board-vote", method = RequestMethod.POST)
     public String boardVoteProposal(
             @PathVariable("id") long id,
@@ -321,12 +407,17 @@ public class MainController {
             proposalService.voteProposalAsBoard(user, id, decision, note);
             return "redirect:/main/proposals/" + id;
         } catch (ForbiddenException ex) {
+            // ForbiddenException: vi phạm quy tắc (tantou không được vote chính proposal mình quản)
             return proposalDetailWithError(id, session, model, ex.getMessage());
         } catch (IllegalArgumentException ex) {
             return proposalDetailWithError(id, session, model, ex.getMessage());
         }
     }
 
+    /**
+     * POST /main/proposals/{id}/board-vote/undo – Rút lại phiếu vote trong vòng 60 giây.
+     * Xem {@link ProposalService#getBoardVoteUndoInfo} để hiểu logic cửa sổ undo.
+     */
     @RequestMapping(value = "/proposals/{id}/board-vote/undo", method = RequestMethod.POST)
     public String undoBoardVote(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = (AuthenticatedUser) session.getAttribute("AUTH_USER");
@@ -340,19 +431,41 @@ public class MainController {
         }
     }
 
+    // ============================================================
+    // [9] HELPER METHODS
+    // ============================================================
+
     private String proposalDetailWithError(long id, HttpSession session, Model model, String error) {
         proposalDetail(id, session, model);
         model.addAttribute("error", error);
         return "proposal/detail";
     }
 
+    /**
+     * Lưu file upload lên server và trả về thông tin đường dẫn.
+     *
+     * <p>Quy trình:
+     * <ol>
+     *   <li>Lấy {@link Part} từ multipart request theo {@code fieldName}.</li>
+     *   <li>Lấy tên file gốc, sanitize (xoá ký tự đặc biệt) để tránh lỗi filesystem.</li>
+     *   <li>Thêm timestamp vào đầu tên file để tránh trùng lặp.</li>
+     *   <li>Lưu vào {@code /uploads/proposals/} dưới webroot.</li>
+     * </ol>
+     * </p>
+     *
+     * @param fieldName tên field file trong HTML form (vd: "sampleFile")
+     * @return {@link UploadInfo} chứa đường dẫn relative và tên file gốc;
+     *         hoặc {@code UploadInfo(null, null)} nếu không có file được upload.
+     */
     private UploadInfo saveUpload(HttpServletRequest request, String fieldName) throws IOException, ServletException {
         Part part = request.getPart(fieldName);
         if (part == null || part.getSize() == 0) {
             return new UploadInfo(null, null);
         }
         String submittedName = part.getSubmittedFileName();
+        // Lấy chỉ tên file (bỏ qua đường dẫn nếu browser gửi cả path)
         String originalName = submittedName == null ? "proposal-file" : new File(submittedName).getName();
+        // Sanitize: chỉ giữ lại ký tự an toàn cho tên file
         String safeName = originalName.replaceAll("[^A-Za-z0-9._-]", "_");
         String storedName = System.currentTimeMillis() + "_" + safeName;
         String uploadPath = request.getServletContext().getRealPath("/uploads/proposals");
@@ -364,30 +477,17 @@ public class MainController {
             throw new IOException("Cannot create upload directory");
         }
         part.write(new File(dir, storedName).getAbsolutePath());
+        // Trả về đường dẫn relative để lưu vào DB
         return new UploadInfo("/uploads/proposals/" + storedName, originalName);
     }
 
     private static class UploadInfo {
-        private final String path;
-        private final String originalName;
+        private final String path;         // Đường dẫn relative trên server (lưu vào DB)
+        private final String originalName; // Tên file gốc từ client (dùng khi download)
 
         private UploadInfo(String path, String originalName) {
             this.path = path;
             this.originalName = originalName;
         }
     }
-
-    private List<TaskSummary> visibleTasks(AuthenticatedUser user, List<TaskSummary> allTasks) {
-        if (user == null || !user.hasRole("ASSISTANT")) {
-            return allTasks;
-        }
-        List<TaskSummary> assigned = new ArrayList<TaskSummary>();
-        for (TaskSummary task : allTasks) {
-            if (task.getAssistantId() == user.getId()) {
-                assigned.add(task);
-            }
-        }
-        return assigned;
-    }
 }
-

@@ -5,8 +5,7 @@ import manga.common.ApiResponse;
 import manga.common.util.SessionUserUtil;
 import manga.model.AuthenticatedUser;
 import manga.model.chaptertask.TaskSummary;
-import manga.repository.chaptertask.PageTaskRepository;
-import java.sql.Date;
+import manga.service.chaptertask.PageTaskService;
 import java.util.List;
 import javax.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,50 +15,66 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * REST API controller quan ly PageTask (task ve trang) — nhom /api/v1.
+ *
+ * MUC LUC:
+ *  1.  listVisible()   - GET   /api/v1/tasks                           - Lay task theo quyen cua user (co the filter status/chapterId)
+ *  2.  list()          - GET   /api/v1/chapters/{chapterId}/tasks       - Lay task theo chapter
+ *  3.  create()        - POST  /api/v1/chapters/{chapterId}/tasks       - Tao task moi giao cho assistant
+ *  4.  patch()         - PATCH /api/v1/tasks/{id}                       - Cap nhat mot phan task (dueDate/priority/notes)
+ *  5.  detail()        - GET   /api/v1/tasks/{id}                       - Xem chi tiet task
+ *  6.  update()        - PUT   /api/v1/tasks/{id}                       - Cap nhat toan bo task
+ *  7.  updateStatus()  - PATCH /api/v1/tasks/{id}/status                - Assistant cap nhat trang thai task
+ *  8.  approve()       - POST  /api/v1/tasks/{id}/approve               - Mangaka duyet task
+ *  9.  reject()        - POST  /api/v1/tasks/{id}/reject                - Mangaka tu choi task
+ * 10.  deleteTask()    - POST  /api/v1/tasks/{id}/delete                - Xoa task (dung POST thay vi DELETE)
+ * 11.  reassignTask()  - POST  /api/v1/tasks/{id}/reassign              - Chuyen task sang assistant khac
+ * 12.  extendTask()    - POST  /api/v1/tasks/{id}/extend                - Gia han deadline task
+ */
 @RestController
 @RequestMapping("/api/v1")
 public class PageTaskApiController {
 
     @Autowired
-    private PageTaskRepository pageTaskRepository;
+    private PageTaskService pageTaskService;
 
+    // ============================================================
+    // 1. LIST TASK THEO QUYEN USER
+    // GET /api/v1/tasks?status=&chapterId=
+    // - ASSISTANT: chi thay task duoc giao cho minh
+    // - MANGAKA/TANTOU/ADMIN: thay task thuoc series/chapter co quyen
+    // - status va chapterId deu optional, dung de filter them
+    // ============================================================
     @RequestMapping(value = "/tasks", method = RequestMethod.GET)
     public ApiResponse<List<TaskSummary>> listVisible(
             HttpSession session,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "chapterId", required = false) Long chapterId) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        pageTaskRepository.markDelayedTasks();
-        pageTaskRepository.markOverdueTasks();
-        return ApiResponse.ok(pageTaskRepository.listVisible(user, status, chapterId), "Task list");
+        return ApiResponse.ok(pageTaskService.listVisible(user, status, chapterId), "Task list");
     }
+
+    // ============================================================
+    // 2. LIST TASK THEO CHAPTER
+    // GET /api/v1/chapters/{chapterId}/tasks
+    // - Service tu filter theo role (ASSISTANT chi thay task cua minh)
+    // ============================================================
     @RequestMapping(value = "/chapters/{chapterId}/tasks", method = RequestMethod.GET)
     public ApiResponse<List<TaskSummary>> list(@PathVariable("chapterId") long chapterId, HttpSession session) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
-
-        if (user.hasRole("ADMIN")) {
-            return ApiResponse.ok(pageTaskRepository.listByChapter(chapterId), "Task list");
-        }
-
-        if (user.hasRole("MANGAKA")) {
-            long ownerId = pageTaskRepository.findChapterOwnerMangaka(chapterId);
-            if (ownerId != user.getId()) {
-                throw new IllegalArgumentException("Only chapter owner Mangaka can view this task list (BR-42)");
-            }
-            return ApiResponse.ok(pageTaskRepository.listByChapter(chapterId), "Task list");
-        }
-
-        if (user.hasRole("TANTOU_EDITOR")) {
-            long tantouId = pageTaskRepository.findChapterTantouEditor(chapterId);
-            if (tantouId != user.getId()) {
-                throw new IllegalArgumentException("Only assigned Tantou can view this chapter task list (BR-42)");
-            }
-            return ApiResponse.ok(pageTaskRepository.listByChapter(chapterId), "Task list");
-        }
-
-        throw new IllegalArgumentException("Only MANGAKA/TANTOU_EDITOR/ADMIN can view chapter task list (BR-42)");
+        return ApiResponse.ok(pageTaskService.listByChapter(chapterId, user), "Task list");
     }
 
+    // ============================================================
+    // 3. TAO TASK MOI
+    // POST /api/v1/chapters/{chapterId}/tasks
+    // - Chi MANGAKA chu chapter moi duoc tao (service enforce BR-CHP-03, BR-CHP-05)
+    // - pageRangeStart/End: pham vi trang, khong duoc chong nhau (BR-CHP-07)
+    // - dueDate: khong vuot qua deadline chapter (BR-CHP-08)
+    // - priority mac dinh NORMAL neu khong truyen
+    // - taskType va notes optional
+    // ============================================================
     @RequestMapping(value = "/chapters/{chapterId}/tasks", method = RequestMethod.POST)
     public ApiResponse<TaskSummary> create(
             @PathVariable("chapterId") long chapterId,
@@ -72,25 +87,18 @@ public class PageTaskApiController {
             @RequestParam(value = "priority", defaultValue = "NORMAL") String priority,
             @RequestParam(value = "notes", required = false) String notes) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can create task");
-
-        long ownerId = pageTaskRepository.findChapterOwnerMangaka(chapterId);
-        if (ownerId != user.getId()) {
-            throw new IllegalArgumentException("Only chapter owner can assign task (BR-31)");
-        }
-
-        long taskId = pageTaskRepository.create(
-                chapterId,
-                assistantId,
-                pageRangeStart,
-                pageRangeEnd,
-                taskType == null || taskType.trim().isEmpty() ? "MIXED" : taskType,
-                Date.valueOf(dueDate),
-                priority,
-                notes);
-        return ApiResponse.ok(pageTaskRepository.findById(taskId), "Task created");
+        return ApiResponse.ok(
+                pageTaskService.create(chapterId, user, assistantId, pageRangeStart, pageRangeEnd, taskType, dueDate, priority, notes),
+                "Task created");
     }
 
+    // ============================================================
+    // 4. CAP NHAT MOT PHAN TASK (PATCH)
+    // PATCH /api/v1/tasks/{id}
+    // - Chi cap nhat duoc: dueDate, priority, notes — tat ca optional
+    // - Khong doi duoc assistantId hay pageRange qua endpoint nay
+    //   (dung reassign() hoac update() neu can doi nhung truong do)
+    // ============================================================
     @RequestMapping(value = "/tasks/{id}", method = RequestMethod.PATCH)
     public ApiResponse<TaskSummary> patch(
             @PathVariable("id") long id,
@@ -99,50 +107,27 @@ public class PageTaskApiController {
             @RequestParam(value = "priority", required = false) String priority,
             @RequestParam(value = "notes", required = false) String notes) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can update task");
-        TaskSummary existing = pageTaskRepository.findById(id);
-        if (existing == null) {
-            throw new IllegalArgumentException("Task not found");
-        }
-        String nextDue = dueDate != null && !dueDate.trim().isEmpty()
-                ? dueDate
-                : (existing.getDueDate() != null ? existing.getDueDate().toString() : null);
-        if (nextDue == null) {
-            throw new IllegalArgumentException("dueDate is required");
-        }
-        pageTaskRepository.updateTaskProgress(
-                id,
-                user.getId(),
-                Date.valueOf(nextDue),
-                priority != null ? priority : existing.getPriority(),
-                notes != null ? notes : existing.getNotes());
-        return ApiResponse.ok(pageTaskRepository.findById(id), "Task updated");
+        return ApiResponse.ok(pageTaskService.patch(id, user, dueDate, priority, notes), "Task updated");
     }
 
+    // ============================================================
+    // 5. XEM CHI TIET TASK
+    // GET /api/v1/tasks/{id}
+    // - Service kiem tra quyen xem theo role
+    // ============================================================
     @RequestMapping(value = "/tasks/{id}", method = RequestMethod.GET)
     public ApiResponse<TaskSummary> detail(@PathVariable("id") long id, HttpSession session) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        TaskSummary task = pageTaskRepository.findById(id);
-        if (task == null) {
-            throw new IllegalArgumentException("Task not found");
-        }
-
-        long chapterId = task.getChapterId();
-        long ownerMangakaId = pageTaskRepository.findChapterOwnerMangaka(chapterId);
-        long tantouId = pageTaskRepository.findChapterTantouEditor(chapterId);
-
-        boolean allowed = user.hasRole("ADMIN")
-                || (user.hasRole("MANGAKA") && ownerMangakaId == user.getId())
-                || (user.hasRole("TANTOU_EDITOR") && tantouId == user.getId())
-                || (user.hasRole("ASSISTANT") && task.getAssistantId() == user.getId());
-
-        if (!allowed) {
-            throw new IllegalArgumentException("Only assigned roles can view this task (BR-42)");
-        }
-
-        return ApiResponse.ok(task, "Task detail");
+        return ApiResponse.ok(pageTaskService.getDetail(id, user), "Task detail");
     }
 
+    // ============================================================
+    // 6. CAP NHAT TOAN BO TASK (PUT)
+    // PUT /api/v1/tasks/{id}
+    // - Tat ca params bat buoc (khac voi PATCH)
+    // - Dung khi can thay doi ca assistantId hoac pageRange
+    // - BR-TSK-03: doi assistantId reset trang thai task ve PENDING
+    // ============================================================
     @RequestMapping(value = "/tasks/{id}", method = RequestMethod.PUT)
     public ApiResponse<TaskSummary> update(
             @PathVariable("id") long id,
@@ -153,70 +138,84 @@ public class PageTaskApiController {
             @RequestParam("taskType") String taskType,
             @RequestParam("dueDate") String dueDate) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can update task");
-
-        pageTaskRepository.updateTaskByMangaka(
-                id,
-                user.getId(),
-                assistantId,
-                pageRangeStart,
-                pageRangeEnd,
-                taskType,
-                Date.valueOf(dueDate));
-
-        return ApiResponse.ok(pageTaskRepository.findById(id), "Task updated");
+        return ApiResponse.ok(
+                pageTaskService.update(id, user, assistantId, pageRangeStart, pageRangeEnd, taskType, dueDate),
+                "Task updated");
     }
 
+    // ============================================================
+    // 7. ASSISTANT CAP NHAT TRANG THAI TASK
+    // PATCH /api/v1/tasks/{id}/status
+    // - Flow hop le: Pending -> In-Progress -> Submitted (BR-TSK-01)
+    // - Chi assistant duoc giao task moi duoc goi endpoint nay (service enforce)
+    // ============================================================
     @RequestMapping(value = "/tasks/{id}/status", method = RequestMethod.PATCH)
     public ApiResponse<Object> updateStatus(
             @PathVariable("id") long id,
             HttpSession session,
             @RequestParam("status") String status) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        SessionUserUtil.requireRole(user, "ASSISTANT", "Only ASSISTANT can submit task for review");
-        pageTaskRepository.updateStatusByAssistant(id, user.getId(), status.toUpperCase());
+        pageTaskService.updateStatusByAssistant(id, user, status);
         return ApiResponse.ok(null, "Task submitted for review");
     }
 
+    // ============================================================
+    // 8. DUYET TASK
+    // POST /api/v1/tasks/{id}/approve
+    // - Chi MANGAKA chu chapter moi duoc duyet (service enforce)
+    // - comment optional
+    // - Task da APPROVED khong the rollback (BR-TSK-06)
+    // ============================================================
     @RequestMapping(value = "/tasks/{id}/approve", method = RequestMethod.POST)
     public ApiResponse<Object> approve(
             @PathVariable("id") long id,
             HttpSession session,
             @RequestParam(value = "comment", required = false) String comment) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can approve task");
-        pageTaskRepository.approveByMangaka(id, user.getId(), comment);
+        pageTaskService.approve(id, user, comment);
         return ApiResponse.ok(null, "Task approved");
     }
 
+    // ============================================================
+    // 9. TU CHOI TASK
+    // POST /api/v1/tasks/{id}/reject
+    // - reason bat buoc (khac voi web form o ModuleWebController hardcode "Rejected via web form")
+    // - Sau 3 lan reject: service tu dong escalate len Tantou Editor (BR-TSK-05)
+    // ============================================================
     @RequestMapping(value = "/tasks/{id}/reject", method = RequestMethod.POST)
     public ApiResponse<Object> reject(
             @PathVariable("id") long id,
             HttpSession session,
             @RequestParam("reason") String reason) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can reject task");
-        if (reason == null || reason.trim().length() < 5) {
-            throw new IllegalArgumentException("Rejection reason must be at least 5 characters");
-        }
-        if (reason.trim().length() > 300) {
-            throw new IllegalArgumentException("Rejection reason must be at most 300 characters");
-        }
-        pageTaskRepository.rejectByMangaka(id, user.getId(), reason.trim());
+        pageTaskService.reject(id, user, reason);
         return ApiResponse.ok(null, "Task rejected");
     }
 
+    // ============================================================
+    // 10. XOA TASK
+    // POST /api/v1/tasks/{id}/delete
+    // - Dung POST thay vi DELETE (co the de tranh gioi han cua mot so client)
+    // - reason bat buoc
+    // - Quyen xoa do service kiem tra
+    // ============================================================
     @RequestMapping(value = "/tasks/{id}/delete", method = RequestMethod.POST)
     public ApiResponse<Object> deleteTask(
             @PathVariable("id") long id,
             HttpSession session,
             @RequestParam("reason") String reason) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can delete task");
-        pageTaskRepository.deleteByMangaka(id, user.getId(), reason);
+        pageTaskService.delete(id, user, reason);
         return ApiResponse.ok(null, "Task deleted");
     }
 
+    // ============================================================
+    // 11. CHUYEN TASK SANG ASSISTANT KHAC
+    // POST /api/v1/tasks/{id}/reassign
+    // - reason bat buoc
+    // - newDueDate optional: neu co thi cap nhat deadline moi
+    // - BR-TSK-03: reassign reset trang thai task ve PENDING, xoa submission cu
+    // ============================================================
     @RequestMapping(value = "/tasks/{id}/reassign", method = RequestMethod.POST)
     public ApiResponse<TaskSummary> reassignTask(
             @PathVariable("id") long id,
@@ -225,12 +224,16 @@ public class PageTaskApiController {
             @RequestParam("reason") String reason,
             @RequestParam(value = "newDueDate", required = false) String newDueDate) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can reassign task");
-        Date parsedDueDate = (newDueDate == null || newDueDate.trim().isEmpty()) ? null : Date.valueOf(newDueDate);
-        long newTaskId = pageTaskRepository.reassignByMangaka(id, user.getId(), assistantId, reason, parsedDueDate);
-        return ApiResponse.ok(pageTaskRepository.findById(newTaskId), "Task reassigned");
+        return ApiResponse.ok(pageTaskService.reassign(id, user, assistantId, reason, newDueDate), "Task reassigned");
     }
 
+    // ============================================================
+    // 12. GIA HAN DEADLINE TASK
+    // POST /api/v1/tasks/{id}/extend
+    // - newDueDate bat buoc
+    // - reason optional
+    // - newDueDate van phai nam trong deadline cua chapter (service enforce BR-CHP-08)
+    // ============================================================
     @RequestMapping(value = "/tasks/{id}/extend", method = RequestMethod.POST)
     public ApiResponse<Object> extendTask(
             @PathVariable("id") long id,
@@ -238,10 +241,7 @@ public class PageTaskApiController {
             @RequestParam("newDueDate") String newDueDate,
             @RequestParam(value = "reason", required = false) String reason) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        // Overdue extension is a Mangaka decision, so the repository verifies chapter ownership.
-        SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can extend task");
-        pageTaskRepository.extendOverdueTask(id, user.getId(), Date.valueOf(newDueDate), reason);
+        pageTaskService.extend(id, user, newDueDate, reason);
         return ApiResponse.ok(null, "Task extended");
     }
 }
-

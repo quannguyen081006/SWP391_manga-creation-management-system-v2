@@ -4,16 +4,16 @@ import manga.model.AuthenticatedUser;
 import manga.model.chaptertask.ChapterSummary;
 import manga.model.Proposal;
 import manga.model.SeriesSummary;
-import manga.model.chaptertask.TaskSummary;
 import manga.repository.chaptertask.ChapterRepository;
 import manga.repository.DecisionRepository;
-import manga.repository.chaptertask.PageTaskRepository;
 import manga.repository.ProductionRepository;
 import manga.repository.RankingRepository;
 import manga.repository.UserAdminRepository;
 import manga.service.AnnotationServiceV2;
 import manga.service.ManuscriptVersionService;
 import manga.service.NotificationService;
+import manga.service.chaptertask.ChapterService;
+import manga.service.chaptertask.PageTaskService;
 import manga.service.ProposalService;
 import manga.service.RankingCsvImportService;
 import manga.service.RankingService;
@@ -40,6 +40,20 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 /**
  * Controller gom cac trang web chinh trong khu vuc /main.
+ *
+ * MUC LUC (Chapter & Task):
+ *  1. seriesDetail()                    - GET  /main/series/{id}
+ *  2. chapterDetailPage()               - GET  /main/chapters/detail
+ *  3. chapterDetail()                   - GET  /main/chapters/{id}
+ *  4. chapterSubmitReview()             - POST /main/chapters/{id}/submit-review
+ *  5. taskDetail()                      - GET  /main/tasks/{id}
+ *  6. taskUpdateByAssistant()           - POST /main/tasks/{id}/assistant-status
+ *  7. taskApprove()                     - POST /main/tasks/{id}/approve
+ *  8. taskReject()                      - POST /main/tasks/{id}/reject
+ *  9. manuscriptWorkspaceCreate()       - GET/POST /main/chapters/{chapterId}/manuscript-workspace/create
+ * 10. manuscriptWorkspaceNewVersion()   - POST /main/chapters/{chapterId}/manuscript-workspace/new-version
+ * 11. manuscriptWorkspaceHistory()      - GET  /main/chapters/{chapterId}/manuscript-workspace/history
+ * 12. manuscriptWorkspaceImportPages()  - POST /main/manuscript-workspace/{id}/import-pages
  */
 @Controller
 @RequestMapping("/main")
@@ -55,7 +69,10 @@ public class ModuleWebController {
     private ChapterRepository chapterRepository;
 
     @Autowired
-    private PageTaskRepository pageTaskRepository;
+    private ChapterService chapterService;
+
+    @Autowired
+    private PageTaskService pageTaskService;
 
     @Autowired
     private AnnotationServiceV2 annotationServiceV2;
@@ -155,6 +172,15 @@ public class ModuleWebController {
         }
     }
 
+    // ============================================================
+    // 1. SERIES DETAIL
+    // GET /main/series/{id}
+    // - Lay danh sach series ma user co quyen xem qua productionRepository.listSeries(user)
+    // - Tim series theo id trong danh sach do — KHONG query thang DB,
+    //   neu user khong co quyen thi tra 404 (throw IllegalArgumentException)
+    // - Load them danh sach chapter cua series qua chapterService.listBySeries(id)
+    // - Tra ve view: series/detail
+    // ============================================================
     @RequestMapping(value = "/series/{id}", method = RequestMethod.GET)
     public String seriesDetail(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
@@ -169,31 +195,49 @@ public class ModuleWebController {
             throw new IllegalArgumentException("Series not found");
         }
         model.addAttribute("series", found);
-        model.addAttribute("chapters", chapterRepository.listBySeries(id));
+        model.addAttribute("chapters", chapterService.listBySeries(id));
         return "series/detail";
     }
 
+    // ============================================================
+    // 2. CHAPTER DETAIL PAGE (view trong)
+    // GET /main/chapters/detail
+    // - Chi check login, khong load data — JSP tu load qua query param ?id=
+    // ============================================================
     @RequestMapping(value = "/chapters/detail", method = RequestMethod.GET)
     public String chapterDetailPage(HttpSession session) {
         requireUser(session);
         return "chapter/detail";
     }
 
+    // ============================================================
+    // 3. CHAPTER DETAIL (redirect)
+    // GET /main/chapters/{id}
+    // - Goi chapterService.getDetail(id) de validate chapter ton tai
+    // - Redirect sang /main/chapters/detail?id={id}
+    // - Logic hien thi thuc su nam o JSP phia sau /chapters/detail
+    // ============================================================
     @RequestMapping(value = "/chapters/{id}", method = RequestMethod.GET)
     public String chapterDetail(@PathVariable("id") long id, HttpSession session) {
         requireUser(session);
-        ChapterSummary chapter = chapterRepository.findById(id);
-        if (chapter == null) {
-            throw new IllegalArgumentException("Chapter not found");
-        }
+        chapterService.getDetail(id);
         return "redirect:/main/chapters/detail?id=" + id;
     }
 
+    // ============================================================
+    // 4. CHAPTER SUBMIT REVIEW
+    // POST /main/chapters/{id}/submit-review
+    // - Goi chapterService.submitForReview(id, user)
+    //   Business logic (kiem tra 100% task approved, v.v.) nam o service
+    // - Thanh cong: redirect ve chapter detail
+    // - Loi: redirect ve chapter detail kem param ?error= (URL-encoded)
+    // NOTE: UnsupportedEncodingException bi nuot im -> redirect khong kem message
+    // ============================================================
     @RequestMapping(value = "/chapters/{id}/submit-review", method = RequestMethod.POST)
     public String chapterSubmitReview(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
         try {
-            chapterRepository.submitForReview(id, user.getId());
+            chapterService.submitForReview(id, user);
             return "redirect:/main/chapters/detail?id=" + id;
         } catch (RuntimeException ex) {
             try {
@@ -205,40 +249,39 @@ public class ModuleWebController {
         }
     }
 
+    // ============================================================
+    // 5. TASK DETAIL
+    // GET /main/tasks/{id}
+    // - Goi pageTaskService.getDetailView(id, user) tra ve DetailView gom:
+    //     + task: thong tin task
+    //     + canAssistantUpdate: assistant duoc cap nhat status
+    //     + canAssistantSubmit: assistant duoc nop
+    //     + canMangakaTaskOwner: mangaka so huu task nay
+    //     + canMangakaReview: mangaka duoc duyet/reject
+    // - Cac flag dua vao model de JSP an/hien nut tuong ung
+    // - Tra ve view: task/detail
+    // ============================================================
     @RequestMapping(value = "/tasks/{id}", method = RequestMethod.GET)
     public String taskDetail(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
-        pageTaskRepository.markDelayedTasks();
-        pageTaskRepository.markOverdueTasks();
-        TaskSummary task = pageTaskRepository.findById(id);
-        if (task == null) {
-            throw new IllegalArgumentException("Task not found");
-        }
-        boolean isAssignedAssistant = user.hasRole("ASSISTANT") && user.getId() == task.getAssistantId();
-        boolean canAssistantUpdate = isAssignedAssistant
-                && ("IN_PROGRESS".equalsIgnoreCase(task.getStatus())
-                || "SUBMITTED".equalsIgnoreCase(task.getStatus())
-                || "REJECTED".equalsIgnoreCase(task.getStatus())
-                || "OVERDUE".equalsIgnoreCase(task.getStatus()));
-        boolean canAssistantSubmit = isAssignedAssistant
-                && ("IN_PROGRESS".equalsIgnoreCase(task.getStatus())
-                || "REJECTED".equalsIgnoreCase(task.getStatus())
-                || "OVERDUE".equalsIgnoreCase(task.getStatus()));
-        boolean isOwnerMangaka = user.hasRole("MANGAKA") && pageTaskRepository.getTaskOwnerMangaka(id) == user.getId();
-        boolean canMangakaReview = isOwnerMangaka
-                && "SUBMITTED".equalsIgnoreCase(task.getStatus());
-        boolean canTantouView = user.hasRole("TANTOU_EDITOR") && pageTaskRepository.getTaskTantouEditor(id) == user.getId();
-        if (!user.hasRole("ADMIN") && !isAssignedAssistant && !isOwnerMangaka && !canTantouView) {
-            throw new IllegalArgumentException("You can only view tasks assigned to your role");
-        }
-        model.addAttribute("task", task);
-        model.addAttribute("canAssistantUpdate", canAssistantUpdate);
-        model.addAttribute("canAssistantSubmit", canAssistantSubmit);
-        model.addAttribute("canMangakaTaskOwner", isOwnerMangaka);
-        model.addAttribute("canMangakaReview", canMangakaReview);
+        PageTaskService.DetailView view = pageTaskService.getDetailView(id, user);
+        model.addAttribute("task", view.getTask());
+        model.addAttribute("canAssistantUpdate", view.isCanAssistantUpdate());
+        model.addAttribute("canAssistantSubmit", view.isCanAssistantSubmit());
+        model.addAttribute("canMangakaTaskOwner", view.isCanMangakaTaskOwner());
+        model.addAttribute("canMangakaReview", view.isCanMangakaReview());
         return "task/detail";
     }
 
+    // ============================================================
+    // 6. TASK UPDATE BY ASSISTANT
+    // POST /main/tasks/{id}/assistant-status
+    // - Param: status (string)
+    // - Goi pageTaskService.updateStatusByAssistant(id, user, status)
+    // - Flow hop le: Pending -> In-Progress -> Submitted (service enforce)
+    // - Thanh cong: redirect task detail
+    // - Loi: render lai task/detail kem error
+    // ============================================================
     @RequestMapping(value = "/tasks/{id}/assistant-status", method = RequestMethod.POST)
     public String taskUpdateByAssistant(
             @PathVariable("id") long id,
@@ -247,7 +290,7 @@ public class ModuleWebController {
             Model model) {
         AuthenticatedUser user = requireUser(session);
         try {
-            pageTaskRepository.updateStatusByAssistant(id, user.getId(), status);
+            pageTaskService.updateStatusByAssistant(id, user, status);
             return "redirect:/main/tasks/" + id;
         } catch (RuntimeException ex) {
             taskDetail(id, session, model);
@@ -256,14 +299,19 @@ public class ModuleWebController {
         }
     }
 
+    // ============================================================
+    // 7. TASK APPROVE
+    // POST /main/tasks/{id}/approve
+    // - Goi pageTaskService.approve(id, user, null)
+    //   Tham so thu 3 (note) hardcode null — khong nhan input tu form
+    // - Thanh cong: redirect task detail
+    // - Loi: render lai task/detail kem error
+    // ============================================================
     @RequestMapping(value = "/tasks/{id}/approve", method = RequestMethod.POST)
     public String taskApprove(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
         try {
-            if (pageTaskRepository.getTaskOwnerMangaka(id) != user.getId()) {
-                throw new IllegalArgumentException("Only owner can approve");
-            }
-            pageTaskRepository.approveByMangaka(id, user.getId(), null);
+            pageTaskService.approve(id, user, null);
             return "redirect:/main/tasks/" + id;
         } catch (RuntimeException ex) {
             taskDetail(id, session, model);
@@ -272,14 +320,22 @@ public class ModuleWebController {
         }
     }
 
+    // ============================================================
+    // 8. TASK REJECT
+    // POST /main/tasks/{id}/reject
+    // - Goi pageTaskService.reject(id, user, "Rejected via web form")
+    //   Ly do reject HARDCODE — khong cho nhap tu UI
+    // - Sau 3 lan reject: service tu dong escalate len Tantou Editor (BR-TSK-05)
+    //   Controller khong xu ly them sau escalation
+    // - Thanh cong: redirect task detail
+    // - Loi: render lai task/detail kem error
+    // NOTE: Neu can ly do reject tu nguoi dung -> phai sua ca controller lan service
+    // ============================================================
     @RequestMapping(value = "/tasks/{id}/reject", method = RequestMethod.POST)
     public String taskReject(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
         try {
-            if (pageTaskRepository.getTaskOwnerMangaka(id) != user.getId()) {
-                throw new IllegalArgumentException("Only owner can reject");
-            }
-            pageTaskRepository.rejectByMangaka(id, user.getId(), "Rejected via web form");
+            pageTaskService.reject(id, user, "Rejected via web form");
             return "redirect:/main/tasks/" + id;
         } catch (RuntimeException ex) {
             taskDetail(id, session, model);
@@ -781,12 +837,17 @@ public class ModuleWebController {
     }
 
     // ============================================================
-    // Manuscript Version Workspace (V2) - Editorial Review Workspace
+    // MANUSCRIPT WORKSPACE (lien quan Chapter)
     // ============================================================
-    /**
-     * Create manuscript workspace for chapter. BR-1: Only chapters in
-     * EDITORIAL_REVIEW can create manuscripts
-     */
+
+    // ============================================================
+    // 9a. TAO MANUSCRIPT WORKSPACE
+    // GET  /main/chapters/{chapterId}/manuscript-workspace/create -> hien form xac nhan
+    // POST /main/chapters/{chapterId}/manuscript-workspace/create -> tao ManuscriptVersion moi
+    // - Chi chapter o trang thai EDITORIAL_REVIEW moi hop le (enforce o service)
+    // - Tao xong: redirect sang /main/manuscript-workspace/{versionId}
+    // - Loi: render lai form create kem error
+    // ============================================================
     @RequestMapping(value = "/chapters/{chapterId}/manuscript-workspace/create", method = RequestMethod.GET)
     public String manuscriptWorkspaceCreate(@PathVariable("chapterId") long chapterId, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
@@ -907,9 +968,12 @@ public class ModuleWebController {
         return "manuscript-version/workspace";
     }
 
-    /**
-     * Import chapter pages into manuscript workspace.
-     */
+    // ============================================================
+    // 12. IMPORT PAGES VAO MANUSCRIPT WORKSPACE
+    // POST /main/manuscript-workspace/{id}/import-pages
+    // - Import cac page tu chapter task da APPROVED vao manuscript version nay
+    // - Loi: render lai workspace view kem error
+    // ============================================================
     @RequestMapping(value = "/manuscript-workspace/{id}/import-pages", method = RequestMethod.POST)
     public String manuscriptWorkspaceImportPages(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
@@ -984,10 +1048,14 @@ public class ModuleWebController {
         }
     }
 
-    /**
-     * Create new version after rejection. BR-3: Previous REJECTED version
-     * remains immutable
-     */
+    // ============================================================
+    // 10. TAO VERSION MOI SAU KHI BI REJECT
+    // POST /main/chapters/{chapterId}/manuscript-workspace/new-version
+    // - Goi manuscriptVersionService.createNewVersion(chapterId, user)
+    // - Version cu bi reject giu nguyen (immutable — BR-MAN-11)
+    // - Tao xong: redirect sang workspace cua version moi
+    // - Loi: redirect ve chapter detail (khong render lai form)
+    // ============================================================
     @RequestMapping(value = "/chapters/{chapterId}/manuscript-workspace/new-version", method = RequestMethod.POST)
     public String manuscriptWorkspaceNewVersion(@PathVariable("chapterId") long chapterId, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
@@ -1014,11 +1082,14 @@ public class ModuleWebController {
         return "manuscript-version/dashboard";
     }
 
-    /**
-     * View version history for chapter. Redirects to the most recent version's
-     * workspace since version history is now integrated into the workspace
-     * sidebar.
-     */
+    // ============================================================
+    // 11. XEM LICH SU VERSION
+    // GET /main/chapters/{chapterId}/manuscript-workspace/history
+    // - Lay danh sach tat ca version cua chapter, lay version moi nhat (index 0)
+    // - Redirect thang sang workspace cua version do
+    // - Khong co trang history rieng — sidebar trong workspace dam nhiem
+    // - Loi: throw neu chua co version nao
+    // ============================================================
     @RequestMapping(value = "/chapters/{chapterId}/manuscript-workspace/history", method = RequestMethod.GET)
     public String manuscriptWorkspaceHistory(@PathVariable("chapterId") long chapterId, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);

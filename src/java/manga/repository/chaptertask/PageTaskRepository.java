@@ -19,16 +19,67 @@ import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
+/**
+ * ============================================================
+ * PageTaskRepository - Quản lý Page Task (nhiệm vụ trang)
+ * ============================================================
+ *
+ * MỤC LỤC:
+ * ----------------------------------------------------------
+ * [1] HẰNG SỐ & TRẠNG THÁI
+ * [2] SCHEMA GUARD - Kiểm tra & tự cập nhật cấu trúc DB
+ * [3] TRUY VẤN TASK
+ *     - listVisible()       : Liệt kê task theo quyền người dùng
+ *     - listByChapter()     : Liệt kê task theo chapter
+ *     - findById()          : Tìm task theo ID
+ * [4] TẠO & CẬP NHẬT TASK (Mangaka)
+ *     - create()            : Tạo task mới
+ *     - updateTaskByMangaka(): Cập nhật task
+ *     - updateTaskProgress() : Cập nhật due date / priority / notes
+ * [5] VÒNG ĐỜI TASK - Nộp / Duyệt / Từ chối
+ *     - updateStatusByAssistant(): Assistant nộp task
+ *     - approveByMangaka()  : Mangaka duyệt task
+ *     - rejectByMangaka()   : Mangaka từ chối task
+ * [6] VÒNG ĐỜI TASK - Phân công lại / Xoá / Huỷ
+ *     - reassignByMangaka() : Phân công lại cho assistant khác
+ *     - deleteByMangaka()   : Xoá task
+ *     - escalatePendingOverdueDecisions(): Tự huỷ task OVERDUE sau 3 ngày không có quyết định
+ * [7] QUẢN LÝ OVERDUE
+ *     - markOverdueTasks()  : Đánh dấu task quá hạn
+ *     - extendOverdueTask() : Gia hạn task OVERDUE
+ * [8] NHẮC NHỞ & THÔNG BÁO
+ *     - notifyDueSoonTasks(): Nhắc task sắp đến hạn (24h)
+ *     - markDelayedTasks()  : Nhắc task bị trễ tiến độ (3+ ngày)
+ * [9] TIẾN ĐỘ CHAPTER
+ *     - refreshChapterProgress(): Tính lại % hoàn thành chapter
+ *     - areAllTasksApproved()  : Kiểm tra tất cả task đã duyệt chưa
+ *     - areAllPagesFullyCompleted(): Kiểm tra tất cả trang đã hoàn tất chưa
+ * [10] THÔNG BÁO (Notification)
+ *     - createNotification()
+ *     - createNotificationIfAbsentToday()
+ * [11] HELPER / UTILITY
+ * ============================================================
+ */
 @Repository
 public class PageTaskRepository {
 
+    // ============================================================
+    // [1] HẰNG SỐ & TRẠNG THÁI
+    // ============================================================
+
+    /** Số ngày buffer tối thiểu giữa dueDate của task và submissionDeadline của chapter (BR-34) */
     private static final int TASK_REJECT_SERIES_DEADLINE_BUFFER_DAYS = 3;
+
+    /** Các trạng thái "đã đóng" — task ở các trạng thái này không còn block việc tái sử dụng page range */
     private static final String SQL_CLOSED_TASK_STATUSES = "'APPROVED','DELETED','REASSIGNED','CANCELLED'";
+
+    /** Các trạng thái bị bỏ qua khi chạy job đánh dấu OVERDUE */
     private static final String SQL_OVERDUE_SKIP_STATUSES = "'APPROVED','OVERDUE','CANCELLED','DELETED','REASSIGNED'";
 
-    /*
-     * Delayed is only a warning flag, not a task status transition.
-     * It is based on work progress (lastProgressAt), while OVERDUE is based on dueDate.
+    /**
+     * Cờ DELAYED (chỉ cảnh báo, không thay đổi status):
+     * Task bị coi là "chậm" nếu không có cập nhật tiến độ trong 3+ ngày kể từ lúc được giao.
+     * Khác với OVERDUE (dựa vào dueDate), DELAYED dựa vào lastProgressAt.
      */
     private static final String SQL_IS_DELAYED =
             "CAST(CASE WHEN t.status IN ('PENDING','IN_PROGRESS','REJECTED') "
@@ -36,15 +87,15 @@ public class PageTaskRepository {
             + "AND DATEDIFF(DAY, COALESCE(t.lastProgressAt, t.assignedAt), GETDATE()) >= 3 "
             + "THEN 1 ELSE 0 END AS BIT) AS isDelayed";
 
+    /** Các cột cơ bản của PageTask dùng trong SELECT */
     private static final String SQL_TASK_COLUMNS_BASE =
             "t.id, t.chapterId, t.assistantId, t.pageRangeStart, t.pageRangeEnd, t.taskType, t.dueDate, t.status, t.rejectionCount, ";
 
+    /** Cache: DB có các cột mở rộng (priority, notes, ...) không? */
     private volatile Boolean taskSchemaExtended;
-    private volatile Boolean taskLifecycleSchemaReady;
 
-    private String normalizeStatus(String status) {
-        return status == null ? "" : status.trim().toUpperCase(Locale.ENGLISH);
-    }
+    /** Cache: DB đã sẵn sàng cho lifecycle schema (actionReason, previousAssistantId, ...) chưa? */
+    private volatile Boolean taskLifecycleSchemaReady;
 
     @Autowired
     private DataSource dataSource;
@@ -55,6 +106,19 @@ public class PageTaskRepository {
     @Autowired
     private PageRepository pageRepository;
 
+    // ============================================================
+    // [2] SCHEMA GUARD - Kiểm tra & tự cập nhật cấu trúc DB
+    // ============================================================
+
+    /** Chuẩn hóa status string: trim + uppercase */
+    private String normalizeStatus(String status) {
+        return status == null ? "" : status.trim().toUpperCase(Locale.ENGLISH);
+    }
+
+    /**
+     * Trả về danh sách cột SELECT tùy thuộc DB có schema mở rộng hay không.
+     * Schema mở rộng: có cột priority, notes, rejectionReason, approvalComment, actionReason, previousAssistantId.
+     */
     private String taskSelectColumns() {
         ensureTaskLifecycleSchemaReady();
         if (isTaskSchemaExtended()) {
@@ -69,6 +133,10 @@ public class PageTaskRepository {
                 + SQL_IS_DELAYED;
     }
 
+    /**
+     * Đảm bảo DB có đủ các cột cho task lifecycle (actionReason, previousAssistantId, lastProgressAt)
+     * và constraint status hợp lệ. Chạy một lần, thread-safe.
+     */
     private void ensureTaskLifecycleSchemaReady() {
         if (Boolean.TRUE.equals(taskLifecycleSchemaReady)) {
             return;
@@ -78,13 +146,11 @@ public class PageTaskRepository {
                 return;
             }
             try (Connection conn = dataSource.getConnection()) {
-                /*
-                 * Runtime schema guard for older local databases.
-                 * schema.sql also contains these columns/statuses for clean DB rebuilds.
-                 */
                 addColumnIfMissing(conn, "actionReason", "nvarchar(300) NULL");
                 addColumnIfMissing(conn, "previousAssistantId", "bigint NULL");
                 addColumnIfMissing(conn, "lastProgressAt", "datetime NULL");
+
+                // Xoá constraint cũ rồi thêm lại với đầy đủ trạng thái mới
                 String dropConstraint =
                         "IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_PageTask_status' AND parent_object_id = OBJECT_ID('dbo.PageTask')) "
                         + "ALTER TABLE [dbo].[PageTask] DROP CONSTRAINT [CK_PageTask_status]";
@@ -105,6 +171,7 @@ public class PageTaskRepository {
         }
     }
 
+    /** Thêm cột vào bảng PageTask nếu chưa tồn tại */
     private void addColumnIfMissing(Connection conn, String column, String definition) throws SQLException {
         String sql = "IF COL_LENGTH('dbo.PageTask', '" + column + "') IS NULL ALTER TABLE [dbo].[PageTask] ADD " + column + " " + definition;
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -112,6 +179,7 @@ public class PageTaskRepository {
         }
     }
 
+    /** Kiểm tra DB có cột mở rộng (priority, notes) không — cache kết quả */
     private boolean isTaskSchemaExtended() {
         if (taskSchemaExtended != null) {
             return taskSchemaExtended.booleanValue();
@@ -137,6 +205,7 @@ public class PageTaskRepository {
         }
     }
 
+    /** Kiểm tra ResultSet có cột tên `label` không */
     private boolean hasColumn(ResultSet rs, String label) throws SQLException {
         ResultSetMetaData md = rs.getMetaData();
         for (int i = 1; i <= md.getColumnCount(); i++) {
@@ -147,10 +216,23 @@ public class PageTaskRepository {
         return false;
     }
 
+    // ============================================================
+    // [3] TRUY VẤN TASK
+    // ============================================================
+
+    /** Liệt kê task theo quyền người dùng (không lọc status/chapter) */
     public List<TaskSummary> listVisible(AuthenticatedUser user) {
         return listVisible(user, null, null);
     }
 
+    /**
+     * Liệt kê task hiển thị với người dùng, có thể lọc thêm theo status và/hoặc chapterId.
+     * Quy tắc phân quyền:
+     *   - ADMIN: thấy tất cả
+     *   - MANGAKA: chỉ thấy task thuộc series của mình
+     *   - TANTOU_EDITOR: chỉ thấy task thuộc series mình phụ trách
+     *   - ASSISTANT: chỉ thấy task được giao cho mình
+     */
     public List<TaskSummary> listVisible(AuthenticatedUser user, String status, Long chapterId) {
         String baseSql =
             "SELECT " + taskSelectColumns() + ", "
@@ -226,6 +308,8 @@ public class PageTaskRepository {
         }
         return rows;
     }
+
+    /** Liệt kê tất cả task thuộc một chapter, sắp xếp theo ID giảm dần */
     public List<TaskSummary> listByChapter(long chapterId) {
         String sql =
             "SELECT " + taskSelectColumns() + ", "
@@ -251,6 +335,7 @@ public class PageTaskRepository {
         return rows;
     }
 
+    /** Tìm một task theo ID, trả về null nếu không tồn tại */
     public TaskSummary findById(long taskId) {
         String sql =
             "SELECT " + taskSelectColumns() + ", "
@@ -274,13 +359,26 @@ public class PageTaskRepository {
         }
     }
 
+    // ============================================================
+    // [4] TẠO & CẬP NHẬT TASK (Mangaka)
+    // ============================================================
+
+    /** Tạo task với priority mặc định NORMAL, không có notes */
     public long create(long chapterId, long assistantId, int start, int end, String taskType, Date dueDate) {
         return create(chapterId, assistantId, start, end, taskType, dueDate, "NORMAL", null);
     }
 
+    /**
+     * Tạo task mới, validate đầy đủ trước khi insert:
+     * - Không trùng page range với task đang active (BR-33)
+     * - dueDate phải trước submissionDeadline ít nhất 3 ngày (BR-34)
+     * - Assistant phải thuộc danh sách của Mangaka (BR-36)
+     * - Mangaka không được tự giao cho chính mình (BR-35)
+     * Sau khi tạo: gửi thông báo cho assistant và cập nhật tiến độ chapter.
+     */
     public long create(long chapterId, long assistantId, int start, int end, String taskType, Date dueDate, String priority, String notes) {
         ensureTaskLifecycleSchemaReady();
-        // Only active tasks block page-range reuse; closed tasks do not block new assignment.
+        // Chỉ task đang active mới block tái sử dụng page range; task đã đóng thì không
         String overlapSql = "SELECT COUNT(1) FROM PageTask WHERE chapterId = ? AND UPPER(status) NOT IN (" + SQL_CLOSED_TASK_STATUSES + ") AND NOT (pageRangeEnd < ? OR pageRangeStart > ?)";
         String chapterSql = "SELECT c.submissionDeadline, c.seriesId, s.mangakaId FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?";
         String enrollmentSql = "SELECT COUNT(1) FROM MangakaAssistant WHERE mangakaId = ? AND assistantId = ?";
@@ -328,6 +426,11 @@ public class PageTaskRepository {
         }
     }
 
+    /**
+     * Mangaka cập nhật toàn bộ thông tin task (kể cả đổi assistant).
+     * Task APPROVED không được chỉnh sửa (BR-TSK-06).
+     * Nếu đổi assistant sẽ gửi thông báo TASK_REASSIGNED thay vì TASK_UPDATED.
+     */
     public void updateTaskByMangaka(long taskId, long mangakaId, long assistantId, int start, int end, String taskType, Date dueDate) {
         String taskInfoSql = "SELECT t.chapterId, t.assistantId, t.status FROM PageTask t WHERE t.id = ?";
         String updateSql = "UPDATE PageTask SET assistantId = ?, pageRangeStart = ?, pageRangeEnd = ?, taskType = ?, dueDate = ?, status = 'IN_PROGRESS', rejectionCount = 0, updatedAt = GETDATE(), assignedAt = GETDATE() WHERE id = ?";
@@ -398,6 +501,16 @@ public class PageTaskRepository {
         }
     }
 
+    // ============================================================
+    // [5] VÒNG ĐỜI TASK - Nộp / Duyệt / Từ chối
+    // ============================================================
+
+    /**
+     * Mangaka phân công lại task cho assistant khác.
+     * Yêu cầu: task đang IN_PROGRESS hoặc OVERDUE; phải cung cấp lý do (≥5 ký tự).
+     * Nếu task OVERDUE, bắt buộc phải truyền newDueDate hợp lệ.
+     * Quy trình: đóng task cũ (REASSIGNED) → tạo task mới → ghi previousAssistantId.
+     */
     public long reassignByMangaka(long taskId, long mangakaId, long newAssistantId, String reason) {
         return reassignByMangaka(taskId, mangakaId, newAssistantId, reason, null);
     }
@@ -460,6 +573,14 @@ public class PageTaskRepository {
         return newTaskId;
     }
 
+    // ============================================================
+    // [6] VÒNG ĐỜI TASK - Phân công lại / Xoá / Huỷ
+    // ============================================================
+
+    /**
+     * Mangaka xoá task (chuyển sang DELETED).
+     * Chỉ xoá được task đang IN_PROGRESS hoặc OVERDUE; phải có lý do ≥5 ký tự.
+     */
     public void deleteByMangaka(long taskId, long mangakaId, String reason) {
         ensureTaskLifecycleSchemaReady();
         if (reason == null || reason.trim().length() < 5) {
@@ -495,6 +616,7 @@ public class PageTaskRepository {
         }
     }
 
+    /** Ghi lại previousAssistantId và lý do phân công lại vào task mới */
     private void setPreviousAssistantAndReason(long taskId, long previousAssistantId, String reason) {
         String sql = "UPDATE PageTask SET previousAssistantId = ?, actionReason = ? WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -508,6 +630,10 @@ public class PageTaskRepository {
         }
     }
 
+    /**
+     * Validate và chuẩn hóa taskType.
+     * Các loại hợp lệ: SKETCHING, INKING, COLORING, SCREENTONE, LETTERING, MIXED.
+     */
     private String normalizeTaskType(String taskType) {
         if (taskType == null || taskType.trim().isEmpty()) {
             throw new IllegalArgumentException("taskType is required");
@@ -523,6 +649,18 @@ public class PageTaskRepository {
         }
         return normalized;
     }
+
+    /**
+     * Validate toàn bộ điều kiện trước khi tạo hoặc cập nhật task:
+     * - Các trường bắt buộc không được null/rỗng
+     * - dueDate không được trong quá khứ
+     * - pageRangeEnd >= pageRangeStart
+     * - Không có trang nào trong range đã hoàn thành (completedStage = LETTERING)
+     * - Không trùng page range với task active khác (BR-33)
+     * - dueDate phải trước submissionDeadline ≥ 3 ngày (BR-34)
+     * - Mangaka không tự giao cho mình (BR-35)
+     * - Assistant phải trong danh sách của Mangaka (BR-36)
+     */
     private void validateTaskAssignment(
             Connection conn,
             long taskId,
@@ -552,6 +690,7 @@ public class PageTaskRepository {
             throw new IllegalArgumentException("pageRangeEnd must be >= pageRangeStart");
         }
 
+        // Kiểm tra trang đã hoàn thành trong range
         String completePageSql = "SELECT TOP 1 pageNumber FROM " + PageRepository.TABLE_PAGE
                 + " WHERE chapterId = ? AND pageNumber BETWEEN ? AND ? "
                 + "AND UPPER(ISNULL(completedStage, '')) = 'LETTERING' ORDER BY pageNumber";
@@ -566,6 +705,7 @@ public class PageTaskRepository {
             }
         }
 
+        // Kiểm tra trùng page range với task active khác
         if (taskId == 0L) {
             try (PreparedStatement overlap = conn.prepareStatement(overlapSql)) {
                 overlap.setLong(1, chapterId);
@@ -606,15 +746,18 @@ public class PageTaskRepository {
             }
         }
 
+        // BR-35: Mangaka không được tự giao cho mình
         if (assistantId == mangakaId) {
             throw new IllegalArgumentException("Mangaka cannot self-assign page task (BR-35)");
         }
 
+        // BR-34: dueDate phải trước submissionDeadline ít nhất 3 ngày
         Date deadline3DaysBefore = new Date(submissionDeadline.getTime() - (3L * 24L * 60L * 60L * 1000L));
         if (dueDate.after(deadline3DaysBefore)) {
             throw new IllegalArgumentException("Task dueDate must be at least 3 days before chapter submissionDeadline (BR-34)");
         }
 
+        // BR-36: Assistant phải trong danh sách của Mangaka
         try (PreparedStatement enrollment = conn.prepareStatement(enrollmentSql)) {
             enrollment.setLong(1, mangakaId);
             enrollment.setLong(2, assistantId);
@@ -627,6 +770,11 @@ public class PageTaskRepository {
         }
     }
 
+    /**
+     * Assistant nộp task để Mangaka review (chuyển sang SUBMITTED).
+     * Chỉ nộp được từ trạng thái IN_PROGRESS, REJECTED, hoặc OVERDUE (BR-TSK-01).
+     * Bắt buộc phải upload đủ ảnh cho tất cả trang trong range trước khi nộp.
+     */
     public void updateStatusByAssistant(long taskId, long assistantId, String status) {
         ensureTaskLifecycleSchemaReady();
         String normalized = status == null ? "" : status.trim().toUpperCase();
@@ -661,7 +809,7 @@ public class PageTaskRepository {
             }
 
             String current = normalizeStatus(currentStatus);
-            // Assistants may still submit late while Mangaka is deciding what to do with an OVERDUE task.
+            // Assistant vẫn có thể nộp khi task OVERDUE (Mangaka chưa quyết định)
             if (!("IN_PROGRESS".equals(current)
                     || "REJECTED".equals(current)
                     || "OVERDUE".equals(current))) {
@@ -689,6 +837,10 @@ public class PageTaskRepository {
         }
     }
 
+    /**
+     * Kiểm tra assistant đã upload đủ ảnh cho tất cả trang trong range chưa.
+     * Mỗi pageNumber trong [pageRangeStart, pageRangeEnd] phải có ít nhất 1 ảnh active loại PAGE.
+     */
     private void validateSubmittedTaskImages(Connection conn, long taskId, int pageRangeStart, int pageRangeEnd) throws SQLException {
         int expected = pageRangeEnd - pageRangeStart + 1;
         String sql = "SELECT COUNT(DISTINCT pageNumber) "
@@ -711,6 +863,10 @@ public class PageTaskRepository {
         }
     }
 
+    /**
+     * Mangaka duyệt task SUBMITTED (BR-39).
+     * Sau khi duyệt: ảnh task được promote lên Chapter, cập nhật tiến độ, gửi thông báo.
+     */
     public void approveByMangaka(long taskId, long mangakaId, String comment) {
         String readSql = "SELECT chapterId, assistantId, status, taskType FROM PageTask WHERE id = ?";
         String updateExtendedSql = "UPDATE PageTask SET status = 'APPROVED', approvalComment = ?, updatedAt = GETDATE() WHERE id = ?";
@@ -756,6 +912,7 @@ public class PageTaskRepository {
                 }
             }
 
+            // Promote ảnh task lên Chapter
             promoteTaskImagesToChapter(taskId, chapterId, mangakaId, taskType);
             refreshChapterProgress(chapterId);
 
@@ -769,6 +926,7 @@ public class PageTaskRepository {
         }
     }
 
+    /** Promote ảnh PAGE của task vào Chapter (cập nhật bảng Page với completedStage tương ứng) */
     private void promoteTaskImagesToChapter(long taskId, long chapterId, long approvedBy, String completedStage) {
         List<ChapterImageItem> images = chapterImageRepository.listByTask(taskId);
         for (ChapterImageItem image : images) {
@@ -784,6 +942,10 @@ public class PageTaskRepository {
         }
     }
 
+    /**
+     * Mangaka từ chối task SUBMITTED (BR-38), trả về số lần bị từ chối.
+     * Task chuyển lại IN_PROGRESS; dueDate được gia hạn thêm 1 ngày nếu còn đủ buffer trước deadline.
+     */
     public int rejectByMangaka(long taskId, long mangakaId, String reason) {
         String readSql =
                 "SELECT t.chapterId, t.assistantId, t.status, t.rejectionCount, t.dueDate, s.publicationDate AS seriesDeadline "
@@ -861,6 +1023,10 @@ public class PageTaskRepository {
         }
     }
 
+    /**
+     * Tính dueDate mới sau khi reject: cộng thêm 1 ngày, nhưng không vượt quá
+     * (seriesDeadline - 3 ngày). Nếu không còn đủ buffer, giữ nguyên dueDate cũ.
+     */
     private Date extendedRejectDueDate(Date currentDueDate, Date seriesDeadline) {
         if (currentDueDate == null || seriesDeadline == null) {
             return currentDueDate;
@@ -873,83 +1039,16 @@ public class PageTaskRepository {
         return Date.valueOf(proposed);
     }
 
-    public long findChapterOwnerMangaka(long chapterId) {
-        String sql = "SELECT s.mangakaId FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, chapterId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) {
-                    throw new IllegalArgumentException("Chapter not found");
-                }
-                return rs.getLong(1);
-            }
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot load chapter owner", ex);
-        }
-    }
+    // ============================================================
+    // [7] QUẢN LÝ OVERDUE
+    // ============================================================
 
-    public long findChapterTantouEditor(long chapterId) {
-        String sql = "SELECT s.tantouEditorId FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, chapterId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) {
-                    throw new IllegalArgumentException("Chapter not found");
-                }
-                return rs.getLong(1);
-            }
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot load chapter tantou", ex);
-        }
-    }
-
-    public long findTaskAssistantId(long taskId) {
-        String sql = "SELECT assistantId FROM PageTask WHERE id = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, taskId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) {
-                    throw new IllegalArgumentException("Task not found");
-                }
-                return rs.getLong("assistantId");
-            }
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot load task assistant", ex);
-        }
-    }
-
-    public long findTaskChapterId(long taskId) {
-        String sql = "SELECT chapterId FROM PageTask WHERE id = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, taskId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) {
-                    throw new IllegalArgumentException("Task not found");
-                }
-                return rs.getLong("chapterId");
-            }
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot load task chapter", ex);
-        }
-    }
-
-    public long getTaskOwnerMangaka(long taskId) {
-        return findChapterOwnerMangaka(findTaskChapterId(taskId));
-    }
-
-    public long getTaskTantouEditor(long taskId) {
-        return findChapterTantouEditor(findTaskChapterId(taskId));
-    }
-
+    /**
+     * Job hàng ngày: đánh dấu OVERDUE các task đã quá dueDate nhưng chưa hoàn tất.
+     * Gửi thông báo cho cả Mangaka (action required) và Assistant.
+     * Trả về số task vừa được cập nhật.
+     */
     public int markOverdueTasks() {
-        /*
-         * OVERDUE is a lifecycle state: due date has passed and task still needs action.
-         * It is separate from the delayed warning flag.
-         */
         String selectSql =
             "SELECT t.id, t.chapterId, t.assistantId, s.mangakaId "
             + "FROM PageTask t "
@@ -975,14 +1074,12 @@ public class PageTaskRepository {
                     if (update.executeUpdate() > 0) {
                         changed++;
                         chapters.add(row[1]);
-                        // Notify mangaka: action required
                         createNotificationIfAbsentToday(
                                 row[3],
                                 "TASK_OVERDUE_ACTION_REQUIRED",
                                 "Task #" + row[0] + " is overdue. Please decide: extend, reassign, or cancel.",
                                 row[0],
                                 "TASK");
-                        // Notify assistant
                         createNotificationIfAbsentToday(
                                 row[2],
                                 "TASK_OVERDUE",
@@ -1003,8 +1100,9 @@ public class PageTaskRepository {
     }
 
     /**
-     * Auto-cancel tasks that have been OVERDUE for 3+ days with no mangaka decision.
-     * Runs daily at 09:00 via PageTaskScheduler.
+     * Job hàng ngày (09:00): tự động huỷ (CANCELLED) các task OVERDUE mà Mangaka
+     * chưa có quyết định trong 3 ngày. Gửi thông báo cho assistant.
+     * Trả về số task bị huỷ.
      */
     public int escalatePendingOverdueDecisions() {
         ensureTaskLifecycleSchemaReady();
@@ -1054,8 +1152,8 @@ public class PageTaskRepository {
     }
 
     /**
-     * Extend an OVERDUE task: set new dueDate, reset status to IN_PROGRESS.
-     * Only the chapter owner Mangaka can call this.
+     * Mangaka gia hạn task OVERDUE: đặt dueDate mới, reset status về IN_PROGRESS.
+     * dueDate mới phải hợp lệ (không quá khứ, đủ buffer trước submissionDeadline).
      */
     public void extendOverdueTask(long taskId, long mangakaId, java.sql.Date newDueDate, String reason) {
         ensureTaskLifecycleSchemaReady();
@@ -1097,6 +1195,10 @@ public class PageTaskRepository {
         createNotification(task.getAssistantId(), "TASK_EXTENDED", msg, taskId, "TASK");
     }
 
+    /**
+     * Kiểm tra dueDate cho quyết định trên task OVERDUE:
+     * không được quá khứ, không được vượt quá (submissionDeadline - 3 ngày).
+     */
     private void validateOverdueDecisionDueDate(long chapterId, Date dueDate) {
         if (dueDate.before(Date.valueOf(LocalDate.now()))) {
             throw new IllegalArgumentException("Task dueDate cannot be in the past");
@@ -1107,6 +1209,7 @@ public class PageTaskRepository {
         }
     }
 
+    /** Trả về ngày tối đa cho dueDate của task: submissionDeadline - 3 ngày */
     private Date findLatestTaskDueDate(long chapterId) {
         String sql = "SELECT submissionDeadline FROM Chapter WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -1124,6 +1227,14 @@ public class PageTaskRepository {
         }
     }
 
+    // ============================================================
+    // [8] NHẮC NHỞ & THÔNG BÁO
+    // ============================================================
+
+    /**
+     * Job hàng ngày: gửi nhắc nhở cho assistant về task sắp đến hạn trong 24 giờ.
+     * Chỉ gửi 1 lần/ngày/task (createNotificationIfAbsentToday).
+     */
     public int notifyDueSoonTasks() {
         String sql =
             "SELECT id, assistantId FROM PageTask "
@@ -1151,7 +1262,10 @@ public class PageTaskRepository {
         return sent;
     }
 
-    /** BR-TSK-08: flag delayed tasks (computed on read) and notify Mangaka once per day. */
+    /**
+     * BR-TSK-08: Nhắc Mangaka về task bị trễ tiến độ (không có cập nhật 3+ ngày kể từ khi giao).
+     * DELAYED chỉ là cờ cảnh báo, không thay đổi status của task.
+     */
     public int markDelayedTasks() {
         String sql =
             "SELECT t.id, s.mangakaId "
@@ -1184,6 +1298,18 @@ public class PageTaskRepository {
         return sent;
     }
 
+    // ============================================================
+    // [9] TIẾN ĐỘ CHAPTER
+    // ============================================================
+
+    /**
+     * Tính lại completionPct và status của Chapter dựa trên completedStage của từng Page.
+     * Thang điểm hoàn thành: SKETCHING=1/5, INKING=2/5, COLORING=3/5, SCREENTONE=4/5, LETTERING=5/5.
+     * Cũng cập nhật cờ atRisk:
+     *   - Đã qua submissionDeadline mà chưa xong: atRisk = true
+     *   - Đã qua 70% thời gian mà mới hoàn thành < 50%: atRisk = true
+     * Nếu chapter mới trở thành atRisk, gửi thông báo cho Tantou Editor.
+     */
     public void refreshChapterProgress(long chapterId) {
         pageRepository.ensurePageStageColumnReady();
         String readRiskSql = "SELECT atRisk FROM Chapter WHERE id = ?";
@@ -1238,6 +1364,7 @@ public class PageTaskRepository {
                 }
             }
 
+            // Gửi thông báo cho Tantou Editor khi chapter lần đầu trở thành at-risk
             if (!wasAtRisk && nowAtRisk) {
                 long tantouId = findChapterTantouEditor(chapterId);
                 createNotificationIfAbsentToday(
@@ -1252,25 +1379,11 @@ public class PageTaskRepository {
         }
     }
 
-    public void createNotification(long userId, String type, String message, long referenceId, String referenceType) {
-        String sql = "INSERT INTO Notification (userId, type, title, message, viewUrl, referenceId, referenceType, isRead, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, 0, GETDATE())";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, userId);
-            ps.setString(2, type);
-            ps.setString(3, notificationTitle(type));
-            ps.setString(4, message);
-            ps.setString(5, notificationViewUrl(type, referenceId, referenceType));
-            ps.setLong(6, referenceId);
-            ps.setString(7, referenceType);
-            ps.executeUpdate();
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot create notification", ex);
-        }
-    }
-
+    /**
+     * Kiểm tra tất cả task active của chapter đã được APPROVED chưa.
+     * Task đã đóng (DELETED, REASSIGNED, CANCELLED) không tính vào denominator.
+     */
     public boolean areAllTasksApproved(long chapterId) {
-        // Closed tasks are excluded from the active denominator so they do not block completion.
         String sql = "SELECT "
                 + "SUM(CASE WHEN UPPER(status) = 'APPROVED' THEN 1 ELSE 0 END) AS approvedCount, "
                 + "SUM(CASE WHEN UPPER(status) NOT IN ('DELETED','REASSIGNED','CANCELLED') THEN 1 ELSE 0 END) AS totalCount "
@@ -1291,6 +1404,7 @@ public class PageTaskRepository {
         }
     }
 
+    /** Kiểm tra tất cả trang của chapter đã đạt completedStage = LETTERING (giai đoạn cuối) chưa */
     public boolean areAllPagesFullyCompleted(long chapterId) {
         pageRepository.ensurePageStageColumnReady();
         String sql = "SELECT "
@@ -1313,6 +1427,32 @@ public class PageTaskRepository {
         }
     }
 
+    // ============================================================
+    // [10] THÔNG BÁO (Notification)
+    // ============================================================
+
+    /** Tạo thông báo cho người dùng */
+    public void createNotification(long userId, String type, String message, long referenceId, String referenceType) {
+        String sql = "INSERT INTO Notification (userId, type, title, message, viewUrl, referenceId, referenceType, isRead, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, 0, GETDATE())";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, userId);
+            ps.setString(2, type);
+            ps.setString(3, notificationTitle(type));
+            ps.setString(4, message);
+            ps.setString(5, notificationViewUrl(type, referenceId, referenceType));
+            ps.setLong(6, referenceId);
+            ps.setString(7, referenceType);
+            ps.executeUpdate();
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot create notification", ex);
+        }
+    }
+
+    /**
+     * Tạo thông báo nhưng chỉ khi chưa có thông báo cùng loại cho cùng referenceId trong ngày hôm nay.
+     * Trả về true nếu thông báo được tạo, false nếu đã tồn tại.
+     */
     public boolean createNotificationIfAbsentToday(long userId, String type, String message, long referenceId, String referenceType) {
         String checkSql =
             "SELECT COUNT(1) FROM Notification "
@@ -1337,62 +1477,36 @@ public class PageTaskRepository {
         return true;
     }
 
+    // ============================================================
+    // [11] HELPER / UTILITY
+    // ============================================================
+
+    /** Map notification type sang tiêu đề hiển thị */
     private String notificationTitle(String type) {
         if (type == null) {
             return "Notification";
         }
         String normalized = type.trim().toUpperCase(Locale.ENGLISH);
-        if ("TASK_ASSIGNED".equals(normalized)) {
-            return "New page task assigned";
-        }
-        if ("TASK_SUBMITTED".equals(normalized)) {
-            return "Task submitted for review";
-        }
-        if ("TASK_APPROVED".equals(normalized)) {
-            return "Task approved";
-        }
-        if ("TASK_REJECTED".equals(normalized)) {
-            return "Task rejected - rework needed";
-        }
-        if ("TASK_DELETED".equals(normalized)) {
-            return "Task deleted";
-        }
-        if ("TASK_REASSIGNED".equals(normalized)) {
-            return "Task reassigned";
-        }
-        if ("TASK_DUE_SOON".equals(normalized)) {
-            return "Task due in 24 hours";
-        }
-        if ("TASK_DELAYED".equals(normalized)) {
-            return "Task delayed";
-        }
-        if ("TASK_OVERDUE".equals(normalized)) {
-            return "Task overdue";
-        }
-        if ("TASK_OVERDUE_ACTION_REQUIRED".equals(normalized)) {
-            return "Task overdue - action required";
-        }
-        if ("TASK_EXTENDED".equals(normalized)) {
-            return "Task deadline extended";
-        }
-        if ("TASK_CANCELLED".equals(normalized)) {
-            return "Task cancelled";
-        }
-        if ("TASK_ESCALATED".equals(normalized)) {
-            return "Task escalated";
-        }
-        if ("CHAPTER_AT_RISK".equals(normalized)) {
-            return "Chapter at risk";
-        }
-        if (normalized.startsWith("MANUSCRIPT")) {
-            return "Manuscript update";
-        }
-        if (normalized.startsWith("CHAPTER")) {
-            return "Chapter update";
-        }
+        if ("TASK_ASSIGNED".equals(normalized)) { return "New page task assigned"; }
+        if ("TASK_SUBMITTED".equals(normalized)) { return "Task submitted for review"; }
+        if ("TASK_APPROVED".equals(normalized)) { return "Task approved"; }
+        if ("TASK_REJECTED".equals(normalized)) { return "Task rejected - rework needed"; }
+        if ("TASK_DELETED".equals(normalized)) { return "Task deleted"; }
+        if ("TASK_REASSIGNED".equals(normalized)) { return "Task reassigned"; }
+        if ("TASK_DUE_SOON".equals(normalized)) { return "Task due in 24 hours"; }
+        if ("TASK_DELAYED".equals(normalized)) { return "Task delayed"; }
+        if ("TASK_OVERDUE".equals(normalized)) { return "Task overdue"; }
+        if ("TASK_OVERDUE_ACTION_REQUIRED".equals(normalized)) { return "Task overdue - action required"; }
+        if ("TASK_EXTENDED".equals(normalized)) { return "Task deadline extended"; }
+        if ("TASK_CANCELLED".equals(normalized)) { return "Task cancelled"; }
+        if ("TASK_ESCALATED".equals(normalized)) { return "Task escalated"; }
+        if ("CHAPTER_AT_RISK".equals(normalized)) { return "Chapter at risk"; }
+        if (normalized.startsWith("MANUSCRIPT")) { return "Manuscript update"; }
+        if (normalized.startsWith("CHAPTER")) { return "Chapter update"; }
         return "Notification";
     }
 
+    /** Tạo URL điều hướng cho thông báo dựa vào referenceType và type */
     private String notificationViewUrl(String type, long referenceId, String referenceType) {
         if (referenceId <= 0 || referenceType == null) {
             return null;
@@ -1405,24 +1519,15 @@ public class PageTaskRepository {
             }
             return "/main/tasks/" + referenceId;
         }
-        if ("CHAPTER".equals(normalizedRef)) {
-            return "/main/chapters/" + referenceId;
-        }
-        if ("MANUSCRIPT".equals(normalizedRef)) {
-            return "/main/notifications";
-        }
-        if ("DECISION".equals(normalizedRef) || "DECISION_SESSION".equals(normalizedRef)) {
-            return "/main/decisions/" + referenceId;
-        }
-        if ("PROPOSAL".equals(normalizedRef)) {
-            return "/main/proposals/" + referenceId;
-        }
-        if ("SERIES".equals(normalizedRef)) {
-            return "/main/notifications";
-        }
+        if ("CHAPTER".equals(normalizedRef)) { return "/main/chapters/" + referenceId; }
+        if ("MANUSCRIPT".equals(normalizedRef)) { return "/main/notifications"; }
+        if ("DECISION".equals(normalizedRef) || "DECISION_SESSION".equals(normalizedRef)) { return "/main/decisions/" + referenceId; }
+        if ("PROPOSAL".equals(normalizedRef)) { return "/main/proposals/" + referenceId; }
+        if ("SERIES".equals(normalizedRef)) { return "/main/notifications"; }
         return null;
     }
 
+    /** Map đầy đủ ResultSet → TaskSummary kèm thông tin chapter/series/assistant */
     private TaskSummary mapDetailed(ResultSet rs) throws SQLException {
         TaskSummary t = map(rs);
         t.setChapterTitle(rs.getString("chapterTitle"));
@@ -1432,6 +1537,8 @@ public class PageTaskRepository {
         t.setDelayed(rs.getBoolean("isDelayed"));
         return t;
     }
+
+    /** Map các cột cơ bản của PageTask từ ResultSet */
     private TaskSummary map(ResultSet rs) throws SQLException {
         TaskSummary t = new TaskSummary();
         t.setId(rs.getLong("id"));
@@ -1448,18 +1555,10 @@ public class PageTaskRepository {
         } else {
             t.setPriority("NORMAL");
         }
-        if (hasColumn(rs, "notes")) {
-            t.setNotes(rs.getString("notes"));
-        }
-        if (hasColumn(rs, "rejectionReason")) {
-            t.setRejectionReason(rs.getString("rejectionReason"));
-        }
-        if (hasColumn(rs, "approvalComment")) {
-            t.setApprovalComment(rs.getString("approvalComment"));
-        }
-        if (hasColumn(rs, "actionReason")) {
-            t.setActionReason(rs.getString("actionReason"));
-        }
+        if (hasColumn(rs, "notes")) { t.setNotes(rs.getString("notes")); }
+        if (hasColumn(rs, "rejectionReason")) { t.setRejectionReason(rs.getString("rejectionReason")); }
+        if (hasColumn(rs, "approvalComment")) { t.setApprovalComment(rs.getString("approvalComment")); }
+        if (hasColumn(rs, "actionReason")) { t.setActionReason(rs.getString("actionReason")); }
         if (hasColumn(rs, "previousAssistantId")) {
             long previousAssistantId = rs.getLong("previousAssistantId");
             t.setPreviousAssistantId(rs.wasNull() ? null : Long.valueOf(previousAssistantId));
@@ -1467,6 +1566,88 @@ public class PageTaskRepository {
         return t;
     }
 
+    /** Lấy ID Mangaka sở hữu chapter (qua series) */
+    public long findChapterOwnerMangaka(long chapterId) {
+        String sql = "SELECT s.mangakaId FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, chapterId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalArgumentException("Chapter not found");
+                }
+                return rs.getLong(1);
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot load chapter owner", ex);
+        }
+    }
+
+    /** Lấy ID Tantou Editor phụ trách chapter (qua series) */
+    public long findChapterTantouEditor(long chapterId) {
+        String sql = "SELECT s.tantouEditorId FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, chapterId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalArgumentException("Chapter not found");
+                }
+                return rs.getLong(1);
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot load chapter tantou", ex);
+        }
+    }
+
+    /** Lấy assistantId của task */
+    public long findTaskAssistantId(long taskId) {
+        String sql = "SELECT assistantId FROM PageTask WHERE id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, taskId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalArgumentException("Task not found");
+                }
+                return rs.getLong("assistantId");
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot load task assistant", ex);
+        }
+    }
+
+    /** Lấy chapterId của task */
+    public long findTaskChapterId(long taskId) {
+        String sql = "SELECT chapterId FROM PageTask WHERE id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, taskId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalArgumentException("Task not found");
+                }
+                return rs.getLong("chapterId");
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot load task chapter", ex);
+        }
+    }
+
+    /** Lấy ID Mangaka sở hữu task (qua chapter → series) */
+    public long getTaskOwnerMangaka(long taskId) {
+        return findChapterOwnerMangaka(findTaskChapterId(taskId));
+    }
+
+    /** Lấy ID Tantou Editor phụ trách task (qua chapter → series) */
+    public long getTaskTantouEditor(long taskId) {
+        return findChapterTantouEditor(findTaskChapterId(taskId));
+    }
+
+    /**
+     * Mangaka cập nhật dueDate, priority, notes của task (không thay đổi assignment).
+     * Task APPROVED không được chỉnh sửa (BR-TSK-06).
+     */
     public void updateTaskProgress(long taskId, long mangakaId, Date dueDate, String priority, String notes) {
         String readSql = "SELECT chapterId, status FROM PageTask WHERE id = ?";
         String updateExtendedSql = "UPDATE PageTask SET dueDate = ?, priority = ?, notes = ?, updatedAt = GETDATE() WHERE id = ?";
@@ -1512,6 +1693,10 @@ public class PageTaskRepository {
         }
     }
 
+    /**
+     * Validate và chuẩn hóa priority.
+     * Các giá trị hợp lệ: NORMAL, HIGH, URGENT. Mặc định là NORMAL nếu null/rỗng.
+     */
     private String normalizePriority(String priority) {
         if (priority == null || priority.trim().isEmpty()) {
             return "NORMAL";
@@ -1523,4 +1708,3 @@ public class PageTaskRepository {
         return normalized;
     }
 }
-

@@ -29,7 +29,7 @@
     <meta charset="UTF-8">
     <title>Task Detail</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css" />
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/task-list.css?v=20260605fix3" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/chaptertask/task-list.css?v=20260605fix3" />
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
@@ -183,7 +183,7 @@ const PAGE_TASK = {
     ctx: '${pageContext.request.contextPath}'
 };
 </script>
-<script src="${pageContext.request.contextPath}/assets/page-submission.js?v=20260605fix1"></script>
+<script src="${pageContext.request.contextPath}/assets/js/chaptertask/page-submission.js?v=20260605fix1"></script>
 
 <jsp:include page="../common/footer.jsp" />
 </body>

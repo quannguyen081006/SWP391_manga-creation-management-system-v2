@@ -23,7 +23,7 @@
     <meta charset="UTF-8">
     <title>Chapter Detail</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css?v=20260525" />
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/chapter-detail.css?v=20260605buttons" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/chaptertask/chapter-detail.css?v=20260605buttons" />
 </head>
 <body>
 <%-- [2] HEADER: shared navigation bar dùng chung toàn app, xem common/header.jsp --%>
@@ -405,7 +405,7 @@ window.CHAPTER_DETAIL_CONFIG = {
     contextPath: '${pageContext.request.contextPath}'
 };
 </script>
-<script src="${pageContext.request.contextPath}/assets/chapter-detail.js?v=20260608split"></script>
+<script src="${pageContext.request.contextPath}/assets/js/chaptertask/chapter-detail.js?v=20260608split"></script>
 
 <jsp:include page="../common/footer.jsp" />
 </body>
