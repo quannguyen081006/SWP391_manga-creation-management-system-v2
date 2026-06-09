@@ -43,6 +43,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 @RequestMapping("/main")
 public class MainController {
 
+    private static final long SAMPLE_FILE_MAX_SIZE_BYTES = 20L * 1024L * 1024L;
+
     @Autowired
     private AuthController authController;
 
@@ -461,6 +463,9 @@ public class MainController {
         Part part = request.getPart(fieldName);
         if (part == null || part.getSize() == 0) {
             return new UploadInfo(null, null);
+        }
+        if (part.getSize() > SAMPLE_FILE_MAX_SIZE_BYTES) {
+            throw new IllegalArgumentException("Sample file must not exceed 20 MB");
         }
         String submittedName = part.getSubmittedFileName();
         // Lấy chỉ tên file (bỏ qua đường dẫn nếu browser gửi cả path)
