@@ -1,18 +1,49 @@
+/**
+ * task-list.js
+ * Quản lý trang danh sách page task (All Tasks) cho Mangaka, Assistant, Tantou Editor.
+ *
+ * MỤC LỤC
+ * ──────────────────────────────────────────────────────────
+ * 1. KHỞI TẠO & BIẾN TRẠNG THÁI        (dòng ~20)
+ * 2. TIỆN ÍCH (HELPERS)
+ *    2a. escapeHtml / noopTaskPushMarker
+ *    2b. Xử lý ngày (formatDate, dateOnly, daysUntilDate)
+ *    2c. Render deadline (formatDeadlineCell)
+ *    2d. Kiểm tra role & quyền (hasRole, isAssignedAssistant, isTaskOwner)
+ * 3. LOGIC FILTER & ĐẾM STATUS          (computeTaskCounts, taskMatchesFilter)
+ * 4. RENDER UI
+ *    4a. Status pills / dropdown filter  (renderStatusPills)
+ *    4b. Bảng task                       (renderTasks, renderTaskRowActions)
+ *    4c. Metrics (active/submitted/...)  (renderMetrics)
+ *    4d. Modal "xem task"                (renderViewModalContent, openTaskView)
+ *    4e. Ảnh task                        (renderImages, loadTaskImages, renderImageForm)
+ * 5. POPOVER APPROVE / REJECT           (openPopover, closePopovers, applyTaskDecision)
+ * 6. MODAL UTILITIES                    (openModal, closeModals)
+ * 7. API CALLS                          (callApi, uploadMultipart, fillAssistantSelect)
+ * 8. LOAD DỮ LIỆU                       (loadData)
+ * 9. EVENT LISTENERS                    (click, change, submit)
+ * ──────────────────────────────────────────────────────────
+ */
+
 (function () {
+    // ─── 1. KHỞI TẠO & BIẾN TRẠNG THÁI ──────────────────────────────────────
+    // ctx: context path của app (lấy từ TASK_LIST_CONFIG hoặc rỗng)
     var ctx = (window.TASK_LIST_CONFIG && window.TASK_LIST_CONFIG.contextPath) || '';
-    var resultBox = document.getElementById('taskResult');
-    var currentUser = null;
-    var seriesList = [];
-    var chapters = [];
-    var tasks = [];
-    var seriesById = {};
-    var chapterById = {};
-    var taskStatusFilter = 'ALL';
+    var resultBox = document.getElementById('taskResult');   // div hiển thị thông báo chung
+    var currentUser = null;      // user đang đăng nhập (lấy từ /api/v1/auth/me)
+    var seriesList = [];         // danh sách series
+    var chapters = [];           // danh sách chapter
+    var tasks = [];              // danh sách task (toàn bộ, chưa filter)
+    var seriesById = {};         // lookup nhanh series theo id
+    var chapterById = {};        // lookup nhanh chapter theo id
+    var taskStatusFilter = 'ALL'; // filter hiện tại trên bảng
+    // Trạng thái popover approve/reject đang mở
     var activePopoverType = null;
     var activePopoverTaskId = null;
     var activePopoverCell = null;
-    var viewModalTaskId = null;
+    var viewModalTaskId = null;  // taskId đang mở trong modal xem chi tiết
 
+    // ─── 2a. TIỆN ÍCH: ESCAPE HTML ───────────────────────────────────────────
     function escapeHtml(value) {
         if (value === null || value === undefined) {
             return '';
@@ -22,10 +53,14 @@
         });
     }
 
+    // Placeholder marker — dùng để test push task (không có logic thực)
     function noopTaskPushMarker() {
         return 'task-push-test';
     }
 
+    // ─── 2b. TIỆN ÍCH: XỬ LÝ NGÀY ───────────────────────────────────────────
+    // Chuẩn hoá value ngày thành chuỗi "YYYY-MM-DD"
+    // Chấp nhận: timestamp số, chuỗi ISO có 'T', hoặc chuỗi đã format sẵn
     function formatDate(value) {
         if (value === null || value === undefined || value === '') {
             return '';
@@ -46,11 +81,13 @@
         return text;
     }
 
+    // Trả về Date object (giờ 00:00:00) từ value ngày
     function dateOnly(value) {
         var formatted = formatDate(value);
         return formatted ? new Date(formatted + 'T00:00:00') : null;
     }
 
+    // Tính số ngày còn lại đến deadline (âm = đã quá hạn)
     function daysUntilDate(value) {
         var due = dateOnly(value);
         if (!due) { return null; }
@@ -59,6 +96,8 @@
         return Math.ceil((due - today) / 86400000);
     }
 
+    // ─── 2c. TIỆN ÍCH: RENDER DEADLINE ───────────────────────────────────────
+    // Sinh text suffix cho deadline: "Done", "X days overdue", "Due today", v.v.
     function deadlineSuffixText(daysLeft, isDone, isOverdue) {
         if (isDone) { return 'Done'; }
         if (isOverdue) {
@@ -74,6 +113,11 @@
         return daysLeft + ' days left';
     }
 
+    // Render cell deadline với màu/class tương ứng trạng thái
+    // - done      → due-date-done (xám)
+    // - overdue   → due-date-overdue (đỏ) + icon ⚠
+    // - urgent (≤3 ngày) → due-date-urgent (cam)
+    // - bình thường       → due-date-active (xanh)
     function formatDeadlineCell(dateValue, isDone, isOverdue) {
         var formatted = formatDate(dateValue);
         if (!formatted) { return '-'; }
@@ -96,10 +140,12 @@
         return '<span class="due-date-active">' + escapeHtml(formatted) + suffix + '</span>';
     }
 
+    // Task coi là "done" khi status = APPROVED
     function isTaskDone(task) {
         return String(task.status || '').toUpperCase() === 'APPROVED';
     }
 
+    // Ngày hôm nay theo format "YYYY-MM-DD"
     function todayIso() {
         var date = new Date();
         var month = String(date.getMonth() + 1);
@@ -107,6 +153,7 @@
         return date.getFullYear() + '-' + (month.length < 2 ? '0' + month : month) + '-' + (day.length < 2 ? '0' + day : day);
     }
 
+    // Cộng thêm `days` ngày vào một giá trị ngày, trả về "YYYY-MM-DD"
     function addDaysIso(value, days) {
         var date = dateOnly(value);
         if (!date) { return ''; }
@@ -116,6 +163,8 @@
         return date.getFullYear() + '-' + (month.length < 2 ? '0' + month : month) + '-' + (day.length < 2 ? '0' + day : day);
     }
 
+    // ─── 2d. TIỆN ÍCH: KIỂM TRA ROLE & QUYỀN ────────────────────────────────
+    // Kiểm tra currentUser có role tương ứng không (so sánh không phân biệt hoa thường)
     function hasRole(role) {
         var roles = currentUser && currentUser.roles ? currentUser.roles : [];
         if (String(currentUser && (currentUser.role || currentUser.activeRole || currentUser.currentRole || '')).toUpperCase() === role) {
@@ -131,16 +180,20 @@
         return false;
     }
 
+    // Assistant được giao task này không?
     function isAssignedAssistant(task) {
         return hasRole('ASSISTANT') && Number(task.assistantId) === Number(currentUser.id);
     }
 
+    // Mangaka sở hữu series chứa task này không?
     function isTaskOwner(task) {
         var chapter = chapterById[String(task.chapterId)];
         var series = chapter ? seriesById[String(chapter.seriesId)] : null;
         return hasRole('MANGAKA') && series && Number(series.mangakaId) === Number(currentUser.id);
     }
 
+    // ─── FORMAT STATUS ────────────────────────────────────────────────────────
+    // "IN_PROGRESS" → "In Progress"
     function formatStatus(status) {
         if (!status) {
             return '';
@@ -148,6 +201,7 @@
         return String(status).toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, function (ch) { return ch.toUpperCase(); });
     }
 
+    // Map status → CSS class cho status chip
     function statusClass(status) {
         status = String(status || '').toUpperCase();
         if (status === 'OVERDUE') { return 'status-overdue'; }
@@ -161,6 +215,9 @@
         return 'status-draft';
     }
 
+    // Task có bị overdue không?
+    // - APPROVED → không bao giờ overdue
+    // - status là OVERDUE, hoặc dueDate đã qua mà chưa approve
     function isTaskOverdue(task) {
         var st = String(task.status || '').toUpperCase();
         if (st === 'APPROVED') { return false; }
@@ -172,10 +229,13 @@
         return due && due < today;
     }
 
+    // Task bị delayed (không update trong 3+ ngày kể từ khi được giao)?
     function isTaskDelayed(task) {
         return task && (task.delayed === true || task.isDelayed === true);
     }
 
+    // ─── 3. LOGIC FILTER & ĐẾM STATUS ────────────────────────────────────────
+    // Cấu hình các option filter hiển thị trên status pill bar
     function taskFilterOptions(counts) {
         return [
             { id: 'ALL', label: 'All', count: counts.ALL, cssClass: 'pill-all' },
@@ -198,6 +258,8 @@
             + '</button>';
     }
 
+    // Đếm số task theo từng status (dùng cho pill bar và metrics)
+    // Lưu ý: DELAYED và OVERDUE là trạng thái tính thêm, không loại trừ nhau với status chính
     function computeTaskCounts() {
         var counts = {
             ALL: tasks.length,
@@ -225,6 +287,8 @@
         return counts;
     }
 
+    // Kiểm tra task có khớp filter hiện tại không
+    // DELAYED và OVERDUE là filter đặc biệt (không dựa vào task.status)
     function taskMatchesFilter(task, filter) {
         if (!filter || filter === 'ALL') { return true; }
         if (filter === 'DELAYED') { return isTaskDelayed(task); }
@@ -236,6 +300,8 @@
         return tasks.filter(function (t) { return taskMatchesFilter(t, taskStatusFilter); });
     }
 
+    // ─── 4a. RENDER: STATUS PILLS / DROPDOWN FILTER ──────────────────────────
+    // Render dropdown filter dạng pill (nút tóm tắt + menu xổ xuống)
     function renderStatusPills(counts) {
         var el = document.getElementById('taskStatusPills');
         if (!el) { return; }
@@ -260,6 +326,7 @@
             + '</div>';
     }
 
+    // Render cell status với badge chính + badge "Delayed" nếu có
     function renderStatusCell(task) {
         var html = '<span class="status-chip ' + statusClass(task.status) + '">' + formatStatus(task.status) + '</span>';
         if (isTaskDelayed(task)) {
@@ -268,6 +335,7 @@
         return html;
     }
 
+    // CSS class cho toàn bộ row (highlight đỏ/vàng nếu overdue/delayed)
     function taskRowClass(task) {
         if (isTaskOverdue(task)) {
             return ' class="task-row-overdue"';
@@ -282,6 +350,7 @@
         return formatDeadlineCell(task.dueDate, isTaskDone(task), isTaskOverdue(task));
     }
 
+    // <select> chọn loại task (Sketching, Inking, Coloring, Lettering)
     function renderTaskTypeSelect(selectedType) {
         var options = [
             { value: 'SKETCHING', label: 'Sketching' },
@@ -294,6 +363,8 @@
             return '<option value="' + option.value + '" ' + (option.value === selected ? 'selected' : '') + '>' + option.label + '</option>';
         }).join('') + '</select>';
     }
+
+    // ─── THÔNG BÁO (MESSAGE HELPERS) ─────────────────────────────────────────
     function showMessage(msg, isError) {
         if (!resultBox) {
             return;
@@ -335,6 +406,7 @@
         el.textContent = '';
     }
 
+    // Chuyển FormData của form thành plain object {key: value}
     function formToObject(form) {
         var data = {};
         var fd = new FormData(form);
@@ -342,6 +414,11 @@
         return data;
     }
 
+    // ─── 7. API CALLS ─────────────────────────────────────────────────────────
+    // Gọi API chung: GET/POST/PATCH/PUT/DELETE
+    // - GET/PUT/PATCH: data gắn vào query string
+    // - POST/DELETE: data gắn vào body (application/x-www-form-urlencoded)
+    // Throw Error nếu HTTP status lỗi hoặc body.success === false
     async function callApi(method, path, data) {
         var opts = { method: method, headers: { 'Accept': 'application/json' } };
         var url = ctx + path;
@@ -367,6 +444,7 @@
         return body;
     }
 
+    // ─── 6. MODAL UTILITIES ───────────────────────────────────────────────────
     function openModal(id) {
         var modal = document.getElementById(id);
         if (modal) {
@@ -387,6 +465,7 @@
         viewModalTaskId = null;
     }
 
+    // Light-box preview ảnh (click ảnh trong danh sách)
     function openImagePreview(url, title) {
         var overlay = document.createElement('div');
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.72);z-index:1400;display:flex;align-items:center;justify-content:center;padding:24px;';
@@ -410,6 +489,8 @@
         document.body.appendChild(overlay);
     }
 
+    // ─── 5. POPOVER APPROVE / REJECT ─────────────────────────────────────────
+    // Đóng tất cả popover đang mở và reset biến trạng thái
     function closePopovers() {
         var host = document.getElementById('taskPopoverHost');
         var scrim = document.getElementById('taskPopoverScrim');
@@ -435,6 +516,8 @@
         activePopoverCell = null;
     }
 
+    // Mở popover approve hoặc reject tại vị trí anchorCell
+    // type: 'approve' | 'reject'
     function openPopover(type, taskId, anchorCell) {
         closePopovers();
         var task = findTask(taskId);
@@ -466,6 +549,7 @@
         }
     }
 
+    // Bật/tắt nút "Confirm Reject" tùy theo độ dài reason (cần >= 5 ký tự)
     function updateRejectConfirmState() {
         var reasonEl = document.getElementById('rejectPopoverReason');
         var counterEl = document.getElementById('rejectPopoverCounter');
@@ -476,6 +560,8 @@
         confirmBtn.disabled = len < 5;
     }
 
+    // Áp dụng kết quả quyết định approve/reject lên local task data (optimistic update)
+    // Sau đó reload lại từ server qua loadData()
     function applyTaskDecision(taskId, decision) {
         var task = findTask(taskId);
         if (!task) { return; }
@@ -483,12 +569,14 @@
         if (decision === 'approved') {
             task.status = 'APPROVED';
         } else if (decision === 'rejected') {
-            task.status = 'IN_PROGRESS';
+            task.status = 'IN_PROGRESS';  // reject → assistant revise lại
         }
         renderMetrics();
         renderTasks();
     }
 
+    // Upload ảnh dạng multipart/form-data
+    // Nếu input file rỗng thì bỏ trường file ra khỏi FormData
     async function uploadMultipart(path, form) {
         var fd = new FormData(form);
         var file = form.querySelector('input[type="file"]');
@@ -506,6 +594,8 @@
         return body;
     }
 
+    // Load danh sách assistant của series vào <select>
+    // Gọi API GET /api/v1/series/{seriesId}/assistants
     async function fillAssistantSelect(select, seriesId, selectedId) {
         if (!select || !seriesId) {
             return;
@@ -524,6 +614,8 @@
         }
     }
 
+    // Render khu vực action "Tạo task" — chỉ hiện cho Mangaka
+    // Populate <select> chapter với những chapter thuộc series của Mangaka đang đăng nhập
     function renderTaskActions() {
         var actions = document.getElementById('taskActions');
         if (!hasRole('MANGAKA')) {
@@ -542,6 +634,8 @@
         }).join('');
     }
 
+    // Cập nhật hint về deadline khi Mangaka chọn chapter trong form tạo task
+    // Due date của task phải nằm trong [today, chapter.submissionDeadline - 3 ngày]
     function updateCreateTaskDeadlineHint(chapter) {
         var hint = document.getElementById('createTaskDeadlineHint');
         var dueDateInput = document.getElementById('taskCreateDueDate');
@@ -560,6 +654,9 @@
             ? ('Chapter deadline: ' + formatDate(chapter.submissionDeadline) + '. Task due date must be between today and ' + latestDueDate + '.')
             : '';
     }
+
+    // ─── 4c. RENDER: METRICS ─────────────────────────────────────────────────
+    // Cập nhật 5 số liệu tổng: Active, Submitted, Completed, Overdue, Delayed
     function renderMetrics() {
         var active = 0;
         var submitted = 0;
@@ -581,6 +678,11 @@
         renderStatusPills(counts);
     }
 
+    // ─── 4d. RENDER: MODAL XEM TASK ──────────────────────────────────────────
+    // Render nội dung bên trong modal xem chi tiết task
+    // - Mangaka (owner): hiện form update dueDate/priority/notes
+    // - Các role khác: chỉ xem, không sửa
+    // - Luôn hiện phần feedback (approval comment, rejection reason, v.v.)
     function renderViewModalContent(task) {
         var chapter = chapterById[String(task.chapterId)];
         var latestDueDate = chapter && chapter.submissionDeadline ? addDaysIso(chapter.submissionDeadline, -3) : '';
@@ -591,6 +693,7 @@
         if (saveBtn) {
             saveBtn.style.display = canEdit ? '' : 'none';
         }
+        // Cảnh báo task đã APPROVED không thể sửa (BR-TSK-06)
         var approvedNote = String(task.status || '').toUpperCase() === 'APPROVED'
             ? '<div class="alert error task-feedback-block">Approved task cannot be edited. Create a new task instead (BR-TSK-06)</div>'
             : '';
@@ -635,6 +738,11 @@
             + renderImageForm(task);
     }
 
+    // ─── 4b. RENDER: BẢNG TASK ───────────────────────────────────────────────
+    // Render các nút action trong cột cuối của mỗi row:
+    // - Assistant được giao: link "View" đến trang detail riêng (/main/tasks/{id})
+    // - Mangaka (owner) + task SUBMITTED: nút Approve/Reject (mở popover)
+    // - Các role khác: nút "View" mở modal
     function renderTaskRowActions(task) {
         if (task._decisionLabel === 'approved') {
             return '<span class="task-decision-label approved">Approved</span>';
@@ -653,10 +761,13 @@
             html += ' <button class="btn small success-soft" type="button" data-task-approve-pop="' + task.id + '">Approve</button>';
             html += ' <button class="btn small danger-soft" type="button" data-task-reject-pop="' + task.id + '">Reject</button>';
         }
-        // Assistant submits from the task detail/work area, not directly from the All Tasks table.
+        // Lưu ý: Assistant submit task từ trang detail riêng, không từ bảng này
         return html;
     }
 
+    // ─── 4e. RENDER: ẢNH TASK ────────────────────────────────────────────────
+    // Form upload ảnh: chỉ assistant được giao task mới upload được
+    // Mangaka và Tantou Editor chỉ xem (read-only)
     function renderImageForm(task) {
         var uploadForm = '';
         if (isAssignedAssistant(task)) {
@@ -679,12 +790,14 @@
             + '</div>';
     }
 
+    // Render lưới ảnh đã upload (mỗi ảnh có nút Download và Delete nếu có quyền)
     function renderImages(images) {
         if (!images.length) {
             return '<p class="section-desc">No images uploaded yet.</p>';
         }
         return '<div class="task-image-grid">' + images.map(function (img) {
             var url = imageUrl(img.fileUrl);
+            // Chỉ uploader hoặc Mangaka mới xóa được ảnh
             var deleteButton = canDeleteImage(img)
                 ? '<button class="btn small danger-soft" type="button" data-task-image-delete="' + img.id + '" data-task-id="' + img.pageTaskId + '">Delete</button>'
                 : '';
@@ -699,10 +812,12 @@
         }).join('') + '</div>';
     }
 
+    // Uploader hoặc Mangaka mới được xóa ảnh
     function canDeleteImage(img) {
         return img.id && currentUser && (Number(img.uploadedBy) === Number(currentUser.id) || hasRole('MANGAKA'));
     }
 
+    // Chuẩn hoá URL ảnh: thêm contextPath nếu chưa có
     function imageUrl(fileUrl) {
         var url = String(fileUrl || '');
         if (url.indexOf('http://') === 0 || url.indexOf('https://') === 0) {
@@ -714,6 +829,7 @@
         return ctx + url;
     }
 
+    // Gọi API lấy danh sách ảnh của task, render vào [data-task-image-list]
     async function loadTaskImages(taskId) {
         var target = document.querySelector('[data-task-image-list="' + taskId + '"]');
         if (!target) {
@@ -728,6 +844,7 @@
         }
     }
 
+    // Render phần header thông tin task (dùng trong một số context hiển thị tóm tắt)
     function renderTaskDetail(task) {
         return '<strong>Task #' + task.id + ' Detail</strong>'
             + '<div class="inline-meta task-inline-meta-spaced">'
@@ -740,6 +857,7 @@
             + (task.notes ? '<div class="alert info task-note-block"><strong>Mangaka note:</strong><div class="task-feedback-body-pre">' + escapeHtml(task.notes) + '</div></div>' : '');
     }
 
+    // Tìm task trong mảng tasks theo id (so sánh số)
     function findTask(taskId) {
         for (var i = 0; i < tasks.length; i++) {
             if (Number(tasks[i].id) === Number(taskId)) {
@@ -749,6 +867,7 @@
         return null;
     }
 
+    // Render toàn bộ bảng task theo filter hiện tại
     function renderTasks() {
         var tbody = document.getElementById('taskRows');
         var visible = getFilteredTasks();
@@ -775,6 +894,7 @@
         }).join('');
     }
 
+    // Mở modal xem chi tiết task, tải ảnh song song
     async function openTaskView(taskId) {
         closePopovers();
         showViewError('');
@@ -790,6 +910,9 @@
         await loadTaskImages(taskId);
     }
 
+    // ─── 8. LOAD DỮ LIỆU ─────────────────────────────────────────────────────
+    // Gọi song song 3 API để lấy series, chapters, tasks
+    // Sau đó build lookup map và render toàn bộ UI
     async function loadData() {
         try {
             var userRes = await callApi('GET', '/api/v1/auth/me');
@@ -818,7 +941,12 @@
         }
     }
 
+    // ─── 9. EVENT LISTENERS ───────────────────────────────────────────────────
+    // Một event listener click duy nhất cho toàn trang (event delegation)
+    // Xử lý: toggle filter dropdown, chọn filter, approve/reject popover,
+    //         đóng popover, mở/đóng modal, xem task, preview ảnh, xóa ảnh
     document.addEventListener('click', async function (e) {
+        // Toggle dropdown filter pill
         var taskToggle = e.target.closest ? e.target.closest('#taskStatusPills [data-status-filter-toggle]') : null;
         if (taskToggle) {
             var taskDropdown = taskToggle.closest('[data-status-filter-dropdown]');
@@ -829,6 +957,7 @@
             return;
         }
 
+        // Chọn filter option từ dropdown
         var taskPill = e.target.closest ? e.target.closest('#taskStatusPills [data-status-option]') : null;
         if (taskPill) {
             taskStatusFilter = taskPill.getAttribute('data-status-option') || 'ALL';
@@ -837,11 +966,13 @@
             return;
         }
 
+        // Click ra ngoài dropdown → đóng dropdown
         var openTaskDropdown = document.querySelector('#taskStatusPills [data-status-filter-dropdown].open');
         if (openTaskDropdown && !(e.target.closest && e.target.closest('#taskStatusPills [data-status-filter-dropdown]'))) {
             openTaskDropdown.classList.remove('open');
         }
 
+        // Nút Approve → mở approve popover
         var approvePopBtn = e.target.closest ? e.target.closest('[data-task-approve-pop]') : null;
         if (approvePopBtn) {
             var approveCell = approvePopBtn.closest('.task-actions-cell');
@@ -849,6 +980,7 @@
             return;
         }
 
+        // Nút Reject → mở reject popover
         var rejectPopBtn = e.target.closest ? e.target.closest('[data-task-reject-pop]') : null;
         if (rejectPopBtn) {
             var rejectCell = rejectPopBtn.closest('.task-actions-cell');
@@ -856,22 +988,26 @@
             return;
         }
 
+        // Nút Cancel trong popover → đóng popover
         var popoverCancel = e.target.closest ? e.target.closest('[data-popover-cancel]') : null;
         if (popoverCancel) {
             closePopovers();
             return;
         }
+        // Click vào scrim (backdrop) của popover → đóng popover
         if (e.target.id === 'taskPopoverScrim') {
             closePopovers();
             return;
         }
 
+        // Click ra ngoài popover và actions cell → đóng popover
         var insidePopover = e.target.closest ? e.target.closest('.task-action-popover') : null;
         var insideActions = e.target.closest ? e.target.closest('.task-row-actions') : null;
         if (!insidePopover && !insideActions && activePopoverType) {
             closePopovers();
         }
 
+        // Nút [data-modal-open] → mở modal tương ứng
         var openButton = e.target.closest ? e.target.closest('[data-modal-open]') : null;
         if (openButton) {
             closePopovers();
@@ -879,6 +1015,7 @@
             openModal(modalId);
             return;
         }
+        // Nút [data-modal-close] hoặc click backdrop modal → đóng modal
         if (e.target.closest && e.target.closest('[data-modal-close]')) {
             closeModals();
             return;
@@ -888,6 +1025,7 @@
             return;
         }
 
+        // Nút [data-task-view] → mở modal xem chi tiết task
         var viewButton = e.target.closest ? e.target.closest('[data-task-view]') : null;
         if (viewButton) {
             closePopovers();
@@ -895,12 +1033,14 @@
             return;
         }
 
+        // Click ảnh thumbnail → mở light-box preview
         var previewImg = e.target.closest ? e.target.closest('[data-preview-src]') : null;
         if (previewImg) {
             openImagePreview(previewImg.getAttribute('data-preview-src'), previewImg.getAttribute('data-preview-title'));
             return;
         }
 
+        // Nút [data-task-image-delete] → xóa ảnh sau khi confirm
         var deleteImageBtn = e.target.closest ? e.target.closest('[data-task-image-delete]') : null;
         if (deleteImageBtn) {
             if (!confirm('Delete this image?')) return;
@@ -918,6 +1058,7 @@
 
     });
 
+    // Confirm Approve: gọi POST /api/v1/tasks/{id}/approve với comment tùy chọn
     document.getElementById('approvePopoverConfirm').addEventListener('click', async function () {
         if (!activePopoverTaskId) { return; }
         try {
@@ -928,12 +1069,13 @@
             closePopovers();
             applyTaskDecision(taskId, 'approved');
             showMessage('Task approved.', false);
-            await loadData();
+            await loadData();  // reload để đồng bộ dữ liệu mới nhất
         } catch (err) {
             showMessage(err.message, true);
         }
     });
 
+    // Confirm Reject: gọi POST /api/v1/tasks/{id}/reject với reason bắt buộc (>= 5 ký tự)
     document.getElementById('rejectPopoverConfirm').addEventListener('click', async function () {
         if (!activePopoverTaskId) { return; }
         var reason = document.getElementById('rejectPopoverReason').value.trim();
@@ -950,8 +1092,11 @@
         }
     });
 
+    // Cập nhật bộ đếm ký tự và trạng thái nút Confirm Reject khi gõ reason
     document.getElementById('rejectPopoverReason').addEventListener('input', updateRejectConfirmState);
 
+    // Nút Save trong modal xem task: gọi PATCH /api/v1/tasks/{id} với dueDate/priority/notes
+    // Không cho sửa task đã APPROVED (BR-TSK-06)
     document.getElementById('taskViewSaveBtn').addEventListener('click', async function () {
         var form = document.getElementById('taskViewUpdateForm');
         showViewError('');
@@ -979,6 +1124,7 @@
         }
     });
 
+    // Khi Mangaka chọn chapter → load danh sách assistant và cập nhật hint deadline
     document.addEventListener('change', async function (e) {
         if (e.target.id === 'createTaskChapterId') {
             var chapter = chapterById[String(e.target.value)];
@@ -992,6 +1138,9 @@
             await fillAssistantSelect(assistantSelect, chapter.seriesId, '');
         }
     });
+
+    // Submit form tạo task: POST /api/v1/chapters/{id}/tasks
+    // Submit form upload ảnh (class task-image-upload-form): POST /api/v1/chapters/{id}/images
     document.addEventListener('submit', async function (e) {
         if (e.target.id === 'taskCreateForm') {
             e.preventDefault();
@@ -1030,5 +1179,6 @@
         }
     });
 
+    // Khởi động: load dữ liệu ngay khi script chạy
     loadData();
 })();

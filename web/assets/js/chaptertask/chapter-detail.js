@@ -1,25 +1,68 @@
-(function () {
-    var ctx = (window.CHAPTER_DETAIL_CONFIG && window.CHAPTER_DETAIL_CONFIG.contextPath) || '';
-    var params = new URLSearchParams(window.location.search);
-    var chapterId = params.get('id');
-    var urlError = params.get('error');
-    var currentUser = null;
-    var chapter = null;
-    var seriesData = null;
-    var pageSlots = [];
-    var chapterTasks = [];
-    var selectedPageIds = {};
-    var lastSlotIndex = -1;
-    var pendingUploadPageId = null;
-    var pendingUploadSlot = null;
-    var activePopoverType = null;
-    var activePopoverTaskId = null;
-    var activePopoverCell = null;
-    var activeOverdueTaskId = null;
-    var taskImagesCache = {};
-    var taskInlineLoaded = {};
-    var metadataSaveTimer = null;
+/**
+ * chapter-detail.js
+ * Script cho trang Chapter Detail — quản lý page slots, tasks, upload ảnh.
+ *
+ * ============================================================
+ * MỤC LỤC
+ * ============================================================
+ * 1.  BIẾN TOÀN CỤC (state)
+ * 2.  UTILITY — escapeHtml, formatDate, initials, dateOnly, daysUntilDate, todayIso, addDaysIso
+ * 3.  ROLE / PERMISSION — hasRole, isOwner
+ * 4.  API HELPERS — callApi, uploadMultipart
+ * 5.  UI HELPERS — showError, formatStatus, showPageUploadError
+ * 6.  STAGE LOGIC — pageStageOrder, normalizeStage, nextAllowedStage, prepareStageSelect,
+ *                   refreshStagePickerEnabled, selectedUploadStage, syncStagePickerFromClick, renderStageTrack
+ * 7.  PAGE MODAL — openPageUploadModal
+ * 8.  STATUS CSS — chapterStatusClass, taskStatusClass
+ * 9.  DEADLINE HELPERS — isChapterDone, isChapterOverdue, deadlineSuffixText, formatDeadlineCell
+ * 10. IMAGE URL — imageUrl
+ * 11. PAGE SELECTION — findPageById, getSelectedPages, isPageFullyComplete, isAssignablePage,
+ *                      toggleSelectedPage, countUploaded, pageStageScore, pageCompletionPercent,
+ *                      countFullyCompletePages, slotStateClass
+ * 12. RENDER — renderSelectionBar, renderAssignChips, nextTaskTypeForPages, groupConsecutivePages,
+ *              setDefaultAssignTaskType, renderPageGrid, renderPageProgress, renderSidebarTasks, renderMeta
+ * 13. TASK HELPERS — findTask, findTaskByPageNumber, isTaskOverdue, formatDueDateCell, renderTaskRowActions, renderChapterTasks
+ * 14. TASK INLINE / COMPARE — loadTaskInlinePages, openPageCompare
+ * 15. MODAL / POPOVER — switchTab, openModal, closeModals, closePopovers, openPopover,
+ *                        updateRejectConfirmState, openAssignModal, openOverdueDecisionModal, setOverdueDecisionChoice
+ * 16. ASSISTANT SELECT — fillAssistantSelect, latestTaskDueDate, updateAssignDueConstraints
+ * 17. LOAD DATA — loadPages, loadTasks, loadData
+ * 18. EVENT LISTENERS — tab bar, metadata save, btn delete/markDone/addPage, upload picker,
+ *                        page grid click, selection bar, assign form, reassign form, extend form,
+ *                        overdue decision buttons, approve/reject popovers, page compare modal
+ * ============================================================
+ */
 
+(function () {
+    // ============================================================
+    // 1. BIẾN TOÀN CỤC (state)
+    // ============================================================
+    var ctx = (window.CHAPTER_DETAIL_CONFIG && window.CHAPTER_DETAIL_CONFIG.contextPath) || ''; // context path từ JSP config
+    var params = new URLSearchParams(window.location.search);
+    var chapterId = params.get('id');       // ID chapter từ query string
+    var urlError = params.get('error');     // Lỗi được truyền qua URL (nếu có)
+    var currentUser = null;     // User đang đăng nhập (từ /api/v1/auth/me)
+    var chapter = null;         // Chi tiết chapter hiện tại
+    var seriesData = null;      // Series chứa chapter này
+    var pageSlots = [];         // Danh sách page slots của chapter
+    var chapterTasks = [];      // Danh sách tasks của chapter
+    var selectedPageIds = {};   // Map pageId → true cho các page đang được chọn để gán task
+    var lastSlotIndex = -1;     // Index slot cuối được click (dùng cho shift-click)
+    var pendingUploadPageId = null;  // PageId đang chờ upload trong modal
+    var pendingUploadSlot = null;    // Slot đang chờ upload trong modal
+    var activePopoverType = null;    // 'approve' | 'reject' — popover đang mở
+    var activePopoverTaskId = null;  // Task ID của popover đang mở
+    var activePopoverCell = null;    // DOM cell anchor của popover
+    var activeOverdueTaskId = null;  // Task ID trong modal overdue decision
+    var taskImagesCache = {};        // Cache ảnh theo taskId: { taskId: [imgObjects] }
+    var taskInlineLoaded = {};       // Đánh dấu task nào đã load inline xong
+    var metadataSaveTimer = null;    // Timer debounce cho auto-save metadata
+
+    // ============================================================
+    // 2. UTILITY
+    // ============================================================
+
+    /** Escape HTML đặc biệt để tránh XSS khi render vào innerHTML */
     function escapeHtml(v) {
         if (v === null || v === undefined) { return ''; }
         return String(v).replace(/[&<>"]/g, function (c) {
@@ -27,6 +70,10 @@
         });
     }
 
+    /**
+     * Format giá trị ngày thành chuỗi YYYY-MM-DD.
+     * Hỗ trợ: timestamp số, chuỗi ISO (có 'T'), hoặc chuỗi ngày sẵn.
+     */
     function formatDate(v) {
         if (!v) { return ''; }
         var s = String(v);
@@ -42,6 +89,10 @@
         return s;
     }
 
+    /**
+     * Lấy chữ viết tắt từ tên đầy đủ (VD: "Nguyen Van A" → "NA").
+     * Dùng để hiển thị avatar assistant trên page slot.
+     */
     function initials(name) {
         if (!name) { return '?'; }
         var parts = String(name).trim().split(/\s+/).filter(Boolean);
@@ -51,11 +102,13 @@
         return parts[0].substring(0, 2).toUpperCase();
     }
 
+    /** Chuyển giá trị ngày thành Date object ở 00:00:00 local time */
     function dateOnly(v) {
         var d = formatDate(v);
         return d ? new Date(d + 'T00:00:00') : null;
     }
 
+    /** Tính số ngày còn lại đến deadline. Âm = đã quá hạn. */
     function daysUntilDate(value) {
         var due = dateOnly(value);
         if (!due) { return null; }
@@ -64,6 +117,7 @@
         return Math.ceil((due - today) / 86400000);
     }
 
+    /** Trả về ngày hôm nay dạng YYYY-MM-DD */
     function todayIso() {
         var date = new Date();
         var month = String(date.getMonth() + 1);
@@ -71,6 +125,7 @@
         return date.getFullYear() + '-' + (month.length < 2 ? '0' + month : month) + '-' + (day.length < 2 ? '0' + day : day);
     }
 
+    /** Cộng thêm `days` ngày vào một giá trị ngày, trả về YYYY-MM-DD */
     function addDaysIso(value, days) {
         var date = dateOnly(value);
         if (!date) { return ''; }
@@ -80,6 +135,14 @@
         return date.getFullYear() + '-' + (month.length < 2 ? '0' + month : month) + '-' + (day.length < 2 ? '0' + day : day);
     }
 
+    // ============================================================
+    // 3. ROLE / PERMISSION
+    // ============================================================
+
+    /**
+     * Kiểm tra currentUser có role chỉ định không.
+     * Hỗ trợ cả field role đơn lẫn mảng roles (string hoặc object).
+     */
     function hasRole(role) {
         if (!currentUser) { return false; }
         if (String(currentUser.role || currentUser.activeRole || currentUser.currentRole || '').toUpperCase() === role) {
@@ -96,10 +159,24 @@
         return false;
     }
 
+    /**
+     * Kiểm tra user hiện tại có phải owner (MANGAKA) của series này không.
+     * Dùng để ẩn/hiện các nút action chỉ dành cho Mangaka.
+     */
     function isOwner() {
         return hasRole('MANGAKA') && seriesData && Number(seriesData.mangakaId) === Number(currentUser.id);
     }
 
+    // ============================================================
+    // 4. API HELPERS
+    // ============================================================
+
+    /**
+     * Gọi API JSON chung cho GET/POST/PUT/PATCH/DELETE.
+     * - GET/PUT/PATCH: data được serialize thành query string.
+     * - POST/DELETE: data được gửi trong body (form-urlencoded).
+     * Throws Error nếu response không OK hoặc body.success === false.
+     */
     async function callApi(method, path, data) {
         var opts = { method: method, headers: { 'Accept': 'application/json' } };
         var url = ctx + path;
@@ -123,6 +200,11 @@
         return body;
     }
 
+    /**
+     * Upload file multipart/form-data.
+     * Nhận FormData, form element, hoặc File object.
+     * Throws Error nếu upload thất bại.
+     */
     async function uploadMultipart(path, formOrFile) {
         var fd;
         if (formOrFile instanceof FormData) {
@@ -144,23 +226,44 @@
         return body;
     }
 
+    // ============================================================
+    // 5. UI HELPERS
+    // ============================================================
+
+    /** Hiển thị / ẩn thông báo lỗi chung (#detailResult) */
     function showError(msg) {
         var el = document.getElementById('detailResult');
         el.style.display = msg ? 'block' : 'none';
         el.textContent = msg || '';
     }
 
+    /** Format enum status thành dạng Title Case (VD: IN_PROGRESS → "In Progress") */
     function formatStatus(s) {
         return String(s || '').toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
     }
 
+    /** Hiển thị / ẩn lỗi trong modal upload page (#pageUploadError) */
+    function showPageUploadError(message) {
+        var el = document.getElementById('pageUploadError');
+        if (!el) { return; }
+        el.style.display = message ? 'block' : 'none';
+        el.textContent = message || '';
+    }
+
+    // ============================================================
+    // 6. STAGE LOGIC
+    // ============================================================
+
+    /** Thứ tự các stage sản xuất của một page */
     var pageStageOrder = ['SKETCHING', 'INKING', 'COLORING', 'SCREENTONE', 'LETTERING'];
 
+    /** Normalize stage string về giá trị hợp lệ trong pageStageOrder, hoặc '' nếu không hợp lệ */
     function normalizeStage(stage) {
         var s = String(stage || '').trim().toUpperCase();
         return pageStageOrder.indexOf(s) >= 0 ? s : '';
     }
 
+    /** Lấy stage tiếp theo có thể thực hiện sau completedStage hiện tại của slot */
     function nextAllowedStage(slot) {
         var current = normalizeStage(slot && slot.completedStage);
         if (!current) { return pageStageOrder[0]; }
@@ -168,6 +271,10 @@
         return pageStageOrder[Math.min(idx + 1, pageStageOrder.length - 1)];
     }
 
+    /**
+     * Khởi tạo stage picker checkbox trong modal upload.
+     * Các stage đã hoàn thành sẽ được checked và disabled.
+     */
     function prepareStageSelect(slot) {
         var picker = document.getElementById('pageUploadStagePicker');
         if (!picker) { return; }
@@ -183,6 +290,10 @@
         refreshStagePickerEnabled();
     }
 
+    /**
+     * Cập nhật trạng thái enabled/disabled của từng checkbox stage.
+     * Quy tắc: chỉ cho phép tick stage kế tiếp sau stage cao nhất đã tick.
+     */
     function refreshStagePickerEnabled() {
         var picker = document.getElementById('pageUploadStagePicker');
         if (!picker) { return; }
@@ -200,6 +311,11 @@
         }
     }
 
+    /**
+     * Đọc stage cao nhất đang được chọn trong picker.
+     * Throws nếu user tick không theo thứ tự (bỏ sót stage giữa chừng).
+     * Trả về tên stage cao nhất, hoặc '' nếu chưa chọn gì.
+     */
     function selectedUploadStage(slot) {
         var picker = document.getElementById('pageUploadStagePicker');
         if (!picker) { return ''; }
@@ -218,6 +334,11 @@
         return highest >= 0 ? pageStageOrder[highest] : '';
     }
 
+    /**
+     * Xử lý khi user click vào một checkbox stage.
+     * Auto-check tất cả stage phía trước (nếu check lên),
+     * hoặc auto-uncheck tất cả stage phía sau (nếu uncheck).
+     */
     function syncStagePickerFromClick(changedBox) {
         var picker = document.getElementById('pageUploadStagePicker');
         if (!picker || !changedBox) { return; }
@@ -239,6 +360,11 @@
         refreshStagePickerEnabled();
     }
 
+    /**
+     * Render thanh tiến trình stage (dot track) cho một page slot.
+     * Dot có class 'done' nếu đã hoàn thành, 'current' nếu đang làm.
+     * Hiển thị chữ cái đầu của tên stage (S/I/C/S/L).
+     */
     function renderStageTrack(stage) {
         var current = normalizeStage(stage);
         var doneIndex = current ? pageStageOrder.indexOf(current) : -1;
@@ -251,13 +377,16 @@
             + '</div>';
     }
 
-    function showPageUploadError(message) {
-        var el = document.getElementById('pageUploadError');
-        if (!el) { return; }
-        el.style.display = message ? 'block' : 'none';
-        el.textContent = message || '';
-    }
+    // ============================================================
+    // 7. PAGE MODAL
+    // ============================================================
 
+    /**
+     * Mở modal upload/replace ảnh cho một page slot.
+     * - Hiển thị preview ảnh hiện tại nếu có.
+     * - Chuẩn bị stage picker dựa trên completedStage của slot.
+     * - Nút Delete chỉ hiện cho owner.
+     */
     function openPageUploadModal(slot) {
         if (!slot) { return; }
         pendingUploadPageId = slot.id;
@@ -282,6 +411,11 @@
         openModal('pageUploadModal');
     }
 
+    // ============================================================
+    // 8. STATUS CSS
+    // ============================================================
+
+    /** Trả về CSS class tương ứng với trạng thái chapter */
     function chapterStatusClass(status) {
         status = String(status || '').toUpperCase();
         if (status === 'PLANNING') { return 'status-draft'; }
@@ -293,6 +427,7 @@
         return 'status-draft';
     }
 
+    /** Trả về CSS class tương ứng với trạng thái task */
     function taskStatusClass(status) {
         status = String(status || '').toUpperCase();
         if (status === 'OVERDUE') { return 'status-overdue'; }
@@ -306,17 +441,27 @@
         return 'status-draft';
     }
 
+    // ============================================================
+    // 9. DEADLINE HELPERS
+    // ============================================================
+
+    /** Chapter được coi là xong nếu status COMPLETE/APPROVED hoặc completionPct >= 100 */
     function isChapterDone(ch) {
         var st = String(ch.status || '').toUpperCase();
         return st === 'COMPLETE' || st === 'APPROVED' || Number(ch.completionPct || 0) >= 100;
     }
 
+    /** Chapter bị overdue nếu chưa xong và đã qua submissionDeadline */
     function isChapterOverdue(ch) {
         if (isChapterDone(ch)) { return false; }
         var daysLeft = daysUntilDate(ch.submissionDeadline);
         return daysLeft !== null && daysLeft < 0;
     }
 
+    /**
+     * Tạo text suffix cho deadline (VD: "3 days left", "1 day overdue", "Done").
+     * Dùng trong formatDeadlineCell.
+     */
     function deadlineSuffixText(daysLeft, isDone, isOverdue) {
         if (isDone) { return 'Done'; }
         if (isOverdue) {
@@ -332,6 +477,13 @@
         return daysLeft + ' days left';
     }
 
+    /**
+     * Render HTML cho cell deadline với màu sắc theo trạng thái:
+     * - done: xanh lá (due-date-done)
+     * - overdue: đỏ với icon cảnh báo (due-date-overdue)
+     * - urgent (≤3 ngày): cam (due-date-urgent)
+     * - bình thường: xanh dương (due-date-active)
+     */
     function formatDeadlineCell(dateValue, isDone, isOverdue) {
         var formatted = formatDate(dateValue);
         if (!formatted) { return '<span class="chapter-detail-inline-66">—</span>'; }
@@ -351,6 +503,14 @@
         return '<span class="due-date-active">' + escapeHtml(formatted) + suffix + '</span>';
     }
 
+    // ============================================================
+    // 10. IMAGE URL
+    // ============================================================
+
+    /**
+     * Chuẩn hóa URL ảnh: nếu là absolute URL giữ nguyên,
+     * nếu là relative path thì thêm ctx prefix.
+     */
     function imageUrl(fileUrl) {
         var url = String(fileUrl || '');
         if (url.indexOf('http://') === 0 || url.indexOf('https://') === 0) { return url; }
@@ -358,6 +518,11 @@
         return ctx + url;
     }
 
+    // ============================================================
+    // 11. PAGE SELECTION
+    // ============================================================
+
+    /** Tìm page slot theo ID trong mảng pageSlots */
     function findPageById(id) {
         for (var i = 0; i < pageSlots.length; i++) {
             if (Number(pageSlots[i].id) === Number(id)) { return pageSlots[i]; }
@@ -365,6 +530,10 @@
         return null;
     }
 
+    /**
+     * Lấy danh sách page đang được chọn (selectedPageIds),
+     * lọc chỉ lấy các page có thể gán task, sắp xếp theo pageNumber.
+     */
     function getSelectedPages() {
         var ids = Object.keys(selectedPageIds);
         var out = [];
@@ -376,14 +545,21 @@
         return out;
     }
 
+    /** Page hoàn chỉnh khi đã đạt stage LETTERING */
     function isPageFullyComplete(slot) {
         return normalizeStage(slot && slot.completedStage) === 'LETTERING';
     }
 
+    /**
+     * Page có thể gán task khi:
+     * - Chưa được gán task nào (slot.taskId falsy)
+     * - Chưa hoàn chỉnh (chưa LETTERING)
+     */
     function isAssignablePage(slot) {
         return !!slot && !slot.taskId && !isPageFullyComplete(slot);
     }
 
+    /** Toggle chọn/bỏ chọn page. Chỉ hoạt động với page có thể gán task. */
     function toggleSelectedPage(pageId, slot) {
         if (!isAssignablePage(slot)) { return; }
         if (selectedPageIds[String(pageId)]) {
@@ -393,6 +569,7 @@
         }
     }
 
+    /** Đếm số page đã có ảnh upload */
     function countUploaded() {
         var n = 0;
         for (var i = 0; i < pageSlots.length; i++) {
@@ -401,11 +578,19 @@
         return n;
     }
 
+    /**
+     * Tính điểm tiến độ của một page dựa trên completedStage.
+     * SKETCHING=1, INKING=2, COLORING=3, SCREENTONE=4, LETTERING=5, chưa có=0.
+     */
     function pageStageScore(slot) {
         var stage = normalizeStage(slot && slot.completedStage);
         return stage ? pageStageOrder.indexOf(stage) + 1 : 0;
     }
 
+    /**
+     * Tính % hoàn thành của chapter dựa trên tổng điểm stage của tất cả page.
+     * Công thức: sum(stageScore) * 100 / (totalPages * 5)
+     */
     function pageCompletionPercent() {
         if (!pageSlots.length) { return 0; }
         var completedUnits = 0;
@@ -415,6 +600,7 @@
         return Math.round((completedUnits * 100) / (pageSlots.length * pageStageOrder.length));
     }
 
+    /** Đếm số page đã đạt LETTERING (hoàn chỉnh) */
     function countFullyCompletePages() {
         var n = 0;
         for (var i = 0; i < pageSlots.length; i++) {
@@ -423,11 +609,17 @@
         return n;
     }
 
+    /** Trả về CSS class cho page slot: 'state-uploaded' hoặc 'state-empty' */
     function slotStateClass(slot) {
         if (String(slot.status || '').toUpperCase() === 'UPLOADED' || slot.imageUrl) { return 'state-uploaded'; }
         return 'state-empty';
     }
 
+    // ============================================================
+    // 12. RENDER
+    // ============================================================
+
+    /** Hiển thị/ẩn thanh selection bar phía trên page grid khi có page được chọn */
     function renderSelectionBar() {
         var selected = getSelectedPages();
         var bar = document.getElementById('selectionBar');
@@ -440,6 +632,10 @@
             + selected[0].pageNumber + (selected.length > 1 ? '–' + selected[selected.length - 1].pageNumber : '') + ')';
     }
 
+    /**
+     * Render chip list các page đã chọn trong modal gán task.
+     * Disable nút submit nếu chưa chọn page nào.
+     */
     function renderAssignChips() {
         var el = document.getElementById('assignPageChips');
         var selected = getSelectedPages();
@@ -454,6 +650,11 @@
         }).join('');
     }
 
+    /**
+     * Tính taskType mặc định cho nhóm page được chọn.
+     * Nếu tất cả page cùng next stage → trả về stage đó.
+     * Nếu mixed (các page ở stage khác nhau) → trả về 'MIXED'.
+     */
     function nextTaskTypeForPages(selected) {
         if (!selected || !selected.length) {
             return pageStageOrder[0];
@@ -473,6 +674,11 @@
         return mixed ? 'MIXED' : first;
     }
 
+    /**
+     * Nhóm các page liên tiếp lại với nhau.
+     * VD: [1,2,3,5,6] → [[1,2,3],[5,6]]
+     * Dùng để tạo nhiều task khi user chọn các page không liên tiếp.
+     */
     function groupConsecutivePages(selected) {
         var groups = [];
         var current = [];
@@ -490,6 +696,7 @@
         return groups;
     }
 
+    /** Cập nhật phần tóm tắt taskType trong modal gán task */
     function setDefaultAssignTaskType() {
         var summary = document.getElementById('assignTaskTypeSummary');
         if (!summary) { return; }
@@ -505,6 +712,12 @@
         }).join('');
     }
 
+    /**
+     * Render toàn bộ page grid.
+     * Mỗi slot hiển thị: thumbnail, page number, lock icon (nếu có task),
+     * icon trạng thái task (IN_PROGRESS/SUBMITTED), stage track dots,
+     * avatar initials của assistant (nếu task chưa approved).
+     */
     function renderPageGrid() {
         var grid = document.getElementById('pageSlotGrid');
         var owner = isOwner();
@@ -517,6 +730,7 @@
 
         var html = pageSlots.map(function (slot, index) {
             var selectable = isAssignablePage(slot);
+            // Xóa khỏi selection nếu page không còn gán được
             if (!selectable && selectedPageIds[String(slot.id)]) {
                 delete selectedPageIds[String(slot.id)];
             }
@@ -541,6 +755,7 @@
                 inner = '<img src="' + escapeHtml(imageUrl(slot.imageUrl)) + '" alt="Page ' + slot.pageNumber + '" />'
                     + '<a class="page-download-btn" href="' + escapeHtml(imageUrl(slot.imageUrl)) + '" download title="Download page image" data-page-download>↓</a>';
             }
+            // Hiện initials assistant nếu task chưa approved
             if (slot.taskId && slot.assistantName && String(slot.taskStatus || '').toUpperCase() !== 'APPROVED') {
                 inner += '<span class="page-slot-initials" title="' + escapeHtml(slot.assistantName) + '">' + escapeHtml(initials(slot.assistantName)) + '</span>';
             }
@@ -555,6 +770,7 @@
         renderSelectionBar();
     }
 
+    /** Cập nhật progress bar, label đếm page, và metadata panel */
     function renderPageProgress() {
         var total = pageSlots.length;
         var uploaded = countUploaded();
@@ -568,6 +784,7 @@
         document.getElementById('metaProgress').textContent = pct + '% page';
     }
 
+    /** Render preview 5 task đầu tiên trong sidebar */
     function renderSidebarTasks() {
         var el = document.getElementById('sidebarTaskList');
         if (!chapterTasks.length) {
@@ -585,56 +802,11 @@
             + (chapterTasks.length > 5 ? '<p class="section-desc chapter-detail-inline-72">+' + (chapterTasks.length - 5) + ' task khác — xem tab Tasks</p>' : '');
     }
 
-    async function updateManuscriptWorkspaceButton() {
-        if (!chapter) { return; }
-        
-        var btnManuscriptWorkspace = document.getElementById('btnManuscriptWorkspace');
-        if (!btnManuscriptWorkspace) { return; }
-        
-        try {
-            var response = await callApi('GET', '/api/v1/manuscript-versions/workspace?chapterId=' + chapter.id);
-            var workspace = response.data;
-            
-            if (!workspace.workspaceExists) {
-                // Case 1: No manuscript version exists
-                btnManuscriptWorkspace.style.display = '';
-                btnManuscriptWorkspace.textContent = '📝 Create Workspace';
-                btnManuscriptWorkspace.href = ctx + '/main/chapters/' + chapter.id + '/manuscript-workspace/create';
-            } else {
-                // Cases 2-6: Workspace exists, determine label based on status
-                var status = String(workspace.status || '').toUpperCase();
-                var workspaceId = workspace.workspaceId;
-                
-                btnManuscriptWorkspace.style.display = '';
-                
-                if (status === 'DRAFT') {
-                    btnManuscriptWorkspace.textContent = '✏️ Continue Manuscript';
-                    btnManuscriptWorkspace.href = ctx + '/main/manuscript-workspace/' + workspaceId;
-                } else if (status === 'SUBMITTED_FOR_REVIEW') {
-                    btnManuscriptWorkspace.textContent = '📤 View Submitted Manuscript';
-                    btnManuscriptWorkspace.href = ctx + '/main/manuscript-workspace/' + workspaceId;
-                } else if (status === 'UNDER_REVIEW') {
-                    btnManuscriptWorkspace.textContent = '👀 View Under Review Manuscript';
-                    btnManuscriptWorkspace.href = ctx + '/main/manuscript-workspace/' + workspaceId;
-                } else if (status === 'APPROVED') {
-                    btnManuscriptWorkspace.textContent = '✅ View Approved Manuscript';
-                    btnManuscriptWorkspace.href = ctx + '/main/manuscript-workspace/' + workspaceId;
-                } else if (status === 'REJECTED') {
-                    btnManuscriptWorkspace.textContent = '🔄 Create New Version';
-                    btnManuscriptWorkspace.href = ctx + '/main/chapters/' + chapter.id + '/manuscript-workspace/new-version';
-                } else {
-                    // Default: view workspace
-                    btnManuscriptWorkspace.textContent = '📝 Manuscript Workspace';
-                    btnManuscriptWorkspace.href = ctx + '/main/manuscript-workspace/' + workspaceId;
-                }
-            }
-        } catch (error) {
-            // If API call fails, hide the button
-            console.error('Failed to load workspace status:', error);
-            btnManuscriptWorkspace.style.display = 'none';
-        }
-    }
-
+    /**
+     * Cập nhật toàn bộ phần metadata (breadcrumb, title, deadline, status chips,
+     * nút action, assign due constraints, page progress).
+     * Nút btnManuscriptWorkspace chỉ hiện khi chapter ở EDITORIAL_REVIEW.
+     */
     function renderMeta() {
         if (!chapter) { return; }
         var progress = Math.max(0, Math.min(100, Number(chapter.completionPct || 0)));
@@ -662,14 +834,22 @@
 
         var owner = isOwner();
         var chapterStatus = String(chapter.status || '').toUpperCase();
+        // canSubmit: owner, 100%, status IN_PROGRESS/COMPLETE, series chưa CANCELLED
         var canSubmit = owner && progress >= 100 && (chapterStatus === 'IN_PROGRESS' || chapterStatus === 'COMPLETE')
             && seriesData && String(seriesData.status || '').toUpperCase() !== 'CANCELLED';
 
         document.getElementById('btnDelete').style.display = (owner && chapterStatus === 'PLANNING') ? '' : 'none';
         document.getElementById('btnMarkDone').style.display = canSubmit ? '' : 'none';
         
-        // Update manuscript workspace button based on workspace status
-        updateManuscriptWorkspaceButton();
+        // Nút "Manuscript Workspace" chỉ hiện khi chapter đang ở EDITORIAL_REVIEW
+        var isEditorialReview = chapterStatus === 'EDITORIAL_REVIEW';
+        var btnManuscriptWorkspace = document.getElementById('btnManuscriptWorkspace');
+        if (isEditorialReview) {
+            btnManuscriptWorkspace.style.display = '';
+            btnManuscriptWorkspace.href = ctx + '/main/chapters/' + chapter.id + '/manuscript-workspace/create';
+        } else {
+            btnManuscriptWorkspace.style.display = 'none';
+        }
         
         document.getElementById('pagesOwnerActions').style.display = owner ? 'flex' : 'none';
         document.getElementById('pagesOwnerActions').style.gap = '8px';
@@ -679,6 +859,11 @@
         renderPageProgress();
     }
 
+    // ============================================================
+    // 13. TASK HELPERS
+    // ============================================================
+
+    /** Tìm task theo taskId trong mảng chapterTasks */
     function findTask(taskId) {
         for (var i = 0; i < chapterTasks.length; i++) {
             if (Number(chapterTasks[i].id) === Number(taskId)) { return chapterTasks[i]; }
@@ -686,6 +871,7 @@
         return null;
     }
 
+    /** Tìm task chứa pageNumber trong pageRange (dùng để hiển thị thông tin task của page) */
     function findTaskByPageNumber(pageNumber) {
         for (var i = 0; i < chapterTasks.length; i++) {
             var t = chapterTasks[i];
@@ -696,6 +882,7 @@
         return null;
     }
 
+    /** Task overdue nếu status là OVERDUE, hoặc chưa APPROVED và đã qua dueDate */
     function isTaskOverdue(task) {
         var st = String(task.status || '').toUpperCase();
         if (st === 'APPROVED') { return false; }
@@ -707,6 +894,7 @@
         return due && due < today;
     }
 
+    /** Render cell deadline của task với màu sắc phù hợp */
     function formatDueDateCell(task) {
         var formatted = formatDate(task.dueDate);
         if (!formatted) { return '—'; }
@@ -715,6 +903,14 @@
         return formatDeadlineCell(task.dueDate, done, overdue);
     }
 
+    /**
+     * Render nút action cho một hàng task trong bảng.
+     * - Tất cả task: nút expand ▼ Trang để xem ảnh inline.
+     * - IN_PROGRESS (owner): Reassign, Delete.
+     * - OVERDUE (owner): Decide (mở modal overdue decision).
+     * - SUBMITTED (owner): Approve popover, Reject popover.
+     * - Sau khi approve/reject: hiển thị label tương ứng.
+     */
     function renderTaskRowActions(task) {
         if (task._decisionLabel === 'approved') {
             return '<span class="task-decision-label approved">Approved</span>';
@@ -739,6 +935,10 @@
         return html;
     }
 
+    /**
+     * Render toàn bộ bảng task (tab Tasks).
+     * Mỗi task có 2 row: row chính + row inline ẩn để hiển thị ảnh khi expand.
+     */
     function renderChapterTasks() {
         var tbody = document.getElementById('chapterTaskRows');
         document.getElementById('tabTaskCount').textContent = chapterTasks.length;
@@ -764,6 +964,15 @@
         renderSidebarTasks();
     }
 
+    // ============================================================
+    // 14. TASK INLINE / COMPARE
+    // ============================================================
+
+    /**
+     * Load và render ảnh của task vào row inline (expand ▼ Trang).
+     * Dùng cache taskImagesCache để tránh gọi API nhiều lần.
+     * Hiển thị thumbnail mỗi page trong task range; ô trống nếu chưa có ảnh.
+     */
     async function loadTaskInlinePages(taskId) {
         var task = findTask(taskId);
         if (!task) { return; }
@@ -796,6 +1005,13 @@
         }
     }
 
+    /**
+     * Mở modal so sánh ảnh của một page slot.
+     * Logic hiển thị tùy theo trạng thái task của page:
+     * - Không có task / task chưa SUBMITTED: chỉ hiện ảnh gốc (+ nút Upload nếu owner).
+     * - Task SUBMITTED: 2 cột so sánh ảnh gốc Mangaka vs ảnh assistant nộp.
+     * - Task APPROVED: hiện ảnh đã duyệt với badge ✓.
+     */
     async function openPageCompare(slot) {
         var modal = document.getElementById('pageCompareModal');
         var title = document.getElementById('pageCompareTitle');
@@ -818,6 +1034,7 @@
             }
             return;
         }
+        // Cần ảnh task: dùng cache hoặc gọi API
         var taskImgs = taskImagesCache[slot.taskId];
         if (!taskImgs) {
             body.innerHTML = '<div class="chapter-detail-inline-80">Đang tải ảnh...</div>';
@@ -839,6 +1056,7 @@
         }
         var assistantUrl = assistantImg ? imageUrl(assistantImg.fileUrl) : null;
         if (ts === 'SUBMITTED') {
+            // 2-column compare: ảnh gốc vs ảnh assistant nộp
             body.innerHTML =
                 '<div class="chapter-detail-inline-81">'
                 + '<div><div class="chapter-detail-inline-82">Bản gốc (Mangaka)</div>'
@@ -849,6 +1067,7 @@
                 + '</div></div>';
             return;
         }
+        // APPROVED: hiện ảnh đã duyệt
         var finalUrl = assistantUrl || origUrl;
         body.innerHTML = finalUrl
             ? '<div class="chapter-detail-inline-88"><span class="chapter-detail-inline-89">✓ Đã được duyệt</span></div>'
@@ -856,6 +1075,11 @@
             : '<div class="chapter-detail-inline-91">Không có ảnh</div>';
     }
 
+    // ============================================================
+    // 15. MODAL / POPOVER
+    // ============================================================
+
+    /** Chuyển tab (pages / tasks / edit), ẩn/hiện các panel tương ứng */
     function switchTab(tab) {
         document.querySelectorAll('.chapter-tab-btn').forEach(function (b) {
             b.classList.toggle('active', b.getAttribute('data-tab') === tab);
@@ -865,6 +1089,7 @@
         document.getElementById('tabEdit').style.display = tab === 'edit' ? '' : 'none';
     }
 
+    /** Mở modal theo id bằng cách thêm class 'open' */
     function openModal(id) {
         var modal = document.getElementById(id);
         if (modal) {
@@ -873,6 +1098,10 @@
         }
     }
 
+    /**
+     * Đóng tất cả modal, reset pending upload state và overdue state.
+     * Gọi khi click backdrop hoặc nút [data-modal-close].
+     */
     function closeModals() {
         document.querySelectorAll('.modal-backdrop').forEach(function (m) {
             m.classList.remove('open');
@@ -884,6 +1113,10 @@
         showPageUploadError('');
     }
 
+    /**
+     * Đóng tất cả approve/reject popover, trả các element về host container.
+     * Reset activePopover* state.
+     */
     function closePopovers() {
         var host = document.getElementById('taskPopoverHost');
         var scrim = document.getElementById('taskPopoverScrim');
@@ -909,6 +1142,10 @@
         activePopoverCell = null;
     }
 
+    /**
+     * Mở approve hoặc reject popover cho một task.
+     * Popover được append vào body để tránh overflow clip.
+     */
     function openPopover(type, taskId, anchorCell) {
         closePopovers();
         var task = findTask(taskId);
@@ -938,6 +1175,7 @@
         }
     }
 
+    /** Validate và cập nhật trạng thái nút Confirm trong reject popover (tối thiểu 5 ký tự) */
     function updateRejectConfirmState() {
         var reasonEl = document.getElementById('rejectPopoverReason');
         var counterEl = document.getElementById('rejectPopoverCounter');
@@ -948,6 +1186,7 @@
         confirmBtn.disabled = len < 5;
     }
 
+    /** Mở modal gán task, refresh chip list và task type summary */
     function openAssignModal() {
         renderAssignChips();
         setDefaultAssignTaskType();
@@ -957,6 +1196,11 @@
         openModal('assignTaskModal');
     }
 
+    /**
+     * Mở modal quyết định cho task overdue.
+     * Có 3 lựa chọn: Extend deadline, Reassign, Delete task.
+     * Khởi tạo các input với ràng buộc ngày hợp lệ.
+     */
     function openOverdueDecisionModal(taskId) {
         var task = findTask(taskId);
         if (!task) { return; }
@@ -977,6 +1221,7 @@
             ? ('Chapter deadline: ' + formatDate(chapter.submissionDeadline) + '. Extension must be today through ' + (latest || formatDate(chapter.submissionDeadline)) + '.')
             : 'Extension date cannot be in the past.';
 
+        // Reset tất cả input trong modal
         document.getElementById('taskExtendReason').value = '';
         document.getElementById('taskOverdueReason').value = '';
         document.getElementById('taskOverdueDeleteReason').value = '';
@@ -996,6 +1241,10 @@
         openModal('taskOverdueDecisionModal');
     }
 
+    /**
+     * Chuyển panel hiển thị trong modal overdue decision.
+     * choice: '' | 'extend' | 'reassign' | 'delete'
+     */
     function setOverdueDecisionChoice(choice) {
         var panels = document.querySelectorAll('[data-overdue-action-panel]');
         for (var i = 0; i < panels.length; i++) {
@@ -1009,6 +1258,16 @@
         }
     }
 
+    // ============================================================
+    // 16. ASSISTANT SELECT
+    // ============================================================
+
+    /**
+     * Load danh sách assistant của series vào các select box:
+     * - assignAssistantId (modal gán task)
+     * - taskReassignAssistantId (modal reassign)
+     * - taskOverdueReassignAssistantId (modal overdue)
+     */
     async function fillAssistantSelect() {
         var select = document.getElementById('assignAssistantId');
         var reassignSelect = document.getElementById('taskReassignAssistantId');
@@ -1034,10 +1293,15 @@
         }
     }
 
+    /**
+     * Tính ngày due tối đa cho task: deadline chapter - 3 ngày.
+     * Đảm bảo task xong trước khi chapter đến hạn submit.
+     */
     function latestTaskDueDate() {
         return chapter && chapter.submissionDeadline ? addDaysIso(chapter.submissionDeadline, -3) : '';
     }
 
+    /** Cập nhật min/max cho input assignDueDate và hint text */
     function updateAssignDueConstraints() {
         var dueInput = document.getElementById('assignDueDate');
         var hint = document.getElementById('assignDueHint');
@@ -1055,6 +1319,11 @@
         }
     }
 
+    // ============================================================
+    // 17. LOAD DATA
+    // ============================================================
+
+    /** Load/reload page slots của chapter, render grid và progress */
     async function loadPages() {
         var res = await callApi('GET', '/api/v1/chapters/' + chapterId + '/pages');
         pageSlots = res.data || [];
@@ -1063,12 +1332,21 @@
         renderMeta();
     }
 
+    /** Load/reload danh sách tasks của chapter, render bảng task */
     async function loadTasks() {
         var res = await callApi('GET', '/api/v1/chapters/' + chapterId + '/tasks');
         chapterTasks = res.data || [];
         renderChapterTasks();
     }
 
+    /**
+     * Load toàn bộ dữ liệu trang:
+     * 1. currentUser từ /api/v1/auth/me
+     * 2. chapter detail
+     * 3. series list để tìm seriesData của chapter
+     * 4. Song song: pages, tasks, assistant select
+     * 5. renderMeta
+     */
     async function loadData() {
         if (!chapterId) {
             showError('No chapter ID specified.');
@@ -1094,12 +1372,21 @@
         }
     }
 
+    // ============================================================
+    // 18. EVENT LISTENERS
+    // ============================================================
+
+    // Tab bar: click chuyển tab
     document.getElementById('tabBar').addEventListener('click', function (e) {
         var btn = e.target.closest('.chapter-tab-btn');
         if (!btn) { return; }
         switchTab(btn.getAttribute('data-tab'));
     });
 
+    /**
+     * Auto-save metadata (title + deadline) sau 700ms debounce.
+     * Chỉ gọi API nếu có thay đổi thực sự so với chapter data.
+     */
     async function saveChapterMetadata() {
         var updateError = document.getElementById('updateError');
         updateError.style.display = 'none';
@@ -1130,12 +1417,13 @@
     function scheduleMetadataSave() {
         if (!isOwner()) { return; }
         clearTimeout(metadataSaveTimer);
-        metadataSaveTimer = setTimeout(saveChapterMetadata, 700);
+        metadataSaveTimer = setTimeout(saveChapterMetadata, 700); // debounce 700ms
     }
 
     document.getElementById('updateTitle').addEventListener('input', scheduleMetadataSave);
     document.getElementById('updateDeadline').addEventListener('change', saveChapterMetadata);
 
+    // Xóa chapter (chỉ khi PLANNING)
     document.getElementById('btnDelete').addEventListener('click', async function () {
         if (!confirm('Delete this chapter? This cannot be undone.')) { return; }
         try {
@@ -1144,6 +1432,7 @@
         } catch (err) { showError(err.message); }
     });
 
+    // Submit chapter sang editorial review (cần 100%)
     document.getElementById('btnMarkDone').addEventListener('click', async function () {
         try {
             await callApi('POST', '/api/v1/chapters/' + chapterId + '/submit-review');
@@ -1152,6 +1441,7 @@
         } catch (err) { showError(err.message); }
     });
 
+    // Thêm page slot mới
     document.getElementById('btnAddPage').addEventListener('click', async function () {
         try {
             await callApi('POST', '/api/v1/pages', { chapterId: chapterId });
@@ -1159,12 +1449,14 @@
         } catch (err) { showError(err.message); }
     });
 
+    // Stage picker checkbox: sync khi thay đổi
     document.getElementById('pageUploadStagePicker').addEventListener('change', function (e) {
         if (e.target && e.target.type === 'checkbox') {
             syncStagePickerFromClick(e.target);
         }
     });
 
+    // Preview ảnh được chọn trong file input của modal
     document.getElementById('pageModalFileInput').addEventListener('change', function (e) {
         var file = e.target.files && e.target.files[0];
         var preview = document.getElementById('pageUploadPreview');
@@ -1176,6 +1468,7 @@
         reader.readAsDataURL(file);
     });
 
+    // Upload nhanh (single file input ẩn, không qua modal)
     document.getElementById('singleFileInput').addEventListener('change', async function (e) {
         var file = e.target.files && e.target.files[0];
         e.target.value = '';
@@ -1193,6 +1486,7 @@
         }
     });
 
+    // Nút Save trong modal upload page
     document.getElementById('pageUploadSave').addEventListener('click', async function () {
         if (!pendingUploadPageId || !pendingUploadSlot) { return; }
         var fileInput = document.getElementById('pageModalFileInput');
@@ -1221,6 +1515,7 @@
         }
     });
 
+    // Nút Delete page trong modal upload
     document.getElementById('pageUploadDelete').addEventListener('click', async function () {
         if (!pendingUploadPageId || !pendingUploadSlot) { return; }
         if (!confirm('Delete page ' + pendingUploadSlot.pageNumber + '? This cannot be undone.')) { return; }
@@ -1237,6 +1532,15 @@
         }
     });
 
+    /**
+     * Click trên page grid:
+     * - [data-add-page]: thêm page mới
+     * - [data-page-download]: bỏ qua (download link)
+     * - Shift + click: toggle selection
+     * - Click vào img: mở compare modal
+     * - Owner click page đã có ảnh/task: compare modal
+     * - Owner click page trống chưa gán: upload modal
+     */
     document.getElementById('pageSlotGrid').addEventListener('click', function (e) {
         var addBtn = e.target.closest('[data-add-page]');
         if (addBtn && isOwner()) {
@@ -1293,17 +1597,23 @@
         renderPageGrid();
     });
 
+    // Nút Clear Selection
     document.getElementById('btnClearSelection').addEventListener('click', function () {
         selectedPageIds = {};
         lastSlotIndex = -1;
         renderPageGrid();
     });
 
+    // Nút Assign From Selection: mở modal gán task
     document.getElementById('btnAssignFromSelection').addEventListener('click', function () {
         if (!getSelectedPages().length) { return; }
         openAssignModal();
     });
 
+    /**
+     * Form gán task: nhóm các page đã chọn thành nhóm liên tiếp,
+     * tạo task riêng cho mỗi nhóm với taskType tự động theo stage.
+     */
     document.getElementById('assignTaskForm').addEventListener('submit', async function (e) {
         e.preventDefault();
         var errEl = document.getElementById('assignTaskError');
@@ -1339,6 +1649,7 @@
         }
     });
 
+    // Form reassign task: yêu cầu lý do ít nhất 5 ký tự
     document.getElementById('taskReassignForm').addEventListener('submit', async function (e) {
         e.preventDefault();
         var errEl = document.getElementById('taskReassignError');
@@ -1365,6 +1676,7 @@
         }
     });
 
+    // Form extend deadline task (trong modal overdue)
     document.getElementById('taskExtendForm').addEventListener('submit', async function (e) {
         e.preventDefault();
         var errEl = document.getElementById('taskExtendError');
@@ -1387,6 +1699,7 @@
         }
     });
 
+    // Nút Reassign trong modal overdue decision
     document.getElementById('taskOverdueReassignBtn').addEventListener('click', async function () {
         var errEl = document.getElementById('taskOverdueDecisionError');
         errEl.style.display = 'none';
@@ -1425,6 +1738,7 @@
         }
     });
 
+    // Nút Delete task trong modal overdue decision
     document.getElementById('taskOverdueDeleteBtn').addEventListener('click', async function () {
         var errEl = document.getElementById('taskOverdueDeleteError');
         errEl.style.display = 'none';
@@ -1447,6 +1761,21 @@
         }
     });
 
+    /**
+     * Global click handler (event delegation) xử lý các action buttons trong bảng task:
+     * - [data-overdue-action-choice]: chuyển panel trong modal overdue
+     * - [data-task-expand]: toggle expand/collapse inline pages
+     * - [data-task-overdue-decision]: mở modal overdue decision
+     * - [data-task-approve-pop]: mở approve popover
+     * - [data-task-reject-pop]: mở reject popover
+     * - [data-task-delete]: xóa task (prompt lý do)
+     * - [data-task-reassign]: mở modal reassign
+     * - [data-popover-cancel]: đóng popover
+     * - #taskPopoverScrim: đóng popover khi click scrim
+     * - Click ngoài popover/actions: đóng popover
+     * - [data-modal-close]: đóng modal
+     * - .modal-backdrop: đóng modal khi click backdrop
+     */
     document.addEventListener('click', async function (e) {
         var overdueChoiceBtn = e.target.closest('[data-overdue-action-choice]');
         if (overdueChoiceBtn) {
@@ -1527,6 +1856,7 @@
         }
     });
 
+    // Approve popover: gọi API approve, cập nhật task local, reload data
     document.getElementById('approvePopoverConfirm').addEventListener('click', async function () {
         if (!activePopoverTaskId) { return; }
         try {
@@ -1543,6 +1873,7 @@
         } catch (err) { showError(err.message); }
     });
 
+    // Reject popover: validate lý do ≥ 5 ký tự, gọi API reject
     document.getElementById('rejectPopoverConfirm').addEventListener('click', async function () {
         if (!activePopoverTaskId) { return; }
         var reason = document.getElementById('rejectPopoverReason').value.trim();
@@ -1559,7 +1890,10 @@
         } catch (err) { showError(err.message); }
     });
 
+    // Realtime validate textarea lý do reject
     document.getElementById('rejectPopoverReason').addEventListener('input', updateRejectConfirmState);
+
+    // Đóng page compare modal
     document.getElementById('pageCompareClose').addEventListener('click', function () {
         document.getElementById('pageCompareModal').style.display = 'none';
     });
@@ -1569,10 +1903,15 @@
         }
     });
 
+    // ============================================================
+    // INIT
+    // ============================================================
+
+    // Hiển thị lỗi từ URL param (nếu có)
     if (urlError) {
         showError(decodeURIComponent(urlError));
     }
 
-    switchTab('pages');
-    loadData();
+    switchTab('pages'); // Mở tab Pages mặc định
+    loadData();         // Load toàn bộ dữ liệu
 })();

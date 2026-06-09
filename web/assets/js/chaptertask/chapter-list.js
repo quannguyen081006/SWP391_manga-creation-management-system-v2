@@ -1,17 +1,49 @@
+/**
+ * chapterList.js — Chapter Tracker Page Script
+ * Hệ thống quản lý sản xuất manga (SWP391)
+ *
+ * ============================================================
+ * MỤC LỤC (TABLE OF CONTENTS)
+ * ============================================================
+ * 1.  KHỞI TẠO BIẾN          — State, config, DOM refs
+ * 2.  HELPER / UTILITY        — escapeHtml, formatDate, date math
+ * 3.  DEADLINE DISPLAY        — Tính & hiển thị trạng thái deadline
+ * 4.  STATUS HELPERS          — isChapterDone, isOverdue, row CSS
+ * 5.  FILTER & SORT           — Đếm, lọc, sort danh sách chapter
+ * 6.  RENDER — PILLS          — Dropdown filter theo status
+ * 7.  RENDER — TABLE GROUPS   — Overdue / In-Progress / Completed
+ * 8.  RENDER — SIDEBAR        — Form tạo chapter + overview stats
+ * 9.  DATA LOADING            — Gọi API, build state, trigger render
+ * 10. EVENT LISTENERS         — Click (sort, filter, toggle), Submit form
+ * ============================================================
+ */
+
 (function () {
+    /* ==========================================================
+     * 1. KHỞI TẠO BIẾN
+     * ==========================================================
+     * Đọc config từ window.CHAPTER_LIST_CONFIG do server inject vào JSP/HTML.
+     * filterSeriesId: nếu có → chỉ hiện chapter của series đó (URL ?seriesId=X).
+     * serverCanCreateChapter: cờ từ server để kiểm tra quyền tạo chapter.
+     * ========================================================== */
     var ctx = (window.CHAPTER_LIST_CONFIG && window.CHAPTER_LIST_CONFIG.contextPath) || '';
-    var box = document.getElementById('chapterResult');
-    var currentUser = null;
-    var seriesList = [];
-    var chapters = [];
-    var seriesById = {};
+    var box = document.getElementById('chapterResult');     // vùng hiện thông báo lỗi/success
+    var currentUser = null;                                 // user đang đăng nhập (load từ /api/v1/auth/me)
+    var seriesList = [];                                    // tất cả series user có quyền xem
+    var chapters = [];                                      // danh sách chapter (toàn bộ hoặc theo series)
+    var seriesById = {};                                    // map seriesId → seriesObject để tra nhanh
     var filterSeriesId = new URLSearchParams(window.location.search).get('seriesId');
-    var sortField = null;
-    var sortDir = 'asc';
-    var completedVisible = false;
-    var chapterStatusFilter = 'ALL';
+    var sortField = null;                                   // field đang sort: 'no'|'title'|'status'|'deadline'
+    var sortDir = 'asc';                                    // chiều sort
+    var completedVisible = false;                           // nhóm "Completed" có đang mở không
+    var chapterStatusFilter = 'ALL';                        // filter status đang chọn
     var serverCanCreateChapter = !!(window.CHAPTER_LIST_CONFIG && window.CHAPTER_LIST_CONFIG.canCreateChapter);
 
+    /* ==========================================================
+     * 2. HELPER / UTILITY
+     * ========================================================== */
+
+    /** Escape ký tự HTML đặc biệt để tránh XSS khi render ra DOM. */
     function escapeHtml(value) {
         if (value === null || value === undefined) { return ''; }
         return String(value).replace(/[&<>\"]/g, function (ch) {
@@ -19,6 +51,10 @@
         });
     }
 
+    /**
+     * Chuẩn hoá nhiều dạng giá trị ngày thành chuỗi YYYY-MM-DD.
+     * Hỗ trợ: Unix timestamp (số), ISO 8601 (có 'T'), hoặc chuỗi ngày thô.
+     */
     function formatDate(value) {
         if (value === null || value === undefined || value === '') { return ''; }
         var text = String(value);
@@ -33,11 +69,13 @@
         return text;
     }
 
+    /** Trả về Date object (giờ = 00:00) hoặc null nếu không parse được. */
     function dateOnly(value) {
         var formatted = formatDate(value);
         return formatted ? new Date(formatted + 'T00:00:00') : null;
     }
 
+    /** Số ngày còn lại đến deadline (âm = đã quá hạn). */
     function daysUntilDate(value) {
         var due = dateOnly(value);
         if (!due) { return null; }
@@ -46,6 +84,14 @@
         return Math.ceil((due - today) / 86400000);
     }
 
+    /* ==========================================================
+     * 3. DEADLINE DISPLAY
+     * ========================================================== */
+
+    /**
+     * Tạo text suffix cho deadline cell.
+     * VD: "3 days left", "2 days overdue", "Due today", "Done".
+     */
     function deadlineSuffixText(daysLeft, isDone, isOverdue) {
         if (isDone) { return 'Done'; }
         if (isOverdue) {
@@ -61,10 +107,19 @@
         return daysLeft + ' days left';
     }
 
+    /**
+     * Render HTML cho ô deadline trong bảng.
+     * Màu sắc phân loại:
+     *   - Xanh lá   → done
+     *   - Đỏ + icon → overdue
+     *   - Cam       → còn ≤ 3 ngày (urgent)
+     *   - Xanh dương → bình thường
+     */
     function formatDeadlineCell(dateValue, isDone, isOverdue) {
         var formatted = formatDate(dateValue);
         if (!formatted) { return '<span class="chapter-empty-muted">—</span>'; }
         var daysLeft = daysUntilDate(dateValue);
+        // Tự động mark overdue nếu deadline đã qua mà chưa done
         if (!isDone && !isOverdue && daysLeft !== null && daysLeft < 0) {
             isOverdue = true;
         }
@@ -83,23 +138,35 @@
         return '<span class="due-date-active">' + escapeHtml(formatted) + suffix + '</span>';
     }
 
+    /* ==========================================================
+     * 4. STATUS HELPERS
+     * ========================================================== */
+
+    /** Chapter được coi là "xong" nếu status là COMPLETE/APPROVED hoặc completionPct = 100. */
     function isChapterDone(ch) {
         var st = String(ch.status || '').toUpperCase();
         return st === 'COMPLETE' || st === 'APPROVED' || Number(ch.completionPct || 0) >= 100;
     }
 
+    /** Chapter bị overdue nếu chưa done và deadline đã qua. */
     function isChapterOverdue(ch) {
         if (isChapterDone(ch)) { return false; }
         var daysLeft = daysUntilDate(ch.submissionDeadline);
         return daysLeft !== null && daysLeft < 0;
     }
 
+    /** CSS class cho row: overdue (đỏ) → delayed (vàng) → không có. */
     function chapterRowClass(ch, forceOverdue) {
         if (forceOverdue || isChapterOverdue(ch)) { return ' class="task-row-overdue"'; }
         if (ch.atRisk && !isChapterDone(ch)) { return ' class="task-row-delayed"'; }
         return '';
     }
 
+    /**
+     * Áp dụng width và màu cho progress bar fill.
+     * Dùng data attribute thay vì inline style để tránh lỗi CSP khi render HTML string.
+     * Gọi sau mỗi lần render bảng.
+     */
     function applyChapterProgressStyles(root) {
         var scope = root || document;
         var fills = scope.querySelectorAll('[data-chapter-progress]');
@@ -110,6 +177,7 @@
         }
     }
 
+    /** Ngày hôm nay dạng YYYY-MM-DD (dùng cho min attribute của date input). */
     function todayIso() {
         var date = new Date();
         var month = String(date.getMonth() + 1);
@@ -117,6 +185,7 @@
         return date.getFullYear() + '-' + (month.length < 2 ? '0' + month : month) + '-' + (day.length < 2 ? '0' + day : day);
     }
 
+    /** Cộng/trừ N ngày từ một giá trị ngày, trả về YYYY-MM-DD. */
     function addDaysIso(value, days) {
         var date = dateOnly(value);
         if (!date) { return ''; }
@@ -126,10 +195,15 @@
         return date.getFullYear() + '-' + (month.length < 2 ? '0' + month : month) + '-' + (day.length < 2 ? '0' + day : day);
     }
 
+    /**
+     * Deadline tối đa cho chapter = publicationDate của series - 7 ngày.
+     * Đảm bảo chapter phải nộp trước khi series xuất bản.
+     */
     function latestChapterDeadline(series) {
         return series && series.publicationDate ? addDaysIso(series.publicationDate, -7) : '';
     }
 
+    /** Kiểm tra currentUser có role cụ thể không (hỗ trợ nhiều dạng role object). */
     function hasRole(role) {
         var roles = currentUser && currentUser.roles ? currentUser.roles : [];
         if (String(currentUser && (currentUser.role || currentUser.activeRole || currentUser.currentRole || '')).toUpperCase() === role) {
@@ -145,11 +219,17 @@
         return false;
     }
 
+    /* ==========================================================
+     * 5. FILTER & SORT
+     * ========================================================== */
+
+    /** Viết hoa chữ cái đầu, thay '_' bằng dấu cách. VD: "IN_PROGRESS" → "In Progress". */
     function formatStatus(status) {
         if (!status) { return ''; }
         return String(status).toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, function (ch) { return ch.toUpperCase(); });
     }
 
+    /** Map status string → CSS class để render chip màu. */
     function chapterStatusClass(status) {
         status = String(status || '').toUpperCase();
         if (status === 'PLANNING') { return 'status-draft'; }
@@ -167,12 +247,14 @@
             + '</span>';
     }
 
+    /** Chip "AT RISK" / "NORMAL" màu đỏ/xanh. */
     function renderAtRiskCell(ch) {
         return '<span class="status-chip ' + (ch.atRisk ? 'status-rejected' : 'status-approved') + '">'
             + (ch.atRisk ? 'AT RISK' : 'NORMAL')
             + '</span>';
     }
 
+    /** Danh sách option cho filter dropdown, kèm count. */
     function chapterFilterOptions(counts) {
         return [
             { id: 'ALL', label: 'All', count: counts.ALL, cssClass: 'pill-all' },
@@ -195,17 +277,12 @@
             + '</button>';
     }
 
+    /** Đếm số chapter theo từng nhóm status để hiển thị badge trên filter pill. */
     function computeChapterCounts() {
         var counts = {
             ALL: chapters.length,
-            OVERDUE: 0,
-            PLANNING: 0,
-            IN_PROGRESS: 0,
-            COMPLETE: 0,
-            EDITORIAL_REVIEW: 0,
-            APPROVED: 0,
-            REJECTED: 0,
-            AT_RISK: 0
+            OVERDUE: 0, PLANNING: 0, IN_PROGRESS: 0, COMPLETE: 0,
+            EDITORIAL_REVIEW: 0, APPROVED: 0, REJECTED: 0, AT_RISK: 0
         };
         for (var i = 0; i < chapters.length; i++) {
             var ch = chapters[i];
@@ -222,6 +299,7 @@
         return counts;
     }
 
+    /** Trả về true nếu chapter thoả mãn filter đang chọn. */
     function chapterMatchesFilter(ch, filter) {
         if (!filter || filter === 'ALL') { return true; }
         if (filter === 'OVERDUE') { return isChapterOverdue(ch); }
@@ -229,16 +307,18 @@
         return String(ch.status || '').toUpperCase() === filter;
     }
 
+    /* ==========================================================
+     * 6. RENDER — PILLS (filter dropdown)
+     * ========================================================== */
+
+    /** Render lại toàn bộ dropdown filter status với số đếm mới nhất. */
     function renderChapterStatusPills(counts) {
         var el = document.getElementById('chapterStatusPills');
         if (!el) { return; }
         var options = chapterFilterOptions(counts);
         var selected = options[0];
         for (var i = 0; i < options.length; i++) {
-            if (options[i].id === chapterStatusFilter) {
-                selected = options[i];
-                break;
-            }
+            if (options[i].id === chapterStatusFilter) { selected = options[i]; break; }
         }
         el.innerHTML = '<div class="status-filter-dropdown" data-status-filter-dropdown="chapter">'
             + '<button type="button" class="status-pill status-filter-toggle ' + selected.cssClass + ' is-active" data-status-filter-toggle="chapter" aria-haspopup="true" aria-expanded="false">'
@@ -252,10 +332,15 @@
             + '</div>';
     }
 
+    /**
+     * Số cột của bảng tracker.
+     * Khi lọc theo series (filterSeriesId có giá trị) thì ẩn cột "Series" → colspan nhỏ hơn 1.
+     */
     function trackerColspan() {
         return filterSeriesId ? 7 : 8;
     }
 
+    /** Ẩn/hiện cột "Series" dựa vào filterSeriesId. */
     function toggleSeriesColumns() {
         var show = !filterSeriesId;
         var cols = document.querySelectorAll('.col-series');
@@ -264,6 +349,7 @@
         }
     }
 
+    /** Sort mảng chapter theo sortField + sortDir hiện tại, không mutate mảng gốc. */
     function sortChapterList(list) {
         if (!sortField) { return list.slice(); }
         var dir = sortDir === 'asc' ? 1 : -1;
@@ -279,6 +365,7 @@
                 av = String(a.status || '');
                 bv = String(b.status || '');
             } else if (sortField === 'deadline') {
+                // Chapter không có deadline xếp cuối ('zzz')
                 av = a.submissionDeadline ? String(a.submissionDeadline) : 'zzz';
                 bv = b.submissionDeadline ? String(b.submissionDeadline) : 'zzz';
             } else {
@@ -290,18 +377,16 @@
         });
     }
 
+    /* Hiện thông báo success/error ở #chapterResult. Truyền msg rỗng để ẩn. */
     function showMessage(msg, isError) {
         if (!box) { return; }
-        if (!msg) {
-            box.style.display = 'none';
-            box.textContent = '';
-            return;
-        }
+        if (!msg) { box.style.display = 'none'; box.textContent = ''; return; }
         box.style.display = 'block';
         box.className = isError ? 'alert error' : 'panel';
         box.textContent = msg;
     }
 
+    /** Serialize form thành plain object {key: value}. */
     function formToObject(form) {
         var data = {};
         var fd = new FormData(form);
@@ -309,6 +394,12 @@
         return data;
     }
 
+    /**
+     * Wrapper fetch gọi API nội bộ.
+     * - GET: params đưa lên query string.
+     * - POST/PUT/DELETE: params đưa vào body (application/x-www-form-urlencoded).
+     * Throw Error nếu response không ok hoặc body.success === false.
+     */
     async function callApi(method, path, data) {
         var opts = { method: method, headers: { 'Accept': 'application/json' } };
         var url = ctx + path;
@@ -332,6 +423,10 @@
         return body;
     }
 
+    /**
+     * Tự động đề xuất số chapter tiếp theo cho series.
+     * Duyệt chapters hiện có, lấy max(chapterNumber) + 1.
+     */
     function nextChapterNumber(seriesId) {
         var next = 1;
         for (var i = 0; i < chapters.length; i++) {
@@ -342,6 +437,11 @@
         return next;
     }
 
+    /**
+     * Cập nhật ràng buộc ngày cho input deadline trong form tạo chapter:
+     *   - min = hôm nay
+     *   - max = publicationDate của series - 7 ngày (nếu có)
+     */
     function updateCreateDeadlineConstraints() {
         var deadlineInput = document.getElementById('chapterCreateDeadline');
         var deadlineHint = document.getElementById('createSeriesDeadlineHint');
@@ -357,6 +457,7 @@
             : (filterSeriesId ? 'Chapter deadline cannot be in the past.' : '');
     }
 
+    /** Hiện skeleton "Loading..." trong tất cả tbody khi đang gọi API. */
     function setTrackerLoading(msg) {
         var colspan = trackerColspan();
         var html = '<tr><td colspan="' + colspan + '" class="chapter-empty-cell">' + escapeHtml(msg) + '</td></tr>';
@@ -365,15 +466,22 @@
         document.getElementById('rowsCompleted').innerHTML = html;
     }
 
+    /* ==========================================================
+     * 8. RENDER — SIDEBAR (form tạo chapter + overview stats)
+     * ========================================================== */
+
+    /**
+     * Hiện/ẩn sidebar tạo chapter dựa vào quyền và filterSeriesId.
+     * Nếu có quyền và đang filter theo series → hiện sidebar + 2-cột layout.
+     * Tính tóm tắt tiến độ tổng thể (overall %, overdue, in-progress, done) cho series.
+     */
     function renderChapterActions() {
         var header = document.getElementById('chapterActionHeader');
         var layout = document.getElementById('chapterLayoutGrid');
         var sidebar = document.getElementById('createSidebar');
         var showActions = serverCanCreateChapter || hasRole('MANGAKA');
 
-        if (header) {
-            header.style.display = showActions ? '' : 'none';
-        }
+        if (header) { header.style.display = showActions ? '' : 'none'; }
 
         if (!showActions || !filterSeriesId) {
             if (sidebar) { sidebar.style.display = 'none'; }
@@ -386,18 +494,14 @@
 
         var nextNum = nextChapterNumber(filterSeriesId);
         var seriesName = (seriesById[String(filterSeriesId)] || {}).title || ('#' + filterSeriesId);
-
         document.getElementById('createSidebarTitle').textContent = 'New chapter';
         document.getElementById('createSidebarSub').textContent = seriesName + ' · #' + nextNum;
         updateCreateDeadlineConstraints();
 
+        // Tính tóm tắt tiến độ
         var total = chapters.length;
-        var today = new Date();
-        today.setHours(0, 0, 0, 0);
-        var overdueCount = 0;
-        var inProgressCount = 0;
-        var doneCount = 0;
-
+        var today = new Date(); today.setHours(0, 0, 0, 0);
+        var overdueCount = 0, inProgressCount = 0, doneCount = 0;
         for (var i = 0; i < chapters.length; i++) {
             var ch = chapters[i];
             var status = String(ch.status || '').toUpperCase();
@@ -411,7 +515,6 @@
                 inProgressCount++;
             }
         }
-
         var overallPct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
         document.getElementById('seriesOverviewStats').innerHTML = ''
             + '<div class="chapter-overview-row">'
@@ -427,6 +530,14 @@
         applyChapterProgressStyles(document.getElementById('seriesOverviewStats'));
     }
 
+    /* ==========================================================
+     * 7. RENDER — TABLE GROUPS
+     * ========================================================== */
+
+    /**
+     * Render một nhóm row vào tbody được chỉ định (Overdue / InProgress / Completed).
+     * isOverdueGroup = true → force class "task-row-overdue" cho mọi row trong nhóm.
+     */
     function renderGroup(tbodyId, list, isOverdueGroup) {
         var tbody = document.getElementById(tbodyId);
         var colspan = trackerColspan();
@@ -443,6 +554,7 @@
             var overdue = isChapterOverdue(ch);
             var deadlineText = formatDeadlineCell(ch.submissionDeadline, done, overdue);
             var seriesName = (seriesById[String(ch.seriesId)] || {}).title || ('#' + ch.seriesId);
+            // Màu progress bar: xanh ≥100%, vàng ≥50%, đỏ <50%
             var progressColor = progress >= 100 ? '#10b981' : (progress >= 50 ? '#f59e0b' : '#ef4444');
             var seriesCell = showSeries
                 ? '<td class="chapter-series-cell" title="' + escapeHtml(seriesName) + '">' + escapeHtml(seriesName) + '</td>'
@@ -470,26 +582,27 @@
         applyChapterProgressStyles(tbody);
     }
 
+    /** Đồng bộ display của tbody và text nút toggle theo state completedVisible. */
     function updateCompletedVisibility() {
         var body = document.getElementById('completedBody');
         var toggle = document.getElementById('toggleCompleted');
-        if (body) {
-            body.style.display = completedVisible ? 'block' : 'none';
-        }
-        if (toggle) {
-            toggle.textContent = completedVisible ? 'Hide' : 'Show';
-        }
+        if (body) { body.style.display = completedVisible ? 'block' : 'none'; }
+        if (toggle) { toggle.textContent = completedVisible ? 'Hide' : 'Show'; }
     }
 
+    /**
+     * Hàm render chính — điều phối toàn bộ quá trình vẽ lại trang:
+     * 1. Cập nhật pills + count
+     * 2. Phân loại chapters vào 3 nhóm (overdue / inProgress / completed)
+     * 3. Render từng nhóm + cập nhật header count
+     * 4. Ẩn nhóm rỗng, cập nhật nút sort
+     */
     function renderChapters() {
         renderChapterStatusPills(computeChapterCounts());
         toggleSeriesColumns();
 
-        var today = new Date();
-        today.setHours(0, 0, 0, 0);
-        var overdue = [];
-        var inProgress = [];
-        var completed = [];
+        var today = new Date(); today.setHours(0, 0, 0, 0);
+        var overdue = [], inProgress = [], completed = [];
 
         var filtered = chapters.filter(function (ch) {
             return chapterMatchesFilter(ch, chapterStatusFilter);
@@ -503,6 +616,7 @@
             var isComplete = isChapterDone(ch);
             var isOverdue = !isComplete && deadlineDate && deadlineDate < today;
 
+            // EDITORIAL_REVIEW được coi là "gần hoàn thành" → vào nhóm completed
             if (isComplete || status === 'EDITORIAL_REVIEW') {
                 completed.push(ch);
             } else if (isOverdue) {
@@ -527,6 +641,7 @@
         updateSortIndicators();
     }
 
+    /** Cập nhật icon ↑ ↓ ↕ trên các nút sort header theo sortField/sortDir hiện tại. */
     function updateSortIndicators() {
         var buttons = document.querySelectorAll('.chapter-sort-btn[data-sort]');
         for (var i = 0; i < buttons.length; i++) {
@@ -542,6 +657,18 @@
         }
     }
 
+    /* ==========================================================
+     * 9. DATA LOADING
+     * ========================================================== */
+
+    /**
+     * Load toàn bộ dữ liệu khi trang khởi động (hoặc sau khi tạo chapter thành công).
+     * Thứ tự:
+     *   1. GET /api/v1/auth/me          → lấy currentUser
+     *   2. GET /api/v1/series           → danh sách series
+     *   3. GET /api/v1/[series/X/]chapters → danh sách chapter
+     * Dùng Promise.all để chạy 2 và 3 song song.
+     */
     async function loadData() {
         setTrackerLoading('Loading...');
         try {
@@ -549,14 +676,18 @@
             currentUser = userRes.data;
             var results = await Promise.all([
                 callApi('GET', '/api/v1/series'),
-                callApi('GET', filterSeriesId ? ('/api/v1/series/' + encodeURIComponent(filterSeriesId) + '/chapters') : '/api/v1/chapters')
+                callApi('GET', filterSeriesId
+                    ? ('/api/v1/series/' + encodeURIComponent(filterSeriesId) + '/chapters')
+                    : '/api/v1/chapters')
             ]);
             seriesList = results[0].data || [];
             chapters = results[1].data || [];
+            // Build lookup map để tránh duyệt mảng nhiều lần
             seriesById = {};
             for (var i = 0; i < seriesList.length; i++) {
                 seriesById[String(seriesList[i].id)] = seriesList[i];
             }
+            // Hiện subtitle "Viewing chapters for series #X — TênSeries"
             var filterSubtitle = document.getElementById('chapterFilterSubtitle');
             if (filterSubtitle && filterSeriesId) {
                 var filteredSeries = seriesById[String(filterSeriesId)];
@@ -574,17 +705,31 @@
         }
     }
 
+    /* ==========================================================
+     * 10. EVENT LISTENERS
+     * ========================================================== */
+
+    /** Toggle hiện/ẩn nhóm "Completed". */
     document.getElementById('toggleCompleted').addEventListener('click', function () {
         completedVisible = !completedVisible;
         updateCompletedVisibility();
     });
 
+    /**
+     * Delegated click handler cho toàn document.
+     * Xử lý 3 loại click:
+     *   a) Nút sort header (.chapter-sort-btn[data-sort]) → đổi field/hướng sort rồi re-render
+     *   b) Toggle dropdown filter ([data-status-filter-toggle]) → mở/đóng menu
+     *   c) Option trong dropdown ([data-chapter-status-option]) → đổi filter rồi re-render
+     *   d) Click ngoài dropdown → đóng dropdown
+     */
     document.addEventListener('click', function (e) {
+        // a) Sort
         var sortBtn = e.target.closest ? e.target.closest('.chapter-sort-btn[data-sort]') : null;
         if (sortBtn) {
             var field = sortBtn.getAttribute('data-sort');
             if (sortField === field) {
-                sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+                sortDir = sortDir === 'asc' ? 'desc' : 'asc'; // toggle chiều
             } else {
                 sortField = field;
                 sortDir = 'asc';
@@ -593,6 +738,7 @@
             return;
         }
 
+        // b) Toggle dropdown
         var chapterToggle = e.target.closest ? e.target.closest('#chapterStatusPills [data-status-filter-toggle]') : null;
         if (chapterToggle) {
             var chapterDropdown = chapterToggle.closest('[data-status-filter-dropdown]');
@@ -603,6 +749,7 @@
             return;
         }
 
+        // c) Chọn option trong dropdown
         var chapterPill = e.target.closest ? e.target.closest('#chapterStatusPills [data-chapter-status-option]') : null;
         if (chapterPill) {
             chapterStatusFilter = chapterPill.getAttribute('data-chapter-status-option') || 'ALL';
@@ -610,21 +757,32 @@
             return;
         }
 
+        // d) Click ngoài → đóng dropdown nếu đang mở
         var openChapterDropdown = document.querySelector('#chapterStatusPills [data-status-filter-dropdown].open');
         if (openChapterDropdown && !(e.target.closest && e.target.closest('#chapterStatusPills [data-status-filter-dropdown]'))) {
             openChapterDropdown.classList.remove('open');
         }
     });
 
+    /**
+     * Nút +/- điều chỉnh số trang cho input "Total Pages" trong form tạo chapter.
+     * data-total-pages-delta="+1" hoặc "-1".
+     */
     document.addEventListener('click', function (e) {
         var deltaBtn = e.target.closest ? e.target.closest('[data-total-pages-delta]') : null;
         if (!deltaBtn) { return; }
         var input = document.getElementById('chapterCreateTotalPages');
         if (!input) { return; }
         var next = Number(input.value || 1) + Number(deltaBtn.getAttribute('data-total-pages-delta'));
-        input.value = Math.max(1, next);
+        input.value = Math.max(1, next); // không cho nhập < 1
     });
 
+    /**
+     * Submit form tạo chapter (#chapterCreateForm).
+     * POST lên /api/v1/series/{seriesId}/chapters.
+     * Nếu thành công → redirect sang trang detail của chapter mới.
+     * Nếu lỗi → hiện thông báo trong #createErrorBox.
+     */
     document.addEventListener('submit', async function (e) {
         if (e.target.id === 'chapterCreateForm') {
             e.preventDefault();
@@ -642,13 +800,14 @@
                 });
                 e.target.reset();
                 var pagesInput = document.getElementById('chapterCreateTotalPages');
-                if (pagesInput) { pagesInput.value = '24'; }
+                if (pagesInput) { pagesInput.value = '24'; } // reset về default 24 trang
                 showMessage('Chapter created successfully.', false);
                 if (createRes && createRes.data && createRes.data.id) {
+                    // Redirect sang detail page ngay sau khi tạo thành công
                     window.location.href = ctx + '/main/chapters/detail?id=' + createRes.data.id;
                     return;
                 }
-                await loadData();
+                await loadData(); // fallback nếu không có id trong response
             } catch (err) {
                 errorBox.style.display = 'block';
                 errorBox.textContent = err.message;
@@ -656,5 +815,6 @@
         }
     });
 
+    // Khởi chạy — load dữ liệu ngay khi script được thực thi
     loadData();
 })();
