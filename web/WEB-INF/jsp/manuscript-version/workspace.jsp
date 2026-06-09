@@ -121,7 +121,8 @@
 
             /* Annotation Markers */
             .annotation-marker {
-                position: absolute;
+                position:absolute;
+                transform: translate(-50%, -50%);
                 border: 2px solid #ef4444;
                 background: rgba(239, 68, 68, 0.15);
                 cursor: pointer;
@@ -466,6 +467,36 @@
                 font-size: 14px;
             }
 
+            /*Annotation focus*/
+            .annotation-marker.active {
+                border: 4px solid blue;
+                background: rgba(255,165,0,.3);
+
+                transform: translate(-50%, -50%);
+
+                box-shadow:
+                    0 0 0 4px rgba(37,99,235,0.15),
+                    0 0 12px rgba(37,99,235,0.35);
+
+                animation: pulseFocus 1.2s infinite;
+            }
+
+            .image-wrapper{
+                position:relative;
+                display:inline-block;
+            }
+
+            @keyframes pulseFocus {
+                0% {
+                    transform: translate(-50%, -50%) scale(1);
+                }
+                50% {
+                    transform: translate(-50%, -50%) scale(1.05);
+                }
+                100% {
+                    transform: translate(-50%, -50%) scale(1);
+                }
+            }
             /* Responsive */
             @media (max-width: 1400px) {
                 .workspace-sidebar {
@@ -607,8 +638,10 @@
                     <c:forEach var="page" items="${pages}">
                         <div class="page-card" id="page-${page.id}">
                             <div class="page-image-container">
-                                <img data-original-url="${page.snapshotFileUrl}" alt="Page ${page.pageNumber}" class="page-image" id="img-${page.id}">
-                                <!-- Annotation markers will be rendered here via JavaScript -->
+                                <div class="image-wrapper">
+                                    <img data-original-url="${page.snapshotFileUrl}" alt="Page ${page.pageNumber}" class="page-image" id="img-${page.id}">
+                                    <!-- Annotation markers will be rendered here via JavaScript -->
+                                </div>
                             </div>
                             <div class="page-info">
                                 <div style="font-weight: 600; color: #111827; margin-bottom: 4px;">Page ${page.pageNumber}</div>
@@ -642,12 +675,29 @@
                             </div>
                         </c:if>
                         <c:forEach var="annotation" items="${annotations}">
-                            <div class="annotation-item ${annotation.status == 'RESOLVED' ? 'resolved' : annotation.status == 'DISMISSED' ? 'dismissed' : ''}" style="cursor: pointer;" onclick="scrollToPage(${annotation.manuscriptPageId})">
+                            <div
+                                class="annotation-item ${annotation.status == 'RESOLVED' ? 'resolved' : annotation.status == 'DISMISSED' ? 'dismissed' : ''}"
+                                style="cursor:pointer;"
+                                onclick="
+                                        focusAnnotation(
+                                ${annotation.id},
+                                ${annotation.manuscriptPageId},
+                                                '${annotation.category}',
+                                                '${annotation.content}',
+                                                '${annotation.severity}'
+                                                )
+                                "
+                                >
+
                                 <div>${annotation.category}</div>
                                 <div>${annotation.content}</div>
+
                                 <div>
-                                    Page ${annotation.pageNumber} - ${annotation.status}
+                                    Page ${annotation.pageNumber}
+                                    -
+                                    ${annotation.status}
                                 </div>
+
                             </div>
                         </c:forEach>
                     </div>
@@ -724,21 +774,48 @@
                 <c:if test="${ann.manuscriptPageId != null}">
             var pageImg = document.getElementById('img-${ann.manuscriptPageId}');
             if (pageImg) {
-                var container = pageImg.parentElement;
+                var wrapper = pageImg.parentElement;
                 var marker = document.createElement('div');
+                marker.setAttribute(
+                        'data-annotation-id',
+                        '${ann.id}'
+                        );
                 marker.className = 'annotation-marker ${ann.status == 'RESOLVED' ? 'resolved' : ann.status == 'DISMISSED' ? 'dismissed' : ''}';
                 marker.style.left = '${ann.getXPercent()}%';
                 marker.style.top = '${ann.getYPercent()}%';
                 marker.style.width = '${ann.getWidthPercent()}%';
                 marker.style.height = '${ann.getHeightPercent()}%';
                 marker.title = '${ann.category}: ${ann.content}';
+
                         marker.onclick = function () {
-                            alert('Category: ${ann.category}\nContent: ${ann.content}\nStatus: ${ann.status}\nSeverity: ${ann.severity}');
-                                    };
-                                    container.appendChild(marker);
-                                }
+                            alert(
+                                    'Category: ${ann.getCategory()}\n' +
+                                    'Content: ${ann.getContent()}\n' +
+                                    'Status: ${ann.getStatus()}\n' +
+                                    'Severity: ${ann.getSeverity()}'
+                                    );
+                        };
+                        wrapper.appendChild(marker);
+                    }
+
                 </c:if>
             </c:forEach>
         </script>
+        <div id="annotationPopup"
+             style="
+             display:none;
+             position:fixed;
+             z-index:9999;
+             background:white;
+             border:1px solid #d1d5db;
+             border-radius:8px;
+             padding:12px;
+             min-width:250px;
+             box-shadow:0 4px 12px rgba(0,0,0,.15);
+             ">
+
+            <div id="annotationPopupContent"></div>
+
+        </div>
     </body>
 </html>

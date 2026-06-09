@@ -494,12 +494,18 @@ async function addReply(annotationId) {
         console.error('Error adding reply:', error);
         alert('Error adding reply. Please try again.');
     }
-    function focusAnnotation(
-            annotationId,
-            content,
-            category,
-            severity
-            ) {
+}
+function focusAnnotation(
+        annotationId,
+        pageId,
+        category,
+        content,
+        severity
+        ) {
+    console.log("FOCUS FUNCTION LOADED");
+    scrollToPage(pageId);
+
+    setTimeout(function () {
 
         document
                 .querySelectorAll('.annotation-marker')
@@ -507,12 +513,15 @@ async function addReply(annotationId) {
                     marker.classList.remove('active');
                 });
 
-        const marker = document.querySelector(
-                '[data-annotation-id="' +
-                annotationId +
-                '"]'
-                );
+        const marker =
+                document.querySelector(
+                        '[data-annotation-id="' +
+                        annotationId +
+                        '"]'
+                        );
 
+        console.log("ANNOTATION ID =", annotationId);
+        console.log("MARKER =", marker);
         if (!marker) {
 
             console.error(
@@ -530,63 +539,33 @@ async function addReply(annotationId) {
             block: 'center'
         });
 
-        const popup =
-                document.getElementById(
-                        'annotationPopup'
-                        );
+        showAnnotationPopup(
+                marker,
+                category,
+                content,
+                severity
+                );
 
-        const popupContent =
-                document.getElementById(
-                        'annotationPopupContent'
-                        );
+    }, 300);
+}
+function showAnnotationPopup(
+        marker,
+        category,
+        content,
+        severity
+        ) {
 
-        popupContent.innerHTML = `
-        <div style="font-weight:bold">
-            ${category}
-        </div>
+    const popup =
+            document.getElementById(
+                    'annotationPopup'
+                    );
 
-        <div style="margin-top:8px">
-            ${content}
-        </div>
+    const popupContent =
+            document.getElementById(
+                    'annotationPopupContent'
+                    );
 
-        <div style="
-            margin-top:8px;
-            color:#6b7280;
-            font-size:12px;
-        ">
-            Severity: ${severity}
-        </div>
-    `;
-
-        const rect =
-                marker.getBoundingClientRect();
-
-        popup.style.left =
-                (rect.right + 20) + 'px';
-
-        popup.style.top =
-                rect.top + 'px';
-
-        popup.classList.add('show');
-    }
-    function showAnnotationPopup(
-            marker,
-            category,
-            content,
-            severity
-            ) {
-
-        const popup =
-                document.getElementById(
-                        'annotationPopup'
-                        );
-
-        const popupContent =
-                document.getElementById(
-                        'annotationPopupContent'
-                        );
-
-        popupContent.innerHTML = `
+    popupContent.innerHTML = `
         <div style="
             font-weight:600;
             margin-bottom:8px;
@@ -608,38 +587,37 @@ async function addReply(annotationId) {
         </div>
     `;
 
-        const rect =
-                marker.getBoundingClientRect();
+    const rect =
+            marker.getBoundingClientRect();
 
-        popup.style.left =
-                (rect.right + 20) + 'px';
+    popup.style.left =
+            (rect.right + 20) + 'px';
 
-        popup.style.top =
-                rect.top + 'px';
+    popup.style.top =
+            rect.top + 'px';
 
-        popup.classList.add('show');
-    }
-
-    document.addEventListener(
-            'click',
-            function (event) {
-
-                const popup =
-                        document.getElementById(
-                                'annotationPopup'
-                                );
-
-                if (!popup) {
-                    return;
-                }
-
-                if (
-                        !popup.contains(event.target) &&
-                        !event.target.closest('.annotation-item')
-                        ) {
-
-                    popup.classList.remove('show');
-                }
-            }
-    );
+    popup.classList.add('show');
 }
+
+document.addEventListener(
+        'click',
+        function (event) {
+            const popup =
+                    document.getElementById(
+                            'annotationPopup'
+                            );
+
+            if (!popup) {
+                return;
+            }
+
+            if (
+                    !popup.contains(event.target) &&
+                    !event.target.closest('.annotation-item')
+                    ) {
+
+                popup.classList.remove('show');
+            }
+        }
+);
+

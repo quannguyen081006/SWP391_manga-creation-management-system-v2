@@ -192,20 +192,6 @@ public class AnnotationServiceV2 {
             } else {
                 ps.setNull(13, java.sql.Types.BIGINT);
             }
-            System.out.println("=== INSERT DEBUG ===");
-
-            System.out.println("manuscriptVersionId = " + manuscriptVersionId);
-            System.out.println("manuscriptPageId = " + manuscriptPageId);
-            System.out.println("editorId = " + editorId);
-            System.out.println("pageNumber = " + pageNumber);
-            System.out.println("category = " + category);
-            System.out.println("content = " + content);
-            System.out.println("xPercent = " + xPercent);
-            System.out.println("yPercent = " + yPercent);
-            System.out.println("widthPercent = " + widthPercent);
-            System.out.println("heightPercent = " + heightPercent);
-            System.out.println("severity = " + severity);
-            System.out.println("parentAnnotationId = " + parentAnnotationId);
             ps.executeUpdate();
             try ( ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
