@@ -7,9 +7,15 @@
     <head>
         <title>Manuscript Workspace - Chapter ${chapter.chapterNumber}</title>
         <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css">
-        <c:if test="${not isMangakaRole}">
-            <script src="${pageContext.request.contextPath}/assets/manuscript-workspace.js"></script>
-        </c:if>
+        <script>
+            window.isMangaka = ${isMangakaOwner};
+
+            console.log(
+                    "isMangaka =",
+                    window.isMangaka
+                    );
+        </script>
+        <script src="${pageContext.request.contextPath}/assets/manuscript-workspace.js"></script>
         <style>
             /* Professional Light Editorial Workspace Styles */
 

@@ -29,21 +29,26 @@ document.addEventListener('DOMContentLoaded', function () {
             );
 
     // Add click handlers for page images
-    document.querySelectorAll('.page-image').forEach(img => {
+    if (!window.isMangaka) {
+        document.querySelectorAll('.page-image').forEach(img => {
 
-        img.addEventListener('click', function (event) {
+            img.addEventListener('click', function (event) {
 
-            handlePageImageClick(event, img);
+                handlePageImageClick(event, img);
+
+            });
 
         });
 
-    });
-
+    }
 });
 
 // Handle page image click
 function handlePageImageClick(event, img) {
 
+    if (window.isMangaka) {
+        return;
+    }
     const pageCard = img.closest('.page-card');
 
     if (!pageCard) {
@@ -70,6 +75,9 @@ function handlePageImageClick(event, img) {
 // Show annotation creation modal
 function showAnnotationModal(event, img) {
 
+    if (window.isMangaka) {
+        return;
+    }
     const rect = img.getBoundingClientRect();
 
     // Calculate click position as percentage
