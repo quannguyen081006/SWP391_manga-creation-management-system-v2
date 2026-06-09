@@ -585,6 +585,56 @@
             + (chapterTasks.length > 5 ? '<p class="section-desc chapter-detail-inline-72">+' + (chapterTasks.length - 5) + ' task khác — xem tab Tasks</p>' : '');
     }
 
+    async function updateManuscriptWorkspaceButton() {
+        if (!chapter) { return; }
+        
+        var btnManuscriptWorkspace = document.getElementById('btnManuscriptWorkspace');
+        if (!btnManuscriptWorkspace) { return; }
+        
+        try {
+            var response = await callApi('GET', '/api/v1/manuscript-versions/workspace?chapterId=' + chapter.id);
+            var workspace = response.data;
+            
+            if (!workspace.workspaceExists) {
+                // Case 1: No manuscript version exists
+                btnManuscriptWorkspace.style.display = '';
+                btnManuscriptWorkspace.textContent = '📝 Create Workspace';
+                btnManuscriptWorkspace.href = ctx + '/main/chapters/' + chapter.id + '/manuscript-workspace/create';
+            } else {
+                // Cases 2-6: Workspace exists, determine label based on status
+                var status = String(workspace.status || '').toUpperCase();
+                var workspaceId = workspace.workspaceId;
+                
+                btnManuscriptWorkspace.style.display = '';
+                
+                if (status === 'DRAFT') {
+                    btnManuscriptWorkspace.textContent = '✏️ Continue Manuscript';
+                    btnManuscriptWorkspace.href = ctx + '/main/manuscript-workspace/' + workspaceId;
+                } else if (status === 'SUBMITTED_FOR_REVIEW') {
+                    btnManuscriptWorkspace.textContent = '📤 View Submitted Manuscript';
+                    btnManuscriptWorkspace.href = ctx + '/main/manuscript-workspace/' + workspaceId;
+                } else if (status === 'UNDER_REVIEW') {
+                    btnManuscriptWorkspace.textContent = '👀 View Under Review Manuscript';
+                    btnManuscriptWorkspace.href = ctx + '/main/manuscript-workspace/' + workspaceId;
+                } else if (status === 'APPROVED') {
+                    btnManuscriptWorkspace.textContent = '✅ View Approved Manuscript';
+                    btnManuscriptWorkspace.href = ctx + '/main/manuscript-workspace/' + workspaceId;
+                } else if (status === 'REJECTED') {
+                    btnManuscriptWorkspace.textContent = '🔄 Create New Version';
+                    btnManuscriptWorkspace.href = ctx + '/main/chapters/' + chapter.id + '/manuscript-workspace/new-version';
+                } else {
+                    // Default: view workspace
+                    btnManuscriptWorkspace.textContent = '📝 Manuscript Workspace';
+                    btnManuscriptWorkspace.href = ctx + '/main/manuscript-workspace/' + workspaceId;
+                }
+            }
+        } catch (error) {
+            // If API call fails, hide the button
+            console.error('Failed to load workspace status:', error);
+            btnManuscriptWorkspace.style.display = 'none';
+        }
+    }
+
     function renderMeta() {
         if (!chapter) { return; }
         var progress = Math.max(0, Math.min(100, Number(chapter.completionPct || 0)));
@@ -618,15 +668,8 @@
         document.getElementById('btnDelete').style.display = (owner && chapterStatus === 'PLANNING') ? '' : 'none';
         document.getElementById('btnMarkDone').style.display = canSubmit ? '' : 'none';
         
-        // Show manuscript workspace button for EDITORIAL_REVIEW status
-        var isEditorialReview = chapterStatus === 'EDITORIAL_REVIEW';
-        var btnManuscriptWorkspace = document.getElementById('btnManuscriptWorkspace');
-        if (isEditorialReview) {
-            btnManuscriptWorkspace.style.display = '';
-            btnManuscriptWorkspace.href = ctx + '/main/chapters/' + chapter.id + '/manuscript-workspace/create';
-        } else {
-            btnManuscriptWorkspace.style.display = 'none';
-        }
+        // Update manuscript workspace button based on workspace status
+        updateManuscriptWorkspaceButton();
         
         document.getElementById('pagesOwnerActions').style.display = owner ? 'flex' : 'none';
         document.getElementById('pagesOwnerActions').style.gap = '8px';
