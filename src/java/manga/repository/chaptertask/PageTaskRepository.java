@@ -1,1973 +1,1710 @@
+package manga.repository.chaptertask;
+
+import manga.model.AuthenticatedUser;
+import manga.model.chaptertask.ChapterImageItem;
+import manga.model.chaptertask.TaskSummary;
+import java.sql.Connection;
+import java.sql.Date;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import javax.sql.DataSource;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Repository;
+
 /**
- * chapter-detail.js
- * Script cho trang Chapter Detail — quản lý page slots, tasks, upload ảnh.
+ * ============================================================
+ * PageTaskRepository - Quản lý Page Task (nhiệm vụ trang)
+ * ============================================================
  *
- * ============================================================
- * MỤC LỤC
- * ============================================================
- * 1.  BIẾN TOÀN CỤC (state)
- * 2.  UTILITY — escapeHtml, formatDate, initials, dateOnly, daysUntilDate, todayIso, addDaysIso
- * 3.  ROLE / PERMISSION — hasRole, isOwner
- * 4.  API HELPERS — callApi, uploadMultipart
- * 5.  UI HELPERS — showError, formatStatus, showPageUploadError
- * 6.  STAGE LOGIC — pageStageOrder, normalizeStage, nextAllowedStage, prepareStageSelect,
- *                   refreshStagePickerEnabled, selectedUploadStage, syncStagePickerFromClick, renderStageTrack
- * 7.  PAGE MODAL — openPageUploadModal
- * 8.  STATUS CSS — chapterStatusClass, taskStatusClass
- * 9.  DEADLINE HELPERS — isChapterDone, isChapterOverdue, deadlineSuffixText, formatDeadlineCell
- * 10. IMAGE URL — imageUrl
- * 11. PAGE SELECTION — findPageById, getSelectedPages, isPageFullyComplete, isAssignablePage,
- *                      toggleSelectedPage, countUploaded, pageStageScore, pageCompletionPercent,
- *                      countFullyCompletePages, slotStateClass
- * 12. RENDER — renderSelectionBar, renderAssignChips, nextTaskTypeForPages, groupConsecutivePages,
- *              setDefaultAssignTaskType, renderPageGrid, renderPageProgress, renderSidebarTasks,
- *              updateManuscriptWorkspaceButton, renderMeta
- * 13. TASK HELPERS — findTask, findTaskByPageNumber, isTaskOverdue, formatDueDateCell, renderTaskRowActions, renderChapterTasks
- * 14. TASK INLINE / COMPARE — loadTaskInlinePages, openPageCompare
- * 15. MODAL / POPOVER — switchTab, openModal, closeModals, closePopovers, openPopover,
- *                        updateRejectConfirmState, openAssignModal, openOverdueDecisionModal, setOverdueDecisionChoice
- * 16. ASSISTANT SELECT — fillAssistantSelect, latestTaskDueDate, updateAssignDueConstraints
- * 17. LOAD DATA — loadPages, loadTasks, loadData
- * 18. EVENT LISTENERS — tab bar, metadata save, btn delete/markDone/addPage, upload picker,
- *                        page grid click, selection bar, assign form, reassign form, extend form,
- *                        overdue decision buttons, approve/reject popovers, page compare modal
+ * MỤC LỤC:
+ * ----------------------------------------------------------
+ * [1] HẰNG SỐ & TRẠNG THÁI
+ * [2] SCHEMA GUARD - Kiểm tra & tự cập nhật cấu trúc DB
+ * [3] TRUY VẤN TASK
+ *     - listVisible()       : Liệt kê task theo quyền người dùng
+ *     - listByChapter()     : Liệt kê task theo chapter
+ *     - findById()          : Tìm task theo ID
+ * [4] TẠO & CẬP NHẬT TASK (Mangaka)
+ *     - create()            : Tạo task mới
+ *     - updateTaskByMangaka(): Cập nhật task
+ *     - updateTaskProgress() : Cập nhật due date / priority / notes
+ * [5] VÒNG ĐỜI TASK - Nộp / Duyệt / Từ chối
+ *     - updateStatusByAssistant(): Assistant nộp task
+ *     - approveByMangaka()  : Mangaka duyệt task
+ *     - rejectByMangaka()   : Mangaka từ chối task
+ * [6] VÒNG ĐỜI TASK - Phân công lại / Xoá / Huỷ
+ *     - reassignByMangaka() : Phân công lại cho assistant khác
+ *     - deleteByMangaka()   : Xoá task
+ *     - escalatePendingOverdueDecisions(): Tự huỷ task OVERDUE sau 3 ngày không có quyết định
+ * [7] QUẢN LÝ OVERDUE
+ *     - markOverdueTasks()  : Đánh dấu task quá hạn
+ *     - extendOverdueTask() : Gia hạn task OVERDUE
+ * [8] NHẮC NHỞ & THÔNG BÁO
+ *     - notifyDueSoonTasks(): Nhắc task sắp đến hạn (24h)
+ *     - markDelayedTasks()  : Nhắc task bị trễ tiến độ (3+ ngày)
+ * [9] TIẾN ĐỘ CHAPTER
+ *     - refreshChapterProgress(): Tính lại % hoàn thành chapter
+ *     - areAllTasksApproved()  : Kiểm tra tất cả task đã duyệt chưa
+ *     - areAllPagesFullyCompleted(): Kiểm tra tất cả trang đã hoàn tất chưa
+ * [10] THÔNG BÁO (Notification)
+ *     - createNotification()
+ *     - createNotificationIfAbsentToday()
+ * [11] HELPER / UTILITY
  * ============================================================
  */
-
-(function () {
-    // ============================================================
-    // 1. BIẾN TOÀN CỤC (state)
-    // ============================================================
-    var ctx = (window.CHAPTER_DETAIL_CONFIG && window.CHAPTER_DETAIL_CONFIG.contextPath) || ''; // context path từ JSP config
-    var params = new URLSearchParams(window.location.search);
-    var chapterId = params.get('id');       // ID chapter từ query string
-    var urlError = params.get('error');     // Lỗi được truyền qua URL (nếu có)
-    var currentUser = null;     // User đang đăng nhập (từ /api/v1/auth/me)
-    var chapter = null;         // Chi tiết chapter hiện tại
-    var seriesData = null;      // Series chứa chapter này
-    var pageSlots = [];         // Danh sách page slots của chapter
-    var chapterTasks = [];      // Danh sách tasks của chapter
-    var selectedPageIds = {};   // Map pageId → true cho các page đang được chọn để gán task
-    var lastSlotIndex = -1;     // Index slot cuối được click (dùng cho shift-click)
-    var pendingUploadPageId = null;  // PageId đang chờ upload trong modal
-    var pendingUploadSlot = null;    // Slot đang chờ upload trong modal
-    var activePopoverType = null;    // 'approve' | 'reject' — popover đang mở
-    var activePopoverTaskId = null;  // Task ID của popover đang mở
-    var activePopoverCell = null;    // DOM cell anchor của popover
-    var activeOverdueTaskId = null;  // Task ID trong modal overdue decision
-    var taskImagesCache = {};        // Cache ảnh theo taskId: { taskId: [imgObjects] }
-    var taskInlineLoaded = {};       // Đánh dấu task nào đã load inline xong
-    var metadataSaveTimer = null;    // Timer debounce cho auto-save metadata
+@Repository
+public class PageTaskRepository {
 
     // ============================================================
-    // 2. UTILITY
+    // [1] HẰNG SỐ & TRẠNG THÁI
     // ============================================================
 
-    /** Escape HTML đặc biệt để tránh XSS khi render vào innerHTML */
-    function escapeHtml(v) {
-        if (v === null || v === undefined) { return ''; }
-        return String(v).replace(/[&<>"]/g, function (c) {
-            return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c];
-        });
+    /** Số ngày buffer tối thiểu giữa dueDate của task và submissionDeadline của chapter (BR-34) */
+    private static final int TASK_REJECT_SERIES_DEADLINE_BUFFER_DAYS = 3;
+
+    /** Các trạng thái "đã đóng" — task ở các trạng thái này không còn block việc tái sử dụng page range */
+    private static final String SQL_CLOSED_TASK_STATUSES = "'APPROVED','DELETED','REASSIGNED','CANCELLED'";
+
+    /** Các trạng thái bị bỏ qua khi chạy job đánh dấu OVERDUE */
+    private static final String SQL_OVERDUE_SKIP_STATUSES = "'APPROVED','OVERDUE','CANCELLED','DELETED','REASSIGNED'";
+
+    /**
+     * Cờ DELAYED (chỉ cảnh báo, không thay đổi status):
+     * Task bị coi là "chậm" nếu không có cập nhật tiến độ trong 3+ ngày kể từ lúc được giao.
+     * Khác với OVERDUE (dựa vào dueDate), DELAYED dựa vào lastProgressAt.
+     */
+    private static final String SQL_IS_DELAYED =
+            "CAST(CASE WHEN t.status IN ('PENDING','IN_PROGRESS','REJECTED') "
+            + "AND DATEDIFF(DAY, t.assignedAt, GETDATE()) >= 3 "
+            + "AND DATEDIFF(DAY, COALESCE(t.lastProgressAt, t.assignedAt), GETDATE()) >= 3 "
+            + "THEN 1 ELSE 0 END AS BIT) AS isDelayed";
+
+    /** Các cột cơ bản của PageTask dùng trong SELECT */
+    private static final String SQL_TASK_COLUMNS_BASE =
+            "t.id, t.chapterId, t.assistantId, t.pageRangeStart, t.pageRangeEnd, t.taskType, t.dueDate, t.status, t.rejectionCount, ";
+
+    /** Cache: DB có các cột mở rộng (priority, notes, ...) không? */
+    private volatile Boolean taskSchemaExtended;
+
+    /** Cache: DB đã sẵn sàng cho lifecycle schema (actionReason, previousAssistantId, ...) chưa? */
+    private volatile Boolean taskLifecycleSchemaReady;
+
+    @Autowired
+    private DataSource dataSource;
+
+    @Autowired
+    private ChapterImageRepository chapterImageRepository;
+
+    @Autowired
+    private PageRepository pageRepository;
+
+    // ============================================================
+    // [2] SCHEMA GUARD - Kiểm tra & tự cập nhật cấu trúc DB
+    // ============================================================
+
+    /** Chuẩn hóa status string: trim + uppercase */
+    private String normalizeStatus(String status) {
+        return status == null ? "" : status.trim().toUpperCase(Locale.ENGLISH);
     }
 
     /**
-     * Format giá trị ngày thành chuỗi YYYY-MM-DD.
-     * Hỗ trợ: timestamp số, chuỗi ISO (có 'T'), hoặc chuỗi ngày sẵn.
+     * Trả về danh sách cột SELECT tùy thuộc DB có schema mở rộng hay không.
+     * Schema mở rộng: có cột priority, notes, rejectionReason, approvalComment, actionReason, previousAssistantId.
      */
-    function formatDate(v) {
-        if (!v) { return ''; }
-        var s = String(v);
-        if (/^\d+$/.test(s)) {
-            var date = new Date(Number(s));
-            if (!isNaN(date.getTime())) {
-                var month = String(date.getMonth() + 1);
-                var day = String(date.getDate());
-                return date.getFullYear() + '-' + (month.length < 2 ? '0' + month : month) + '-' + (day.length < 2 ? '0' + day : day);
+    private String taskSelectColumns() {
+        ensureTaskLifecycleSchemaReady();
+        if (isTaskSchemaExtended()) {
+            return SQL_TASK_COLUMNS_BASE
+                    + "ISNULL(t.priority, 'NORMAL') AS priority, t.notes, t.rejectionReason, t.approvalComment, t.actionReason, t.previousAssistantId, "
+                    + SQL_IS_DELAYED;
+        }
+        return SQL_TASK_COLUMNS_BASE
+                + "'NORMAL' AS priority, CAST(NULL AS NVARCHAR(500)) AS notes, "
+                + "CAST(NULL AS NVARCHAR(300)) AS rejectionReason, CAST(NULL AS NVARCHAR(300)) AS approvalComment, "
+                + "CAST(NULL AS NVARCHAR(300)) AS actionReason, CAST(NULL AS BIGINT) AS previousAssistantId, "
+                + SQL_IS_DELAYED;
+    }
+
+    /**
+     * Đảm bảo DB có đủ các cột cho task lifecycle (actionReason, previousAssistantId, lastProgressAt)
+     * và constraint status hợp lệ. Chạy một lần, thread-safe.
+     */
+    private void ensureTaskLifecycleSchemaReady() {
+        if (Boolean.TRUE.equals(taskLifecycleSchemaReady)) {
+            return;
+        }
+        synchronized (this) {
+            if (Boolean.TRUE.equals(taskLifecycleSchemaReady)) {
+                return;
+            }
+            try (Connection conn = dataSource.getConnection()) {
+                addColumnIfMissing(conn, "actionReason", "nvarchar(300) NULL");
+                addColumnIfMissing(conn, "previousAssistantId", "bigint NULL");
+                addColumnIfMissing(conn, "lastProgressAt", "datetime NULL");
+
+                // Xoá constraint cũ rồi thêm lại với đầy đủ trạng thái mới
+                String dropConstraint =
+                        "IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_PageTask_status' AND parent_object_id = OBJECT_ID('dbo.PageTask')) "
+                        + "ALTER TABLE [dbo].[PageTask] DROP CONSTRAINT [CK_PageTask_status]";
+                try (PreparedStatement ps = conn.prepareStatement(dropConstraint)) {
+                    ps.executeUpdate();
+                }
+                String addConstraint =
+                        "IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_PageTask_status' AND parent_object_id = OBJECT_ID('dbo.PageTask')) "
+                        + "ALTER TABLE [dbo].[PageTask] WITH CHECK ADD CONSTRAINT [CK_PageTask_status] CHECK "
+                        + "([status] IN ('PENDING','IN_PROGRESS','SUBMITTED','APPROVED','REJECTED','OVERDUE','DELETED','REASSIGNED','CANCELLED'))";
+                try (PreparedStatement ps = conn.prepareStatement(addConstraint)) {
+                    ps.executeUpdate();
+                }
+                taskLifecycleSchemaReady = Boolean.TRUE;
+            } catch (SQLException ex) {
+                throw new RuntimeException("Cannot prepare task lifecycle schema", ex);
             }
         }
-        if (s.indexOf('T') > -1) { return s.substring(0, 10); }
-        return s;
     }
 
-    /**
-     * Lấy chữ viết tắt từ tên đầy đủ (VD: "Nguyen Van A" → "NA").
-     * Dùng để hiển thị avatar assistant trên page slot.
-     */
-    function initials(name) {
-        if (!name) { return '?'; }
-        var parts = String(name).trim().split(/\s+/).filter(Boolean);
-        if (parts.length >= 2) {
-            return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+    /** Thêm cột vào bảng PageTask nếu chưa tồn tại */
+    private void addColumnIfMissing(Connection conn, String column, String definition) throws SQLException {
+        String sql = "IF COL_LENGTH('dbo.PageTask', '" + column + "') IS NULL ALTER TABLE [dbo].[PageTask] ADD " + column + " " + definition;
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.executeUpdate();
         }
-        return parts[0].substring(0, 2).toUpperCase();
     }
 
-    /** Chuyển giá trị ngày thành Date object ở 00:00:00 local time */
-    function dateOnly(v) {
-        var d = formatDate(v);
-        return d ? new Date(d + 'T00:00:00') : null;
-    }
-
-    /** Tính số ngày còn lại đến deadline. Âm = đã quá hạn. */
-    function daysUntilDate(value) {
-        var due = dateOnly(value);
-        if (!due) { return null; }
-        var today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return Math.ceil((due - today) / 86400000);
-    }
-
-    /** Trả về ngày hôm nay dạng YYYY-MM-DD */
-    function todayIso() {
-        var date = new Date();
-        var month = String(date.getMonth() + 1);
-        var day = String(date.getDate());
-        return date.getFullYear() + '-' + (month.length < 2 ? '0' + month : month) + '-' + (day.length < 2 ? '0' + day : day);
-    }
-
-    /** Cộng thêm `days` ngày vào một giá trị ngày, trả về YYYY-MM-DD */
-    function addDaysIso(value, days) {
-        var date = dateOnly(value);
-        if (!date) { return ''; }
-        date.setDate(date.getDate() + days);
-        var month = String(date.getMonth() + 1);
-        var day = String(date.getDate());
-        return date.getFullYear() + '-' + (month.length < 2 ? '0' + month : month) + '-' + (day.length < 2 ? '0' + day : day);
-    }
-
-    // ============================================================
-    // 3. ROLE / PERMISSION
-    // ============================================================
-
-    /**
-     * Kiểm tra currentUser có role chỉ định không.
-     * Hỗ trợ cả field role đơn lẫn mảng roles (string hoặc object).
-     */
-    function hasRole(role) {
-        if (!currentUser) { return false; }
-        if (String(currentUser.role || currentUser.activeRole || currentUser.currentRole || '').toUpperCase() === role) {
-            return true;
+    /** Kiểm tra DB có cột mở rộng (priority, notes) không — cache kết quả */
+    private boolean isTaskSchemaExtended() {
+        if (taskSchemaExtended != null) {
+            return taskSchemaExtended.booleanValue();
         }
-        var roles = currentUser.roles || [];
-        for (var i = 0; i < roles.length; i++) {
-            var value = roles[i];
-            var name = typeof value === 'string' ? value : (value && (value.name || value.role || value.authority));
-            if (String(name || '').toUpperCase() === role) {
+        synchronized (this) {
+            if (taskSchemaExtended != null) {
+                return taskSchemaExtended.booleanValue();
+            }
+            boolean ready = false;
+            String sql = "SELECT CASE WHEN COL_LENGTH('dbo.PageTask', 'priority') IS NOT NULL "
+                    + "AND COL_LENGTH('dbo.PageTask', 'notes') IS NOT NULL THEN 1 ELSE 0 END";
+            try (Connection conn = dataSource.getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql);
+                 ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    ready = rs.getInt(1) == 1;
+                }
+            } catch (SQLException ex) {
+                ready = false;
+            }
+            taskSchemaExtended = Boolean.valueOf(ready);
+            return ready;
+        }
+    }
+
+    /** Kiểm tra ResultSet có cột tên `label` không */
+    private boolean hasColumn(ResultSet rs, String label) throws SQLException {
+        ResultSetMetaData md = rs.getMetaData();
+        for (int i = 1; i <= md.getColumnCount(); i++) {
+            if (label.equalsIgnoreCase(md.getColumnLabel(i))) {
                 return true;
             }
         }
         return false;
     }
 
-    /**
-     * Kiểm tra user hiện tại có phải owner (MANGAKA) của series này không.
-     * Dùng để ẩn/hiện các nút action chỉ dành cho Mangaka.
-     */
-    function isOwner() {
-        return hasRole('MANGAKA') && seriesData && Number(seriesData.mangakaId) === Number(currentUser.id);
+    // ============================================================
+    // [3] TRUY VẤN TASK
+    // ============================================================
+
+    /** Liệt kê task theo quyền người dùng (không lọc status/chapter) */
+    public List<TaskSummary> listVisible(AuthenticatedUser user) {
+        return listVisible(user, null, null);
     }
 
-    // ============================================================
-    // 4. API HELPERS
-    // ============================================================
-
     /**
-     * Gọi API JSON chung cho GET/POST/PUT/PATCH/DELETE.
-     * - GET/PUT/PATCH: data được serialize thành query string.
-     * - POST/DELETE: data được gửi trong body (form-urlencoded).
-     * Throws Error nếu response không OK hoặc body.success === false.
+     * Liệt kê task hiển thị với người dùng, có thể lọc thêm theo status và/hoặc chapterId.
+     * Quy tắc phân quyền:
+     *   - ADMIN: thấy tất cả
+     *   - MANGAKA: chỉ thấy task thuộc series của mình
+     *   - TANTOU_EDITOR: chỉ thấy task thuộc series mình phụ trách
+     *   - ASSISTANT: chỉ thấy task được giao cho mình
      */
-    async function callApi(method, path, data) {
-        var opts = { method: method, headers: { 'Accept': 'application/json' } };
-        var url = ctx + path;
-        if (data) {
-            var p = new URLSearchParams(data).toString();
-            if (method === 'GET' || method === 'PUT' || method === 'PATCH') {
-                url += (url.indexOf('?') === -1 ? '?' : '&') + p;
-            } else {
-                opts.headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8';
-                opts.body = p;
+    public List<TaskSummary> listVisible(AuthenticatedUser user, String status, Long chapterId) {
+        String baseSql =
+            "SELECT " + taskSelectColumns() + ", "
+            + "c.title AS chapterTitle, c.chapterNumber, s.title AS seriesTitle, u.fullName AS assistantName "
+            + "FROM PageTask t "
+            + "JOIN Chapter c ON c.id = t.chapterId "
+            + "JOIN Series s ON s.id = c.seriesId "
+            + "LEFT JOIN [User] u ON u.id = t.assistantId";
+
+        List<TaskSummary> rows = new ArrayList<TaskSummary>();
+        List<String> conditions = new ArrayList<String>();
+        List<Object> params = new ArrayList<Object>();
+        if (!user.hasRole("ADMIN")) {
+            if (user.hasRole("MANGAKA")) {
+                conditions.add("s.mangakaId = ?");
+                params.add(user.getId());
+            }
+            if (user.hasRole("TANTOU_EDITOR")) {
+                conditions.add("s.tantouEditorId = ?");
+                params.add(user.getId());
+            }
+            if (user.hasRole("ASSISTANT")) {
+                conditions.add("t.assistantId = ?");
+                params.add(user.getId());
+            }
+            if (conditions.isEmpty()) {
+                return rows;
             }
         }
-        var res = await fetch(url, opts);
-        var text = await res.text();
-        var body = null;
-        try { body = text ? JSON.parse(text) : null; } catch (e) {}
-        if (!res.ok || (body && body.success === false)) {
-            var msg = (body && (body.message || (body.errors && body.errors[0]))) || text || ('HTTP ' + res.status);
-            throw new Error(msg);
-        }
-        return body;
-    }
 
-    /**
-     * Upload file multipart/form-data.
-     * Nhận FormData, form element, hoặc File object.
-     * Throws Error nếu upload thất bại.
-     */
-    async function uploadMultipart(path, formOrFile) {
-        var fd;
-        if (formOrFile instanceof FormData) {
-            fd = formOrFile;
-        } else if (formOrFile && formOrFile.tagName === 'FORM') {
-            fd = new FormData(formOrFile);
-        } else {
-            fd = new FormData();
-            fd.append('file', formOrFile);
-        }
-        var res = await fetch(ctx + path, { method: 'POST', headers: { 'Accept': 'application/json' }, body: fd });
-        var text = await res.text();
-        var body = null;
-        try { body = text ? JSON.parse(text) : null; } catch (e) {}
-        if (!res.ok || (body && body.success === false)) {
-            var msg = (body && (body.message || (body.errors && body.errors[0]))) || text || ('HTTP ' + res.status);
-            throw new Error(msg);
-        }
-        return body;
-    }
-
-    // ============================================================
-    // 5. UI HELPERS
-    // ============================================================
-
-    /** Hiển thị / ẩn thông báo lỗi chung (#detailResult) */
-    function showError(msg) {
-        var el = document.getElementById('detailResult');
-        el.style.display = msg ? 'block' : 'none';
-        el.textContent = msg || '';
-    }
-
-    /** Format enum status thành dạng Title Case (VD: IN_PROGRESS → "In Progress") */
-    function formatStatus(s) {
-        return String(s || '').toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
-    }
-
-    /** Hiển thị / ẩn lỗi trong modal upload page (#pageUploadError) */
-    function showPageUploadError(message) {
-        var el = document.getElementById('pageUploadError');
-        if (!el) { return; }
-        el.style.display = message ? 'block' : 'none';
-        el.textContent = message || '';
-    }
-
-    // ============================================================
-    // 6. STAGE LOGIC
-    // ============================================================
-
-    /** Thứ tự các stage sản xuất của một page */
-    var pageStageOrder = ['SKETCHING', 'INKING', 'COLORING', 'SCREENTONE', 'LETTERING'];
-
-    /** Normalize stage string về giá trị hợp lệ trong pageStageOrder, hoặc '' nếu không hợp lệ */
-    function normalizeStage(stage) {
-        var s = String(stage || '').trim().toUpperCase();
-        return pageStageOrder.indexOf(s) >= 0 ? s : '';
-    }
-
-    /** Lấy stage tiếp theo có thể thực hiện sau completedStage hiện tại của slot */
-    function nextAllowedStage(slot) {
-        var current = normalizeStage(slot && slot.completedStage);
-        if (!current) { return pageStageOrder[0]; }
-        var idx = pageStageOrder.indexOf(current);
-        return pageStageOrder[Math.min(idx + 1, pageStageOrder.length - 1)];
-    }
-
-    /**
-     * Khởi tạo stage picker checkbox trong modal upload.
-     * Các stage đã hoàn thành sẽ được checked và disabled.
-     */
-    function prepareStageSelect(slot) {
-        var picker = document.getElementById('pageUploadStagePicker');
-        if (!picker) { return; }
-        var current = normalizeStage(slot && slot.completedStage);
-        var currentIndex = current ? pageStageOrder.indexOf(current) : -1;
-        var boxes = picker.querySelectorAll('input[type="checkbox"]');
-        picker.setAttribute('data-base-index', String(currentIndex));
-        for (var i = 0; i < boxes.length; i++) {
-            var optStage = normalizeStage(boxes[i].value);
-            var optIndex = pageStageOrder.indexOf(optStage);
-            boxes[i].checked = optIndex <= currentIndex;
-        }
-        refreshStagePickerEnabled();
-    }
-
-    /**
-     * Cập nhật trạng thái enabled/disabled của từng checkbox stage.
-     * Quy tắc: chỉ cho phép tick stage kế tiếp sau stage cao nhất đã tick.
-     */
-    function refreshStagePickerEnabled() {
-        var picker = document.getElementById('pageUploadStagePicker');
-        if (!picker) { return; }
-        var boxes = picker.querySelectorAll('input[type="checkbox"]');
-        var baseIndex = Number(picker.getAttribute('data-base-index') || '-1');
-        var highest = baseIndex;
-        for (var i = 0; i < boxes.length; i++) {
-            if (boxes[i].checked) {
-                highest = Math.max(highest, i);
-            }
-        }
-        var maxEnabled = Math.min(highest + 1, boxes.length - 1);
-        for (var j = 0; j < boxes.length; j++) {
-            boxes[j].disabled = j <= baseIndex || j > maxEnabled;
-        }
-    }
-
-    /**
-     * Đọc stage cao nhất đang được chọn trong picker.
-     * Throws nếu user tick không theo thứ tự (bỏ sót stage giữa chừng).
-     * Trả về tên stage cao nhất, hoặc '' nếu chưa chọn gì.
-     */
-    function selectedUploadStage(slot) {
-        var picker = document.getElementById('pageUploadStagePicker');
-        if (!picker) { return ''; }
-        var boxes = picker.querySelectorAll('input[type="checkbox"]');
-        var highest = -1;
-        for (var i = 0; i < boxes.length; i++) {
-            if (boxes[i].checked) {
-                highest = Math.max(highest, pageStageOrder.indexOf(normalizeStage(boxes[i].value)));
-            }
-        }
-        for (var j = 0; j <= highest; j++) {
-            if (!boxes[j].checked) {
-                throw new Error('Stage phải tick theo thứ tự từ Sketching trước.');
-            }
-        }
-        return highest >= 0 ? pageStageOrder[highest] : '';
-    }
-
-    /**
-     * Xử lý khi user click vào một checkbox stage.
-     * Auto-check tất cả stage phía trước (nếu check lên),
-     * hoặc auto-uncheck tất cả stage phía sau (nếu uncheck).
-     */
-    function syncStagePickerFromClick(changedBox) {
-        var picker = document.getElementById('pageUploadStagePicker');
-        if (!picker || !changedBox) { return; }
-        var boxes = picker.querySelectorAll('input[type="checkbox"]');
-        var changedIndex = pageStageOrder.indexOf(normalizeStage(changedBox.value));
-        if (changedBox.checked) {
-            for (var i = 0; i < boxes.length; i++) {
-                if (!boxes[i].disabled && i < changedIndex) {
-                    boxes[i].checked = true;
+        StringBuilder sql = new StringBuilder(baseSql);
+        if (!user.hasRole("ADMIN")) {
+            sql.append(" WHERE (");
+            for (int i = 0; i < conditions.size(); i++) {
+                if (i > 0) {
+                    sql.append(" OR ");
                 }
+                sql.append(conditions.get(i));
             }
-        } else {
-            for (var j = 0; j < boxes.length; j++) {
-                if (!boxes[j].disabled && j > changedIndex) {
-                    boxes[j].checked = false;
-                }
-            }
+            sql.append(")");
         }
-        refreshStagePickerEnabled();
-    }
-
-    /**
-     * Render thanh tiến trình stage (dot track) cho một page slot.
-     * Dot có class 'done' nếu đã hoàn thành, 'current' nếu đang làm.
-     * Hiển thị chữ cái đầu của tên stage (S/I/C/S/L).
-     */
-    function renderStageTrack(stage) {
-        var current = normalizeStage(stage);
-        var doneIndex = current ? pageStageOrder.indexOf(current) : -1;
-        var activeIndex = Math.min(doneIndex + 1, pageStageOrder.length - 1);
-        return '<div class="page-stage-track">'
-            + pageStageOrder.map(function (s, i) {
-                var cls = i <= doneIndex ? ' done' : (i === activeIndex ? ' current' : '');
-                return '<span class="page-stage-dot' + cls + '" title="' + escapeHtml(formatStatus(s)) + '">' + s.charAt(0) + '</span>';
-            }).join('')
-            + '</div>';
-    }
-
-    // ============================================================
-    // 7. PAGE MODAL
-    // ============================================================
-
-    /**
-     * Mở modal upload/replace ảnh cho một page slot.
-     * - Hiển thị preview ảnh hiện tại nếu có.
-     * - Chuẩn bị stage picker dựa trên completedStage của slot.
-     * - Nút Delete chỉ hiện cho owner.
-     */
-    function openPageUploadModal(slot) {
-        if (!slot) { return; }
-        pendingUploadPageId = slot.id;
-        pendingUploadSlot = slot;
-        showPageUploadError('');
-        document.getElementById('pageUploadTitle').textContent = slot.imageUrl ? 'Replace page ' + slot.pageNumber : 'Upload page ' + slot.pageNumber;
-        document.getElementById('pageUploadSubtitle').textContent = 'Choose the image and tick the stages already completed for this page.';
-        document.getElementById('pageModalFileInput').value = '';
-        prepareStageSelect(slot);
-        var preview = document.getElementById('pageUploadPreview');
-        var download = document.getElementById('pageUploadDownload');
-        if (slot.imageUrl) {
-            var url = imageUrl(slot.imageUrl);
-            preview.innerHTML = '<img src="' + escapeHtml(url) + '" alt="Page ' + slot.pageNumber + '" />';
-            download.href = url;
-            download.style.display = '';
-        } else {
-            preview.innerHTML = '<span class="section-desc">No image uploaded yet.</span>';
-            download.style.display = 'none';
+        boolean hasWhere = !user.hasRole("ADMIN");
+        if (status != null && !status.trim().isEmpty()) {
+            sql.append(hasWhere ? " AND" : " WHERE");
+            sql.append(" t.status = ?");
+            params.add(status.trim().toUpperCase(Locale.ENGLISH));
+            hasWhere = true;
         }
-        document.getElementById('pageUploadDelete').style.display = isOwner() ? '' : 'none';
-        openModal('pageUploadModal');
-    }
-
-    // ============================================================
-    // 8. STATUS CSS
-    // ============================================================
-
-    /** Trả về CSS class tương ứng với trạng thái chapter */
-    function chapterStatusClass(status) {
-        status = String(status || '').toUpperCase();
-        if (status === 'PLANNING') { return 'status-draft'; }
-        if (status === 'IN_PROGRESS') { return 'status-progress'; }
-        if (status === 'COMPLETE') { return 'status-approved'; }
-        if (status === 'EDITORIAL_REVIEW') { return 'status-review'; }
-        if (status === 'APPROVED') { return 'status-approved'; }
-        if (status === 'REJECTED') { return 'status-rejected'; }
-        return 'status-draft';
-    }
-
-    /** Trả về CSS class tương ứng với trạng thái task */
-    function taskStatusClass(status) {
-        status = String(status || '').toUpperCase();
-        if (status === 'OVERDUE') { return 'status-overdue'; }
-        if (status === 'IN_PROGRESS') { return 'status-progress'; }
-        if (status === 'PENDING') { return 'status-pending'; }
-        if (status === 'SUBMITTED') { return 'status-review'; }
-        if (status === 'APPROVED') { return 'status-approved'; }
-        if (status === 'REJECTED') { return 'status-rejected'; }
-        if (status === 'DELETED') { return 'status-rejected'; }
-        if (status === 'REASSIGNED') { return 'status-pending'; }
-        return 'status-draft';
-    }
-
-    // ============================================================
-    // 9. DEADLINE HELPERS
-    // ============================================================
-
-    /** Chapter được coi là xong nếu status COMPLETE/APPROVED hoặc completionPct >= 100 */
-    function isChapterDone(ch) {
-        var st = String(ch.status || '').toUpperCase();
-        return st === 'COMPLETE' || st === 'APPROVED' || Number(ch.completionPct || 0) >= 100;
-    }
-
-    /** Chapter bị overdue nếu chưa xong và đã qua submissionDeadline */
-    function isChapterOverdue(ch) {
-        if (isChapterDone(ch)) { return false; }
-        var daysLeft = daysUntilDate(ch.submissionDeadline);
-        return daysLeft !== null && daysLeft < 0;
-    }
-
-    /**
-     * Tạo text suffix cho deadline (VD: "3 days left", "1 day overdue", "Done").
-     * Dùng trong formatDeadlineCell.
-     */
-    function deadlineSuffixText(daysLeft, isDone, isOverdue) {
-        if (isDone) { return 'Done'; }
-        if (isOverdue) {
-            if (daysLeft !== null && daysLeft < 0) {
-                var n = Math.abs(daysLeft);
-                return n === 1 ? '1 day overdue' : (n + ' days overdue');
-            }
-            return 'Overdue';
+        if (chapterId != null) {
+            sql.append(hasWhere ? " AND" : " WHERE");
+            sql.append(" t.chapterId = ?");
+            params.add(chapterId);
         }
-        if (daysLeft === null) { return ''; }
-        if (daysLeft === 0) { return 'Due today'; }
-        if (daysLeft === 1) { return '1 day left'; }
-        return daysLeft + ' days left';
-    }
+        sql.append(" ORDER BY t.updatedAt DESC");
 
-    /**
-     * Render HTML cho cell deadline với màu sắc theo trạng thái:
-     * - done: xanh lá (due-date-done)
-     * - overdue: đỏ với icon cảnh báo (due-date-overdue)
-     * - urgent (≤3 ngày): cam (due-date-urgent)
-     * - bình thường: xanh dương (due-date-active)
-     */
-    function formatDeadlineCell(dateValue, isDone, isOverdue) {
-        var formatted = formatDate(dateValue);
-        if (!formatted) { return '<span class="chapter-detail-inline-66">—</span>'; }
-        var daysLeft = daysUntilDate(dateValue);
-        if (!isDone && !isOverdue && daysLeft !== null && daysLeft < 0) { isOverdue = true; }
-        var suffix = deadlineSuffixText(daysLeft, isDone, isOverdue);
-        suffix = suffix ? ' (' + suffix + ')' : '';
-        if (isDone) {
-            return '<span class="due-date-done">' + escapeHtml(formatted) + suffix + '</span>';
-        }
-        if (isOverdue) {
-            return '<span class="due-date-overdue">&#9888; ' + escapeHtml(formatted) + suffix + '</span>';
-        }
-        if (daysLeft !== null && daysLeft <= 3) {
-            return '<span class="due-date-urgent">' + escapeHtml(formatted) + suffix + '</span>';
-        }
-        return '<span class="due-date-active">' + escapeHtml(formatted) + suffix + '</span>';
-    }
-
-    // ============================================================
-    // 10. IMAGE URL
-    // ============================================================
-
-    /**
-     * Chuẩn hóa URL ảnh: nếu là absolute URL giữ nguyên,
-     * nếu là relative path thì thêm ctx prefix.
-     */
-    function imageUrl(fileUrl) {
-        var url = String(fileUrl || '');
-        if (url.indexOf('http://') === 0 || url.indexOf('https://') === 0) { return url; }
-        if (url.indexOf(ctx + '/') === 0) { return url; }
-        return ctx + url;
-    }
-
-    // ============================================================
-    // 11. PAGE SELECTION
-    // ============================================================
-
-    /** Tìm page slot theo ID trong mảng pageSlots */
-    function findPageById(id) {
-        for (var i = 0; i < pageSlots.length; i++) {
-            if (Number(pageSlots[i].id) === Number(id)) { return pageSlots[i]; }
-        }
-        return null;
-    }
-
-    /**
-     * Lấy danh sách page đang được chọn (selectedPageIds),
-     * lọc chỉ lấy các page có thể gán task, sắp xếp theo pageNumber.
-     */
-    function getSelectedPages() {
-        var ids = Object.keys(selectedPageIds);
-        var out = [];
-        for (var i = 0; i < ids.length; i++) {
-            var p = findPageById(ids[i]);
-            if (p && isAssignablePage(p)) { out.push(p); }
-        }
-        out.sort(function (a, b) { return a.pageNumber - b.pageNumber; });
-        return out;
-    }
-
-    /** Page hoàn chỉnh khi đã đạt stage LETTERING */
-    function isPageFullyComplete(slot) {
-        return normalizeStage(slot && slot.completedStage) === 'LETTERING';
-    }
-
-    /**
-     * Page có thể gán task khi:
-     * - Chưa được gán task nào (slot.taskId falsy)
-     * - Chưa hoàn chỉnh (chưa LETTERING)
-     */
-    function isAssignablePage(slot) {
-        return !!slot && !slot.taskId && !isPageFullyComplete(slot);
-    }
-
-    /** Toggle chọn/bỏ chọn page. Chỉ hoạt động với page có thể gán task. */
-    function toggleSelectedPage(pageId, slot) {
-        if (!isAssignablePage(slot)) { return; }
-        if (selectedPageIds[String(pageId)]) {
-            delete selectedPageIds[String(pageId)];
-        } else {
-            selectedPageIds[String(pageId)] = true;
-        }
-    }
-
-    /** Đếm số page đã có ảnh upload */
-    function countUploaded() {
-        var n = 0;
-        for (var i = 0; i < pageSlots.length; i++) {
-            if (pageSlots[i].imageUrl) { n++; }
-        }
-        return n;
-    }
-
-    /**
-     * Tính điểm tiến độ của một page dựa trên completedStage.
-     * SKETCHING=1, INKING=2, COLORING=3, SCREENTONE=4, LETTERING=5, chưa có=0.
-     */
-    function pageStageScore(slot) {
-        var stage = normalizeStage(slot && slot.completedStage);
-        return stage ? pageStageOrder.indexOf(stage) + 1 : 0;
-    }
-
-    /**
-     * Tính % hoàn thành của chapter dựa trên tổng điểm stage của tất cả page.
-     * Công thức: sum(stageScore) * 100 / (totalPages * 5)
-     */
-    function pageCompletionPercent() {
-        if (!pageSlots.length) { return 0; }
-        var completedUnits = 0;
-        for (var i = 0; i < pageSlots.length; i++) {
-            completedUnits += pageStageScore(pageSlots[i]);
-        }
-        return Math.round((completedUnits * 100) / (pageSlots.length * pageStageOrder.length));
-    }
-
-    /** Đếm số page đã đạt LETTERING (hoàn chỉnh) */
-    function countFullyCompletePages() {
-        var n = 0;
-        for (var i = 0; i < pageSlots.length; i++) {
-            if (isPageFullyComplete(pageSlots[i])) { n++; }
-        }
-        return n;
-    }
-
-    /** Trả về CSS class cho page slot: 'state-uploaded' hoặc 'state-empty' */
-    function slotStateClass(slot) {
-        if (String(slot.status || '').toUpperCase() === 'UPLOADED' || slot.imageUrl) { return 'state-uploaded'; }
-        return 'state-empty';
-    }
-
-    // ============================================================
-    // 12. RENDER
-    // ============================================================
-
-    /** Hiển thị/ẩn thanh selection bar phía trên page grid khi có page được chọn */
-    function renderSelectionBar() {
-        var selected = getSelectedPages();
-        var bar = document.getElementById('selectionBar');
-        if (!selected.length) {
-            bar.classList.remove('visible');
-            return;
-        }
-        bar.classList.add('visible');
-        document.getElementById('selectionLabel').textContent = selected.length + ' trang đã chọn ('
-            + selected[0].pageNumber + (selected.length > 1 ? '–' + selected[selected.length - 1].pageNumber : '') + ')';
-    }
-
-    /**
-     * Render chip list các page đã chọn trong modal gán task.
-     * Disable nút submit nếu chưa chọn page nào.
-     */
-    function renderAssignChips() {
-        var el = document.getElementById('assignPageChips');
-        var selected = getSelectedPages();
-        if (!selected.length) {
-            el.innerHTML = '<span class="section-desc chapter-detail-inline-67">Chưa chọn trang — chọn trên lưới Pages trước khi gán.</span>';
-            document.getElementById('assignTaskSubmit').disabled = true;
-            return;
-        }
-        document.getElementById('assignTaskSubmit').disabled = false;
-        el.innerHTML = selected.map(function (p) {
-            return '<span class="assign-chip">Trang ' + p.pageNumber + '</span>';
-        }).join('');
-    }
-
-    /**
-     * Tính taskType mặc định cho nhóm page được chọn.
-     * Nếu tất cả page cùng next stage → trả về stage đó.
-     * Nếu mixed (các page ở stage khác nhau) → trả về 'MIXED'.
-     */
-    function nextTaskTypeForPages(selected) {
-        if (!selected || !selected.length) {
-            return pageStageOrder[0];
-        }
-        var first = null;
-        var mixed = false;
-        selected.forEach(function (p) {
-            var stage = normalizeStage(p.completedStage);
-            var nextIndex = stage ? Math.min(pageStageOrder.indexOf(stage) + 1, pageStageOrder.length - 1) : 0;
-            var next = pageStageOrder[nextIndex];
-            if (first === null) {
-                first = next;
-            } else if (first !== next) {
-                mixed = true;
-            }
-        });
-        return mixed ? 'MIXED' : first;
-    }
-
-    /**
-     * Nhóm các page liên tiếp lại với nhau.
-     * VD: [1,2,3,5,6] → [[1,2,3],[5,6]]
-     * Dùng để tạo nhiều task khi user chọn các page không liên tiếp.
-     */
-    function groupConsecutivePages(selected) {
-        var groups = [];
-        var current = [];
-        selected.forEach(function (page) {
-            if (!current.length || page.pageNumber === current[current.length - 1].pageNumber + 1) {
-                current.push(page);
-            } else {
-                groups.push(current);
-                current = [page];
-            }
-        });
-        if (current.length) {
-            groups.push(current);
-        }
-        return groups;
-    }
-
-    /** Cập nhật phần tóm tắt taskType trong modal gán task */
-    function setDefaultAssignTaskType() {
-        var summary = document.getElementById('assignTaskTypeSummary');
-        if (!summary) { return; }
-        var selected = getSelectedPages();
-        if (!selected.length) {
-            summary.textContent = 'Tự tính theo stage tiếp theo của từng trang.';
-            return;
-        }
-        summary.innerHTML = selected.map(function (p) {
-            var stage = normalizeStage(p.completedStage);
-            var nextIndex = stage ? Math.min(pageStageOrder.indexOf(stage) + 1, pageStageOrder.length - 1) : 0;
-            return '<span class="assign-chip">Page ' + p.pageNumber + ': ' + escapeHtml(formatStatus(pageStageOrder[nextIndex])) + '</span>';
-        }).join('');
-    }
-
-    /**
-     * Render toàn bộ page grid.
-     * Mỗi slot hiển thị: thumbnail, page number, lock icon (nếu có task),
-     * icon trạng thái task (IN_PROGRESS/SUBMITTED), stage track dots,
-     * avatar initials của assistant (nếu task chưa approved).
-     */
-    function renderPageGrid() {
-        var grid = document.getElementById('pageSlotGrid');
-        var owner = isOwner();
-        if (!pageSlots.length) {
-            grid.innerHTML = '<p class="chapter-detail-inline-68">Chưa có ô trang. '
-                + (owner ? 'Nhấn + Thêm trang để bắt đầu.' : 'No page slots yet.') + '</p>'
-                + (owner ? '<div class="page-slot page-slot-add chapter-detail-inline-69" data-add-page="1" title="Thêm trang">+</div>' : '');
-            return;
-        }
-
-        var html = pageSlots.map(function (slot, index) {
-            var selectable = isAssignablePage(slot);
-            // Xóa khỏi selection nếu page không còn gán được
-            if (!selectable && selectedPageIds[String(slot.id)]) {
-                delete selectedPageIds[String(slot.id)];
-            }
-            var selected = selectable && !!selectedPageIds[String(slot.id)];
-            var state = slotStateClass(slot);
-            var inProgressTaskCls = String(slot.taskStatus || '').toUpperCase() === 'IN_PROGRESS' ? ' task-in-progress' : '';
-            var inProgressTaskIcon = inProgressTaskCls
-                ? '<span class="page-slot-status-icon icon-in-progress">●<span class="icon-tooltip">Đang làm</span></span>'
-                : '';
-            var submittedTaskCls = String(slot.taskStatus || '').toUpperCase() === 'SUBMITTED' ? ' task-submitted' : '';
-            var submittedTaskIcon = submittedTaskCls
-                ? '<span class="page-slot-status-icon icon-submitted">●<span class="icon-tooltip">Đã nộp</span></span>'
-                : '';
-            var completeStageCls = normalizeStage(slot.completedStage) === 'LETTERING' ? ' stage-complete' : '';
-            var cls = 'page-slot ' + state + inProgressTaskCls + submittedTaskCls + completeStageCls + (selected ? ' state-selected' : '');
-            var num = '<span class="page-slot-num">' + slot.pageNumber + '</span>';
-            var lockIconHtml = slot.taskId ? '<span class="page-slot-lock" title="Trang này đã được gán task">🔒</span>' : '';
-            var inner = '';
-            if (state === 'state-empty') {
-                inner = '<span class="page-slot-upload-label">+ Upload</span>';
-            } else if (slot.imageUrl) {
-                inner = '<img src="' + escapeHtml(imageUrl(slot.imageUrl)) + '" alt="Page ' + slot.pageNumber + '" />'
-                    + '<a class="page-download-btn" href="' + escapeHtml(imageUrl(slot.imageUrl)) + '" download title="Download page image" data-page-download>↓</a>';
-            }
-            // Hiện initials assistant nếu task chưa approved
-            if (slot.taskId && slot.assistantName && String(slot.taskStatus || '').toUpperCase() !== 'APPROVED') {
-                inner += '<span class="page-slot-initials" title="' + escapeHtml(slot.assistantName) + '">' + escapeHtml(initials(slot.assistantName)) + '</span>';
-            }
-            inner += renderStageTrack(slot.completedStage);
-            return '<div class="' + cls + '" data-page-id="' + slot.id + '" data-slot-index="' + index + '" data-page-number="' + slot.pageNumber + '">' + num + lockIconHtml + inProgressTaskIcon + submittedTaskIcon + inner + '</div>';
-        }).join('');
-
-        if (owner) {
-            html += '<div class="page-slot page-slot-add" data-add-page="1" title="Thêm trang">+</div>';
-        }
-        grid.innerHTML = html;
-        renderSelectionBar();
-    }
-
-    /** Cập nhật progress bar, label đếm page, và metadata panel */
-    function renderPageProgress() {
-        var total = pageSlots.length;
-        var uploaded = countUploaded();
-        var completePages = countFullyCompletePages();
-        var pct = pageCompletionPercent();
-        document.getElementById('progressLabel').textContent = pct + '% (' + completePages + ' / ' + total + ' pages complete)';
-        document.getElementById('progressFill').style.width = pct + '%';
-        document.getElementById('pageCountLabel').textContent = uploaded + ' / ' + total + ' đã upload';
-        document.getElementById('tabPageCount').textContent = total;
-        document.getElementById('metaPages').textContent = uploaded + ' / ' + total;
-        document.getElementById('metaProgress').textContent = pct + '% page';
-    }
-
-    /** Render preview 5 task đầu tiên trong sidebar */
-    function renderSidebarTasks() {
-        var el = document.getElementById('sidebarTaskList');
-        if (!chapterTasks.length) {
-            el.innerHTML = '<p class="section-desc chapter-detail-inline-70">Chưa có task.</p>';
-            return;
-        }
-        var preview = chapterTasks.slice(0, 5);
-        el.innerHTML = preview.map(function (t) {
-            return '<div class="sidebar-task-mini">'
-                + '<strong>#' + t.id + '</strong> p.' + t.pageRangeStart + '-' + t.pageRangeEnd
-                + ' · ' + escapeHtml(formatStatus(t.taskType))
-                + '<br/><span class="status-chip ' + taskStatusClass(t.status) + ' chapter-detail-inline-71">' + formatStatus(t.status) + '</span>'
-                + '</div>';
-        }).join('')
-            + (chapterTasks.length > 5 ? '<p class="section-desc chapter-detail-inline-72">+' + (chapterTasks.length - 5) + ' task khác — xem tab Tasks</p>' : '');
-    }
-
-    /**
-     * Cập nhật nút btnManuscriptWorkspace dựa trên trạng thái workspace thực tế từ API.
-     * Gọi API /api/v1/manuscript-versions/workspace?chapterId=... để lấy trạng thái,
-     * sau đó hiển thị label và href phù hợp theo từng case:
-     *   - workspaceExists=false              → "📝 Create Workspace"      → /create
-     *   - status=DRAFT                       → "✏️ Continue Manuscript"   → /workspace/:id
-     *   - status=SUBMITTED_FOR_REVIEW        → "📤 View Submitted..."     → /workspace/:id
-     *   - status=UNDER_REVIEW                → "👀 View Under Review..."  → /workspace/:id
-     *   - status=APPROVED                    → "✅ View Approved..."      → /workspace/:id
-     *   - status=REJECTED                    → "🔄 Create New Version"    → /new-version
-     *   - Lỗi API                            → ẩn nút
-     */
-    async function updateManuscriptWorkspaceButton() {
-        if (!chapter) { return; }
-
-        var btnManuscriptWorkspace = document.getElementById('btnManuscriptWorkspace');
-        if (!btnManuscriptWorkspace) { return; }
-
-        try {
-            var response = await callApi('GET', '/api/v1/manuscript-versions/workspace?chapterId=' + chapter.id);
-            var workspace = response.data;
-
-            if (!workspace.workspaceExists) {
-                // Case 1: Chưa có manuscript version nào → tạo mới
-                btnManuscriptWorkspace.style.display = '';
-                btnManuscriptWorkspace.textContent = '📝 Create Workspace';
-                btnManuscriptWorkspace.href = ctx + '/main/chapters/' + chapter.id + '/manuscript-workspace/create';
-            } else {
-                // Case 2–6: Workspace đã tồn tại → xác định label theo status
-                var status = String(workspace.status || '').toUpperCase();
-                var workspaceId = workspace.workspaceId;
-
-                btnManuscriptWorkspace.style.display = '';
-
-                if (status === 'DRAFT') {
-                    btnManuscriptWorkspace.textContent = '✏️ Continue Manuscript';
-                    btnManuscriptWorkspace.href = ctx + '/main/manuscript-workspace/' + workspaceId;
-                } else if (status === 'SUBMITTED_FOR_REVIEW') {
-                    btnManuscriptWorkspace.textContent = '📤 View Submitted Manuscript';
-                    btnManuscriptWorkspace.href = ctx + '/main/manuscript-workspace/' + workspaceId;
-                } else if (status === 'UNDER_REVIEW') {
-                    btnManuscriptWorkspace.textContent = '👀 View Under Review Manuscript';
-                    btnManuscriptWorkspace.href = ctx + '/main/manuscript-workspace/' + workspaceId;
-                } else if (status === 'APPROVED') {
-                    btnManuscriptWorkspace.textContent = '✅ View Approved Manuscript';
-                    btnManuscriptWorkspace.href = ctx + '/main/manuscript-workspace/' + workspaceId;
-                } else if (status === 'REJECTED') {
-                    btnManuscriptWorkspace.textContent = '🔄 Create New Version';
-                    btnManuscriptWorkspace.href = ctx + '/main/chapters/' + chapter.id + '/manuscript-workspace/new-version';
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql.toString())) {
+            for (int i = 0; i < params.size(); i++) {
+                Object param = params.get(i);
+                if (param instanceof Long) {
+                    ps.setLong(i + 1, ((Long) param).longValue());
                 } else {
-                    // Default: fallback về view workspace
-                    btnManuscriptWorkspace.textContent = '📝 Manuscript Workspace';
-                    btnManuscriptWorkspace.href = ctx + '/main/manuscript-workspace/' + workspaceId;
+                    ps.setString(i + 1, String.valueOf(param));
                 }
             }
-        } catch (error) {
-            // Nếu API lỗi → ẩn nút để tránh hiển thị trạng thái sai
-            console.error('Failed to load workspace status:', error);
-            btnManuscriptWorkspace.style.display = 'none';
-        }
-    }
-
-    /**
-     * Cập nhật toàn bộ phần metadata (breadcrumb, title, deadline, status chips,
-     * nút action, assign due constraints, page progress).
-     * Nút btnManuscriptWorkspace được cập nhật async qua updateManuscriptWorkspaceButton().
-     */
-    function renderMeta() {
-        if (!chapter) { return; }
-        var progress = Math.max(0, Math.min(100, Number(chapter.completionPct || 0)));
-        var done = isChapterDone(chapter);
-        var overdue = isChapterOverdue(chapter);
-        var seriesTitle = seriesData ? seriesData.title : ('#' + chapter.seriesId);
-
-        document.getElementById('breadcrumbSeries').textContent = seriesTitle;
-        document.getElementById('breadcrumbSeries').href = ctx + '/main/chapters?seriesId=' + chapter.seriesId;
-        document.getElementById('breadcrumbChapter').textContent = 'Ch.' + chapter.chapterNumber + ' — ' + chapter.title;
-        document.getElementById('breadcrumbStatusPill').innerHTML =
-            '<span class="status-chip chapter-status-chip ' + chapterStatusClass(chapter.status) + '">' + formatStatus(chapter.status) + '</span>';
-
-        document.getElementById('panelChapterTitle').textContent = 'Ch.' + chapter.chapterNumber + ' — ' + chapter.title;
-        document.getElementById('panelSeriesName').textContent = seriesTitle + ' · Chapter ' + chapter.chapterNumber;
-
-        document.getElementById('metaDeadline').innerHTML = formatDeadlineCell(chapter.submissionDeadline, done, overdue);
-        document.getElementById('metaDeadlineSub').textContent = '';
-        document.getElementById('metaStatus').innerHTML =
-            '<span class="status-chip chapter-status-chip ' + chapterStatusClass(chapter.status) + '">' + formatStatus(chapter.status) + '</span>';
-
-        document.getElementById('updateChapterId').value = chapter.id;
-        document.getElementById('updateTitle').value = chapter.title || '';
-        document.getElementById('updateDeadline').value = formatDate(chapter.submissionDeadline) || '';
-
-        var owner = isOwner();
-        var chapterStatus = String(chapter.status || '').toUpperCase();
-        // canSubmit: owner, 100%, status IN_PROGRESS/COMPLETE, series chưa CANCELLED
-        var canSubmit = owner && progress >= 100 && (chapterStatus === 'IN_PROGRESS' || chapterStatus === 'COMPLETE')
-            && seriesData && String(seriesData.status || '').toUpperCase() !== 'CANCELLED';
-
-        document.getElementById('btnDelete').style.display = (owner && chapterStatus === 'PLANNING') ? '' : 'none';
-        document.getElementById('btnMarkDone').style.display = canSubmit ? '' : 'none';
-
-        // Cập nhật nút Manuscript Workspace async (gọi API để lấy trạng thái thực tế)
-        updateManuscriptWorkspaceButton();
-
-        document.getElementById('pagesOwnerActions').style.display = owner ? 'flex' : 'none';
-        document.getElementById('pagesOwnerActions').style.gap = '8px';
-        document.getElementById('pagesHint').style.display = owner ? '' : 'none';
-
-        updateAssignDueConstraints();
-        renderPageProgress();
-    }
-
-    // ============================================================
-    // 13. TASK HELPERS
-    // ============================================================
-
-    /** Tìm task theo taskId trong mảng chapterTasks */
-    function findTask(taskId) {
-        for (var i = 0; i < chapterTasks.length; i++) {
-            if (Number(chapterTasks[i].id) === Number(taskId)) { return chapterTasks[i]; }
-        }
-        return null;
-    }
-
-    /** Tìm task chứa pageNumber trong pageRange (dùng để hiển thị thông tin task của page) */
-    function findTaskByPageNumber(pageNumber) {
-        for (var i = 0; i < chapterTasks.length; i++) {
-            var t = chapterTasks[i];
-            if (Number(pageNumber) >= Number(t.pageRangeStart) && Number(pageNumber) <= Number(t.pageRangeEnd)) {
-                return t;
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    rows.add(mapDetailed(rs));
+                }
             }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot list tasks", ex);
         }
-        return null;
+        return rows;
     }
 
-    /** Task overdue nếu status là OVERDUE, hoặc chưa APPROVED và đã qua dueDate */
-    function isTaskOverdue(task) {
-        var st = String(task.status || '').toUpperCase();
-        if (st === 'APPROVED') { return false; }
-        if (st === 'OVERDUE') { return true; }
-        if (!task.dueDate) { return false; }
-        var today = new Date();
-        today.setHours(0, 0, 0, 0);
-        var due = dateOnly(task.dueDate);
-        return due && due < today;
+    /** Liệt kê tất cả task thuộc một chapter, sắp xếp theo ID giảm dần */
+    public List<TaskSummary> listByChapter(long chapterId) {
+        String sql =
+            "SELECT " + taskSelectColumns() + ", "
+            + "c.title AS chapterTitle, c.chapterNumber, s.title AS seriesTitle, u.fullName AS assistantName "
+            + "FROM PageTask t "
+            + "JOIN Chapter c ON c.id = t.chapterId "
+            + "JOIN Series s ON s.id = c.seriesId "
+            + "LEFT JOIN [User] u ON u.id = t.assistantId "
+            + "WHERE t.chapterId = ? "
+            + "ORDER BY t.id DESC";
+        List<TaskSummary> rows = new ArrayList<TaskSummary>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, chapterId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    rows.add(mapDetailed(rs));
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot list tasks", ex);
+        }
+        return rows;
     }
 
-    /** Render cell deadline của task với màu sắc phù hợp */
-    function formatDueDateCell(task) {
-        var formatted = formatDate(task.dueDate);
-        if (!formatted) { return '—'; }
-        var done = String(task.status || '').toUpperCase() === 'APPROVED';
-        var overdue = isTaskOverdue(task);
-        return formatDeadlineCell(task.dueDate, done, overdue);
-    }
-
-    /**
-     * Render nút action cho một hàng task trong bảng.
-     * - Tất cả task: nút expand ▼ Trang để xem ảnh inline.
-     * - IN_PROGRESS (owner): Reassign, Delete.
-     * - OVERDUE (owner): Decide (mở modal overdue decision).
-     * - SUBMITTED (owner): Approve popover, Reject popover.
-     * - Sau khi approve/reject: hiển thị label tương ứng.
-     */
-    function renderTaskRowActions(task) {
-        if (task._decisionLabel === 'approved') {
-            return '<span class="task-decision-label approved">Approved</span>';
+    /** Tìm một task theo ID, trả về null nếu không tồn tại */
+    public TaskSummary findById(long taskId) {
+        String sql =
+            "SELECT " + taskSelectColumns() + ", "
+            + "c.title AS chapterTitle, c.chapterNumber, s.title AS seriesTitle, u.fullName AS assistantName "
+            + "FROM PageTask t "
+            + "JOIN Chapter c ON c.id = t.chapterId "
+            + "JOIN Series s ON s.id = c.seriesId "
+            + "LEFT JOIN [User] u ON u.id = t.assistantId "
+            + "WHERE t.id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, taskId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return null;
+                }
+                return mapDetailed(rs);
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot load task", ex);
         }
-        if (task._decisionLabel === 'rejected') {
-            return '<span class="task-decision-label rejected">Rejected</span>';
-        }
-        var st = String(task.status || '').toUpperCase();
-        var html = '';
-        html += ' <button class="task-expand-btn" type="button" data-task-expand="' + task.id + '">▼ Trang</button>';
-        if (isOwner() && st === 'IN_PROGRESS') {
-            html += ' <button class="btn small" type="button" data-task-reassign="' + task.id + '">Reassign</button>';
-            html += ' <button class="btn small danger-soft" type="button" data-task-delete="' + task.id + '">Delete</button>';
-        }
-        if (isOwner() && st === 'OVERDUE') {
-            html += ' <button class="btn small warning-soft" type="button" data-task-overdue-decision="' + task.id + '">Decide</button>';
-        }
-        if (isOwner() && st === 'SUBMITTED') {
-            html += ' <button class="btn small success-soft" type="button" data-task-approve-pop="' + task.id + '">Approve</button>';
-            html += ' <button class="btn small danger-soft" type="button" data-task-reject-pop="' + task.id + '">Reject</button>';
-        }
-        return html;
-    }
-
-    /**
-     * Render toàn bộ bảng task (tab Tasks).
-     * Mỗi task có 2 row: row chính + row inline ẩn để hiển thị ảnh khi expand.
-     */
-    function renderChapterTasks() {
-        var tbody = document.getElementById('chapterTaskRows');
-        document.getElementById('tabTaskCount').textContent = chapterTasks.length;
-        if (!chapterTasks.length) {
-            tbody.innerHTML = '<tr><td colspan="7">No tasks for this chapter.</td></tr>';
-            renderSidebarTasks();
-            return;
-        }
-        tbody.innerHTML = chapterTasks.map(function (task) {
-            return '<tr>'
-                + '<td>' + task.id + '</td>'
-                + '<td>' + task.pageRangeStart + '-' + task.pageRangeEnd + '</td>'
-                + '<td>' + formatStatus(task.taskType) + '</td>'
-                + '<td>' + escapeHtml(task.assistantName || '') + '</td>'
-                + '<td><span class="status-chip ' + taskStatusClass(task.status) + '">' + formatStatus(task.status) + '</span></td>'
-                + '<td>' + formatDueDateCell(task) + '</td>'
-                + '<td class="task-actions-cell"><div class="task-row-actions">' + renderTaskRowActions(task) + '</div></td>'
-                + '</tr>'
-                + '<tr class="task-inline-row chapter-detail-inline-73" id="task-inline-' + task.id + '">'
-                + '<td colspan="7"><div class="task-inline-body" id="task-inline-body-' + task.id + '">Đang tải...</div></td>'
-                + '</tr>';
-        }).join('');
-        renderSidebarTasks();
     }
 
     // ============================================================
-    // 14. TASK INLINE / COMPARE
+    // [4] TẠO & CẬP NHẬT TASK (Mangaka)
     // ============================================================
 
+    /** Tạo task với priority mặc định NORMAL, không có notes */
+    public long create(long chapterId, long assistantId, int start, int end, String taskType, Date dueDate) {
+        return create(chapterId, assistantId, start, end, taskType, dueDate, "NORMAL", null);
+    }
+
     /**
-     * Load và render ảnh của task vào row inline (expand ▼ Trang).
-     * Dùng cache taskImagesCache để tránh gọi API nhiều lần.
-     * Hiển thị thumbnail mỗi page trong task range; ô trống nếu chưa có ảnh.
+     * Tạo task mới, validate đầy đủ trước khi insert:
+     * - Không trùng page range với task đang active (BR-33)
+     * - dueDate phải trước submissionDeadline ít nhất 3 ngày (BR-34)
+     * - Assistant phải thuộc danh sách của Mangaka (BR-36)
+     * - Mangaka không được tự giao cho chính mình (BR-35)
+     * Sau khi tạo: gửi thông báo cho assistant và cập nhật tiến độ chapter.
      */
-    async function loadTaskInlinePages(taskId) {
-        var task = findTask(taskId);
-        if (!task) { return; }
-        var bodyEl = document.getElementById('task-inline-body-' + taskId);
-        if (!bodyEl) { return; }
-        if (!taskInlineLoaded[taskId]) {
-            bodyEl.innerHTML = '<span class="chapter-detail-inline-74">Đang tải...</span>';
-            try {
-                var res = await callApi('GET', '/api/v1/tasks/' + taskId + '/images');
-                var imgs = res.data || res || [];
-                var imgMap = {};
-                imgs.forEach(function (img) { imgMap[img.pageNumber] = img; });
-                taskImagesCache[taskId] = imgs;
-                var html = '';
-                for (var p = task.pageRangeStart; p <= task.pageRangeEnd; p++) {
-                    var img = imgMap[p];
-                    html += '<div class="task-page-mini">';
-                    if (img) {
-                        html += '<img src="' + escapeHtml(imageUrl(img.fileUrl)) + '" alt="p' + p + '" />';
-                    } else {
-                        html += '<div class="no-thumb">+</div>';
+    public long create(long chapterId, long assistantId, int start, int end, String taskType, Date dueDate, String priority, String notes) {
+        ensureTaskLifecycleSchemaReady();
+        // Chỉ task đang active mới block tái sử dụng page range; task đã đóng thì không
+        String overlapSql = "SELECT COUNT(1) FROM PageTask WHERE chapterId = ? AND UPPER(status) NOT IN (" + SQL_CLOSED_TASK_STATUSES + ") AND NOT (pageRangeEnd < ? OR pageRangeStart > ?)";
+        String chapterSql = "SELECT c.submissionDeadline, c.seriesId, s.mangakaId FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?";
+        String enrollmentSql = "SELECT COUNT(1) FROM MangakaAssistant WHERE mangakaId = ? AND assistantId = ?";
+        String insertExtendedSql = "INSERT INTO PageTask (chapterId, assistantId, pageRangeStart, pageRangeEnd, taskType, dueDate, status, rejectionCount, priority, notes, assignedAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, 'IN_PROGRESS', 0, ?, ?, GETDATE(), GETDATE())";
+        String insertLegacySql = "INSERT INTO PageTask (chapterId, assistantId, pageRangeStart, pageRangeEnd, taskType, dueDate, status, rejectionCount, assignedAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, 'IN_PROGRESS', 0, GETDATE(), GETDATE())";
+
+        try (Connection conn = dataSource.getConnection()) {
+            taskType = normalizeTaskType(taskType);
+            String normalizedPriority = normalizePriority(priority);
+            validateTaskAssignment(conn, 0L, chapterId, assistantId, start, end, taskType, dueDate, overlapSql, chapterSql, enrollmentSql);
+
+            long newId;
+            boolean extended = isTaskSchemaExtended();
+            String insertSql = extended ? insertExtendedSql : insertLegacySql;
+            try (PreparedStatement insert = conn.prepareStatement(insertSql, PreparedStatement.RETURN_GENERATED_KEYS)) {
+                insert.setLong(1, chapterId);
+                insert.setLong(2, assistantId);
+                insert.setInt(3, start);
+                insert.setInt(4, end);
+                insert.setString(5, taskType);
+                insert.setDate(6, dueDate);
+                if (extended) {
+                    insert.setString(7, normalizedPriority);
+                    insert.setString(8, notes == null ? null : notes.trim());
+                }
+                insert.executeUpdate();
+                try (ResultSet rs = insert.getGeneratedKeys()) {
+                    if (!rs.next()) {
+                        throw new IllegalStateException("Cannot create task");
                     }
-                    html += '<div>Trang ' + p + '</div></div>';
+                    newId = rs.getLong(1);
                 }
-                bodyEl.innerHTML = html || '<span class="chapter-detail-inline-75">Chưa có ảnh nào.</span>';
-                taskInlineLoaded[taskId] = true;
-            } catch (e) {
-                bodyEl.innerHTML = '<span class="chapter-detail-inline-76">' + escapeHtml(e.message) + '</span>';
             }
+
+            refreshChapterProgress(chapterId);
+            createNotification(
+                    assistantId,
+                    "TASK_ASSIGNED",
+                    "You have been assigned task #" + newId + ".",
+                    newId,
+                    "TASK");
+            return newId;
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot create task", ex);
         }
     }
 
     /**
-     * Mở modal so sánh ảnh của một page slot.
-     * Logic hiển thị tùy theo trạng thái task của page:
-     * - Không có task / task chưa SUBMITTED: chỉ hiện ảnh gốc (+ nút Upload nếu owner).
-     * - Task SUBMITTED: 2 cột so sánh ảnh gốc Mangaka vs ảnh assistant nộp.
-     * - Task APPROVED: hiện ảnh đã duyệt với badge ✓.
+     * Mangaka cập nhật toàn bộ thông tin task (kể cả đổi assistant).
+     * Task APPROVED không được chỉnh sửa (BR-TSK-06).
+     * Nếu đổi assistant sẽ gửi thông báo TASK_REASSIGNED thay vì TASK_UPDATED.
      */
-    async function openPageCompare(slot) {
-        var modal = document.getElementById('pageCompareModal');
-        var title = document.getElementById('pageCompareTitle');
-        var body = document.getElementById('pageCompareBody');
-        modal.style.display = 'flex';
-        title.textContent = 'Trang ' + slot.pageNumber;
-        var ts = String(slot.taskStatus || '').toUpperCase();
-        var origUrl = slot.imageUrl ? imageUrl(slot.imageUrl) : null;
-        if (!slot.taskId || (ts !== 'SUBMITTED' && ts !== 'APPROVED')) {
-            body.innerHTML = origUrl
-                ? (isOwner() && !slot.taskId ? '<div class="chapter-detail-inline-77"><button class="btn small primary" type="button" id="pageCompareEdit">Upload / replace</button></div>' : '')
-                    + '<img src="' + escapeHtml(origUrl) + '" class="chapter-detail-inline-78" />'
-                : '<div class="chapter-detail-inline-79">Chưa có ảnh</div>';
-            var editBtn = document.getElementById('pageCompareEdit');
-            if (editBtn) {
-                editBtn.addEventListener('click', function () {
-                    modal.style.display = 'none';
-                    openPageUploadModal(slot);
-                });
+    public void updateTaskByMangaka(long taskId, long mangakaId, long assistantId, int start, int end, String taskType, Date dueDate) {
+        String taskInfoSql = "SELECT t.chapterId, t.assistantId, t.status FROM PageTask t WHERE t.id = ?";
+        String updateSql = "UPDATE PageTask SET assistantId = ?, pageRangeStart = ?, pageRangeEnd = ?, taskType = ?, dueDate = ?, status = 'IN_PROGRESS', rejectionCount = 0, updatedAt = GETDATE(), assignedAt = GETDATE() WHERE id = ?";
+
+        try (Connection conn = dataSource.getConnection()) {
+            taskType = normalizeTaskType(taskType);
+            long chapterId;
+            long currentAssistantId;
+            String currentStatus;
+            try (PreparedStatement ps = conn.prepareStatement(taskInfoSql)) {
+                ps.setLong(1, taskId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        throw new IllegalArgumentException("Task not found");
+                    }
+                    chapterId = rs.getLong("chapterId");
+                    currentAssistantId = rs.getLong("assistantId");
+                    currentStatus = rs.getString("status");
+                }
             }
-            return;
-        }
-        // Cần ảnh task: dùng cache hoặc gọi API
-        var taskImgs = taskImagesCache[slot.taskId];
-        if (!taskImgs) {
-            body.innerHTML = '<div class="chapter-detail-inline-80">Đang tải ảnh...</div>';
-            try {
-                var res = await callApi('GET', '/api/v1/tasks/' + slot.taskId + '/images');
-                taskImgs = res.data || res || [];
-                taskImagesCache[slot.taskId] = taskImgs;
-            } catch (e) {
-                body.innerHTML = '<div class="alert error">' + escapeHtml(e.message) + '</div>';
-                return;
+
+            long ownerId = findChapterOwnerMangaka(chapterId);
+            if (ownerId != mangakaId) {
+                throw new IllegalArgumentException("Only chapter owner can update task");
             }
-        }
-        var assistantImg = null;
-        for (var i = 0; i < taskImgs.length; i++) {
-            if (Number(taskImgs[i].pageNumber) === Number(slot.pageNumber)) {
-                assistantImg = taskImgs[i];
-                break;
+
+            if ("APPROVED".equalsIgnoreCase(currentStatus)) {
+                throw new IllegalArgumentException("Approved task cannot be edited. Create a new task instead (BR-TSK-06)");
             }
+
+            validateTaskAssignment(
+                    conn,
+                    taskId,
+                    chapterId,
+                    assistantId,
+                    start,
+                    end,
+                    taskType,
+                    dueDate,
+                    "SELECT COUNT(1) FROM PageTask WHERE chapterId = ? AND id <> ? AND UPPER(status) NOT IN (" + SQL_CLOSED_TASK_STATUSES + ") AND NOT (pageRangeEnd < ? OR pageRangeStart > ?)",
+                    "SELECT c.submissionDeadline, c.seriesId, s.mangakaId FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?",
+                    "SELECT COUNT(1) FROM MangakaAssistant WHERE mangakaId = ? AND assistantId = ?");
+
+            try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                ps.setLong(1, assistantId);
+                ps.setInt(2, start);
+                ps.setInt(3, end);
+                ps.setString(4, taskType);
+                ps.setDate(5, dueDate);
+                ps.setLong(6, taskId);
+                if (ps.executeUpdate() == 0) {
+                    throw new IllegalArgumentException("Task not found");
+                }
+            }
+
+            refreshChapterProgress(chapterId);
+            boolean reassigned = currentAssistantId != assistantId;
+            createNotification(
+                    assistantId,
+                    reassigned ? "TASK_REASSIGNED" : "TASK_UPDATED",
+                    reassigned
+                            ? "Task #" + taskId + " has been assigned to you."
+                            : "Task #" + taskId + " has been updated.",
+                    taskId,
+                    "TASK");
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot update task", ex);
         }
-        var assistantUrl = assistantImg ? imageUrl(assistantImg.fileUrl) : null;
-        if (ts === 'SUBMITTED') {
-            // 2-column compare: ảnh gốc vs ảnh assistant nộp
-            body.innerHTML =
-                '<div class="chapter-detail-inline-81">'
-                + '<div><div class="chapter-detail-inline-82">Bản gốc (Mangaka)</div>'
-                + (origUrl ? '<img src="' + escapeHtml(origUrl) + '" class="chapter-detail-inline-83" />' : '<div class="chapter-detail-inline-84">Không có ảnh gốc</div>')
-                + '</div>'
-                + '<div><div class="chapter-detail-inline-85">Bản assistant nộp</div>'
-                + (assistantUrl ? '<img src="' + escapeHtml(assistantUrl) + '" class="chapter-detail-inline-86" />' : '<div class="chapter-detail-inline-87">Chưa có ảnh</div>')
-                + '</div></div>';
-            return;
-        }
-        // APPROVED: hiện ảnh đã duyệt
-        var finalUrl = assistantUrl || origUrl;
-        body.innerHTML = finalUrl
-            ? '<div class="chapter-detail-inline-88"><span class="chapter-detail-inline-89">✓ Đã được duyệt</span></div>'
-                + '<img src="' + escapeHtml(finalUrl) + '" class="chapter-detail-inline-90" />'
-            : '<div class="chapter-detail-inline-91">Không có ảnh</div>';
     }
 
     // ============================================================
-    // 15. MODAL / POPOVER
+    // [5] VÒNG ĐỜI TASK - Nộp / Duyệt / Từ chối
     // ============================================================
 
-    /** Chuyển tab (pages / tasks / edit), ẩn/hiện các panel tương ứng */
-    function switchTab(tab) {
-        document.querySelectorAll('.chapter-tab-btn').forEach(function (b) {
-            b.classList.toggle('active', b.getAttribute('data-tab') === tab);
-        });
-        document.getElementById('tabPages').style.display = tab === 'pages' ? '' : 'none';
-        document.getElementById('tabTasks').style.display = tab === 'tasks' ? '' : 'none';
-        document.getElementById('tabEdit').style.display = tab === 'edit' ? '' : 'none';
+    /**
+     * Mangaka phân công lại task cho assistant khác.
+     * Yêu cầu: task đang IN_PROGRESS hoặc OVERDUE; phải cung cấp lý do (≥5 ký tự).
+     * Nếu task OVERDUE, bắt buộc phải truyền newDueDate hợp lệ.
+     * Quy trình: đóng task cũ (REASSIGNED) → tạo task mới → ghi previousAssistantId.
+     */
+    public long reassignByMangaka(long taskId, long mangakaId, long newAssistantId, String reason) {
+        return reassignByMangaka(taskId, mangakaId, newAssistantId, reason, null);
     }
 
-    /** Mở modal theo id bằng cách thêm class 'open' */
-    function openModal(id) {
-        var modal = document.getElementById(id);
-        if (modal) {
-            modal.classList.add('open');
-            modal.setAttribute('aria-hidden', 'false');
+    public long reassignByMangaka(long taskId, long mangakaId, long newAssistantId, String reason, Date newDueDate) {
+        ensureTaskLifecycleSchemaReady();
+        if (reason == null || reason.trim().length() < 5) {
+            throw new IllegalArgumentException("Reassign reason must be at least 5 characters");
+        }
+        TaskSummary task = findById(taskId);
+        if (task == null) {
+            throw new IllegalArgumentException("Task not found");
+        }
+        if (findChapterOwnerMangaka(task.getChapterId()) != mangakaId) {
+            throw new IllegalArgumentException("Only chapter owner can reassign task");
+        }
+        String currentStatusForReassign = normalizeStatus(task.getStatus());
+        if (!"IN_PROGRESS".equals(currentStatusForReassign) && !"OVERDUE".equals(currentStatusForReassign)) {
+            throw new IllegalArgumentException("Only IN_PROGRESS or OVERDUE task can be reassigned");
+        }
+        if (task.getAssistantId() == newAssistantId) {
+            throw new IllegalArgumentException("Choose a different assistant");
+        }
+        Date dueDateForNewTask = task.getDueDate();
+        if ("OVERDUE".equals(currentStatusForReassign)) {
+            if (newDueDate == null) {
+                throw new IllegalArgumentException("newDueDate is required when reassigning an overdue task");
+            }
+            validateOverdueDecisionDueDate(task.getChapterId(), newDueDate);
+            dueDateForNewTask = newDueDate;
+        }
+
+        String closeSql = "UPDATE PageTask SET status = 'REASSIGNED', actionReason = ?, updatedAt = GETDATE() WHERE id = ?";
+        try (Connection conn = dataSource.getConnection()) {
+            try (PreparedStatement close = conn.prepareStatement(closeSql)) {
+                close.setString(1, reason.trim());
+                close.setLong(2, taskId);
+                close.executeUpdate();
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot reassign task", ex);
+        }
+
+        long newTaskId = create(
+                task.getChapterId(),
+                newAssistantId,
+                task.getPageRangeStart(),
+                task.getPageRangeEnd(),
+                task.getTaskType(),
+                dueDateForNewTask,
+                task.getPriority(),
+                task.getNotes());
+        setPreviousAssistantAndReason(newTaskId, task.getAssistantId(), reason.trim());
+        createNotification(
+                task.getAssistantId(),
+                "TASK_REASSIGNED",
+                "Task #" + taskId + " was reassigned. Reason: " + reason.trim(),
+                taskId,
+                "TASK");
+        return newTaskId;
+    }
+
+    // ============================================================
+    // [6] VÒNG ĐỜI TASK - Phân công lại / Xoá / Huỷ
+    // ============================================================
+
+    /**
+     * Mangaka xoá task (chuyển sang DELETED).
+     * Chỉ xoá được task đang IN_PROGRESS hoặc OVERDUE; phải có lý do ≥5 ký tự.
+     */
+    public void deleteByMangaka(long taskId, long mangakaId, String reason) {
+        ensureTaskLifecycleSchemaReady();
+        if (reason == null || reason.trim().length() < 5) {
+            throw new IllegalArgumentException("Delete reason must be at least 5 characters");
+        }
+        TaskSummary task = findById(taskId);
+        if (task == null) {
+            throw new IllegalArgumentException("Task not found");
+        }
+        if (findChapterOwnerMangaka(task.getChapterId()) != mangakaId) {
+            throw new IllegalArgumentException("Only chapter owner can delete task");
+        }
+        String currentStatusForDelete = normalizeStatus(task.getStatus());
+        if (!"IN_PROGRESS".equals(currentStatusForDelete) && !"OVERDUE".equals(currentStatusForDelete)) {
+            throw new IllegalArgumentException("Only IN_PROGRESS or OVERDUE task can be deleted");
+        }
+
+        String sql = "UPDATE PageTask SET status = 'DELETED', actionReason = ?, updatedAt = GETDATE() WHERE id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, reason.trim());
+            ps.setLong(2, taskId);
+            ps.executeUpdate();
+            refreshChapterProgress(task.getChapterId());
+            createNotification(
+                    task.getAssistantId(),
+                    "TASK_DELETED",
+                    "Task #" + taskId + " was deleted. Reason: " + reason.trim(),
+                    taskId,
+                    "TASK");
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot delete task", ex);
+        }
+    }
+
+    /** Ghi lại previousAssistantId và lý do phân công lại vào task mới */
+    private void setPreviousAssistantAndReason(long taskId, long previousAssistantId, String reason) {
+        String sql = "UPDATE PageTask SET previousAssistantId = ?, actionReason = ? WHERE id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, previousAssistantId);
+            ps.setString(2, reason);
+            ps.setLong(3, taskId);
+            ps.executeUpdate();
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot update reassignment metadata", ex);
         }
     }
 
     /**
-     * Đóng tất cả modal, reset pending upload state và overdue state.
-     * Gọi khi click backdrop hoặc nút [data-modal-close].
+     * Validate và chuẩn hóa taskType.
+     * Các loại hợp lệ: SKETCHING, INKING, COLORING, SCREENTONE, LETTERING, MIXED.
      */
-    function closeModals() {
-        document.querySelectorAll('.modal-backdrop').forEach(function (m) {
-            m.classList.remove('open');
-            m.setAttribute('aria-hidden', 'true');
-        });
-        pendingUploadPageId = null;
-        pendingUploadSlot = null;
-        activeOverdueTaskId = null;
-        showPageUploadError('');
+    private String normalizeTaskType(String taskType) {
+        if (taskType == null || taskType.trim().isEmpty()) {
+            throw new IllegalArgumentException("taskType is required");
+        }
+        String normalized = taskType.trim().toUpperCase(Locale.ENGLISH);
+        if (!"SKETCHING".equals(normalized)
+                && !"INKING".equals(normalized)
+                && !"COLORING".equals(normalized)
+                && !"LETTERING".equals(normalized)
+                && !"SCREENTONE".equals(normalized)
+                && !"MIXED".equals(normalized)) {
+            throw new IllegalArgumentException("taskType must be SKETCHING, INKING, COLORING, SCREENTONE, LETTERING, or MIXED");
+        }
+        return normalized;
     }
 
     /**
-     * Đóng tất cả approve/reject popover, trả các element về host container.
-     * Reset activePopover* state.
+     * Validate toàn bộ điều kiện trước khi tạo hoặc cập nhật task:
+     * - Các trường bắt buộc không được null/rỗng
+     * - dueDate không được trong quá khứ
+     * - pageRangeEnd >= pageRangeStart
+     * - Không có trang nào trong range đã hoàn thành (completedStage = LETTERING)
+     * - Không trùng page range với task active khác (BR-33)
+     * - dueDate phải trước submissionDeadline ≥ 3 ngày (BR-34)
+     * - Mangaka không tự giao cho mình (BR-35)
+     * - Assistant phải trong danh sách của Mangaka (BR-36)
      */
-    function closePopovers() {
-        var host = document.getElementById('taskPopoverHost');
-        var scrim = document.getElementById('taskPopoverScrim');
-        var approvePop = document.getElementById('taskApprovePopover');
-        var rejectPop = document.getElementById('taskRejectPopover');
-        if (scrim) {
-            scrim.classList.remove('open');
-            scrim.setAttribute('aria-hidden', 'true');
-            if (host) { host.appendChild(scrim); }
-        }
-        if (approvePop) {
-            approvePop.classList.remove('open');
-            approvePop.setAttribute('aria-hidden', 'true');
-            if (host) { host.appendChild(approvePop); }
-        }
-        if (rejectPop) {
-            rejectPop.classList.remove('open');
-            rejectPop.setAttribute('aria-hidden', 'true');
-            if (host) { host.appendChild(rejectPop); }
-        }
-        activePopoverType = null;
-        activePopoverTaskId = null;
-        activePopoverCell = null;
-    }
+    private void validateTaskAssignment(
+            Connection conn,
+            long taskId,
+            long chapterId,
+            long assistantId,
+            int start,
+            int end,
+            String taskType,
+            Date dueDate,
+            String overlapSql,
+            String chapterSql,
+            String enrollmentSql) throws SQLException {
 
-    /**
-     * Mở approve hoặc reject popover cho một task.
-     * Popover được append vào body để tránh overflow clip.
-     */
-    function openPopover(type, taskId, anchorCell) {
-        closePopovers();
-        var task = findTask(taskId);
-        if (!task) { return; }
-        var scrim = document.getElementById('taskPopoverScrim');
-        var popId = type === 'approve' ? 'taskApprovePopover' : 'taskRejectPopover';
-        var pop = document.getElementById(popId);
-        if (!pop) { return; }
-        if (scrim) {
-            document.body.appendChild(scrim);
-            scrim.classList.add('open');
-            scrim.setAttribute('aria-hidden', 'false');
+        if (assistantId <= 0) {
+            throw new IllegalArgumentException("assistantId is required");
         }
-        document.body.appendChild(pop);
-        pop.classList.add('open');
-        pop.setAttribute('aria-hidden', 'false');
-        activePopoverType = type;
-        activePopoverTaskId = taskId;
-        activePopoverCell = anchorCell;
-        if (type === 'approve') {
-            document.getElementById('approvePopoverTitle').textContent = 'Approve task #' + task.id;
-            document.getElementById('approvePopoverComment').value = '';
+        if (taskType == null || taskType.trim().isEmpty()) {
+            throw new IllegalArgumentException("taskType is required");
+        }
+        if (dueDate == null) {
+            throw new IllegalArgumentException("dueDate is required");
+        }
+        if (dueDate.before(Date.valueOf(LocalDate.now()))) {
+            throw new IllegalArgumentException("Task dueDate cannot be in the past");
+        }
+        if (end < start) {
+            throw new IllegalArgumentException("pageRangeEnd must be >= pageRangeStart");
+        }
+
+        // Kiểm tra trang đã hoàn thành trong range
+        String completePageSql = "SELECT TOP 1 pageNumber FROM " + PageRepository.TABLE_PAGE
+                + " WHERE chapterId = ? AND pageNumber BETWEEN ? AND ? "
+                + "AND UPPER(ISNULL(completedStage, '')) = 'LETTERING' ORDER BY pageNumber";
+        try (PreparedStatement ps = conn.prepareStatement(completePageSql)) {
+            ps.setLong(1, chapterId);
+            ps.setInt(2, start);
+            ps.setInt(3, end);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    throw new IllegalArgumentException("Page " + rs.getInt("pageNumber") + " is already complete and cannot be assigned");
+                }
+            }
+        }
+
+        // Kiểm tra trùng page range với task active khác
+        if (taskId == 0L) {
+            try (PreparedStatement overlap = conn.prepareStatement(overlapSql)) {
+                overlap.setLong(1, chapterId);
+                overlap.setInt(2, start);
+                overlap.setInt(3, end);
+                try (ResultSet rs = overlap.executeQuery()) {
+                    rs.next();
+                    if (rs.getInt(1) > 0) {
+                        throw new IllegalArgumentException("Page range overlaps existing task (BR-33)");
+                    }
+                }
+            }
         } else {
-            document.getElementById('rejectPopoverTitle').textContent = 'Reject task #' + task.id;
-            document.getElementById('rejectPopoverReason').value = '';
-            updateRejectConfirmState();
-        }
-    }
-
-    /** Validate và cập nhật trạng thái nút Confirm trong reject popover (tối thiểu 5 ký tự) */
-    function updateRejectConfirmState() {
-        var reasonEl = document.getElementById('rejectPopoverReason');
-        var counterEl = document.getElementById('rejectPopoverCounter');
-        var confirmBtn = document.getElementById('rejectPopoverConfirm');
-        if (!reasonEl || !confirmBtn) { return; }
-        var len = reasonEl.value.length;
-        if (counterEl) { counterEl.textContent = len + ' / 300'; }
-        confirmBtn.disabled = len < 5;
-    }
-
-    /** Mở modal gán task, refresh chip list và task type summary */
-    function openAssignModal() {
-        renderAssignChips();
-        setDefaultAssignTaskType();
-        var err = document.getElementById('assignTaskError');
-        err.style.display = 'none';
-        err.textContent = '';
-        openModal('assignTaskModal');
-    }
-
-    /**
-     * Mở modal quyết định cho task overdue.
-     * Có 3 lựa chọn: Extend deadline, Reassign, Delete task.
-     * Khởi tạo các input với ràng buộc ngày hợp lệ.
-     */
-    function openOverdueDecisionModal(taskId) {
-        var task = findTask(taskId);
-        if (!task) { return; }
-        activeOverdueTaskId = taskId;
-        document.getElementById('taskExtendId').value = taskId;
-        document.getElementById('taskOverdueDecisionTitle').textContent = 'Overdue task #' + taskId;
-        document.getElementById('taskOverdueDecisionSummary').textContent =
-            'Pages ' + task.pageRangeStart + '-' + task.pageRangeEnd + ' · '
-            + formatStatus(task.taskType) + ' · assigned to ' + (task.assistantName || ('#' + task.assistantId));
-
-        var latest = latestTaskDueDate();
-        var dueInput = document.getElementById('taskExtendDueDate');
-        dueInput.value = '';
-        dueInput.min = todayIso();
-        dueInput.removeAttribute('max');
-        if (latest) { dueInput.max = latest; }
-        document.getElementById('taskExtendHint').textContent = chapter && chapter.submissionDeadline
-            ? ('Chapter deadline: ' + formatDate(chapter.submissionDeadline) + '. Extension must be today through ' + (latest || formatDate(chapter.submissionDeadline)) + '.')
-            : 'Extension date cannot be in the past.';
-
-        // Reset tất cả input trong modal
-        document.getElementById('taskExtendReason').value = '';
-        document.getElementById('taskOverdueReason').value = '';
-        document.getElementById('taskOverdueDeleteReason').value = '';
-        document.getElementById('taskOverdueReassignAssistantId').value = '';
-        var reassignDueInput = document.getElementById('taskOverdueReassignDueDate');
-        reassignDueInput.value = '';
-        reassignDueInput.min = todayIso();
-        reassignDueInput.removeAttribute('max');
-        if (latest) { reassignDueInput.max = latest; }
-        document.getElementById('taskExtendError').style.display = 'none';
-        document.getElementById('taskExtendError').textContent = '';
-        document.getElementById('taskOverdueDecisionError').style.display = 'none';
-        document.getElementById('taskOverdueDecisionError').textContent = '';
-        document.getElementById('taskOverdueDeleteError').style.display = 'none';
-        document.getElementById('taskOverdueDeleteError').textContent = '';
-        setOverdueDecisionChoice('');
-        openModal('taskOverdueDecisionModal');
-    }
-
-    /**
-     * Chuyển panel hiển thị trong modal overdue decision.
-     * choice: '' | 'extend' | 'reassign' | 'delete'
-     */
-    function setOverdueDecisionChoice(choice) {
-        var panels = document.querySelectorAll('[data-overdue-action-panel]');
-        for (var i = 0; i < panels.length; i++) {
-            panels[i].style.display = panels[i].getAttribute('data-overdue-action-panel') === choice ? '' : 'none';
-        }
-        var buttons = document.querySelectorAll('[data-overdue-action-choice]');
-        for (var j = 0; j < buttons.length; j++) {
-            var active = buttons[j].getAttribute('data-overdue-action-choice') === choice;
-            buttons[j].classList.toggle('is-active', active);
-            buttons[j].setAttribute('aria-pressed', active ? 'true' : 'false');
-        }
-    }
-
-    // ============================================================
-    // 16. ASSISTANT SELECT
-    // ============================================================
-
-    /**
-     * Load danh sách assistant của series vào các select box:
-     * - assignAssistantId (modal gán task)
-     * - taskReassignAssistantId (modal reassign)
-     * - taskOverdueReassignAssistantId (modal overdue)
-     */
-    async function fillAssistantSelect() {
-        var select = document.getElementById('assignAssistantId');
-        var reassignSelect = document.getElementById('taskReassignAssistantId');
-        var overdueReassignSelect = document.getElementById('taskOverdueReassignAssistantId');
-        if (!chapter || !select) { return; }
-        select.innerHTML = '<option value="">Loading assistants...</option>';
-        if (reassignSelect) { reassignSelect.innerHTML = '<option value="">Loading assistants...</option>'; }
-        if (overdueReassignSelect) { overdueReassignSelect.innerHTML = '<option value="">Loading assistants...</option>'; }
-        try {
-            var res = await callApi('GET', '/api/v1/series/' + chapter.seriesId + '/assistants');
-            var assistants = res.data || [];
-            var options = '<option value="">Select Assistant</option>' + assistants.map(function (a) {
-                return '<option value="' + a.id + '">#' + a.id + ' - ' + escapeHtml(a.fullName || a.username) + '</option>';
-            }).join('');
-            select.innerHTML = options;
-            if (reassignSelect) { reassignSelect.innerHTML = options; }
-            if (overdueReassignSelect) { overdueReassignSelect.innerHTML = options; }
-        } catch (err) {
-            select.innerHTML = '<option value="">Cannot load assistants</option>';
-            if (reassignSelect) { reassignSelect.innerHTML = '<option value="">Cannot load assistants</option>'; }
-            if (overdueReassignSelect) { overdueReassignSelect.innerHTML = '<option value="">Cannot load assistants</option>'; }
-            showError(err.message);
-        }
-    }
-
-    /**
-     * Tính ngày due tối đa cho task: deadline chapter - 3 ngày.
-     * Đảm bảo task xong trước khi chapter đến hạn submit.
-     */
-    function latestTaskDueDate() {
-        return chapter && chapter.submissionDeadline ? addDaysIso(chapter.submissionDeadline, -3) : '';
-    }
-
-    /** Cập nhật min/max cho input assignDueDate và hint text */
-    function updateAssignDueConstraints() {
-        var dueInput = document.getElementById('assignDueDate');
-        var hint = document.getElementById('assignDueHint');
-        if (!dueInput) { return; }
-        dueInput.min = todayIso();
-        dueInput.removeAttribute('max');
-        var latest = latestTaskDueDate();
-        if (latest) {
-            dueInput.max = latest;
-        }
-        if (hint) {
-            hint.textContent = chapter && chapter.submissionDeadline
-                ? ('Chapter deadline: ' + formatDate(chapter.submissionDeadline) + '. Task due date: today → ' + (latest || formatDate(chapter.submissionDeadline)) + '.')
-                : '';
-        }
-    }
-
-    // ============================================================
-    // 17. LOAD DATA
-    // ============================================================
-
-    /** Load/reload page slots của chapter, render grid và progress */
-    async function loadPages() {
-        var res = await callApi('GET', '/api/v1/chapters/' + chapterId + '/pages');
-        pageSlots = res.data || [];
-        renderPageGrid();
-        renderPageProgress();
-        renderMeta();
-    }
-
-    /** Load/reload danh sách tasks của chapter, render bảng task */
-    async function loadTasks() {
-        var res = await callApi('GET', '/api/v1/chapters/' + chapterId + '/tasks');
-        chapterTasks = res.data || [];
-        renderChapterTasks();
-    }
-
-    /**
-     * Load toàn bộ dữ liệu trang:
-     * 1. currentUser từ /api/v1/auth/me
-     * 2. chapter detail
-     * 3. series list để tìm seriesData của chapter
-     * 4. Song song: pages, tasks, assistant select
-     * 5. renderMeta
-     */
-    async function loadData() {
-        if (!chapterId) {
-            showError('No chapter ID specified.');
-            return;
-        }
-        try {
-            var userRes = await callApi('GET', '/api/v1/auth/me');
-            currentUser = userRes.data;
-            var chRes = await callApi('GET', '/api/v1/chapters/' + chapterId);
-            chapter = chRes.data;
-            var sListRes = await callApi('GET', '/api/v1/series');
-            var sList = sListRes.data || [];
-            for (var i = 0; i < sList.length; i++) {
-                if (Number(sList[i].id) === Number(chapter.seriesId)) {
-                    seriesData = sList[i];
-                    break;
+            try (PreparedStatement overlap = conn.prepareStatement(overlapSql)) {
+                overlap.setLong(1, chapterId);
+                overlap.setLong(2, taskId);
+                overlap.setInt(3, start);
+                overlap.setInt(4, end);
+                try (ResultSet rs = overlap.executeQuery()) {
+                    rs.next();
+                    if (rs.getInt(1) > 0) {
+                        throw new IllegalArgumentException("Page range overlaps existing task (BR-33)");
+                    }
                 }
             }
-            await Promise.all([loadPages(), loadTasks(), fillAssistantSelect()]);
-            renderMeta();
-        } catch (err) {
-            showError(err.message);
         }
-    }
 
-    // ============================================================
-    // 18. EVENT LISTENERS
-    // ============================================================
-
-    // Tab bar: click chuyển tab
-    document.getElementById('tabBar').addEventListener('click', function (e) {
-        var btn = e.target.closest('.chapter-tab-btn');
-        if (!btn) { return; }
-        switchTab(btn.getAttribute('data-tab'));
-    });
-
-    /**
-     * Auto-save metadata (title + deadline) sau 700ms debounce.
-     * Chỉ gọi API nếu có thay đổi thực sự so với chapter data.
-     */
-    async function saveChapterMetadata() {
-        var updateError = document.getElementById('updateError');
-        updateError.style.display = 'none';
-        try {
-            var title = document.getElementById('updateTitle').value;
-            var deadline = document.getElementById('updateDeadline').value;
-            if (!chapter || (title === (chapter.title || '') && deadline === formatDate(chapter.submissionDeadline))) {
-                return;
+        long mangakaId;
+        Date submissionDeadline;
+        try (PreparedStatement chapter = conn.prepareStatement(chapterSql)) {
+            chapter.setLong(1, chapterId);
+            try (ResultSet rs = chapter.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalArgumentException("Chapter not found");
+                }
+                submissionDeadline = rs.getDate("submissionDeadline");
+                mangakaId = rs.getLong("mangakaId");
             }
-            var qs = new URLSearchParams({
-                title: title,
-                submissionDeadline: deadline,
-                publicationDate: deadline,
-                deadline: deadline,
-                chapterDeadline: deadline
-            }).toString();
-            await callApi('PUT', '/api/v1/chapters/' + chapterId + '?' + qs);
-            chapter.title = title;
-            chapter.submissionDeadline = deadline;
-            renderMeta();
-            showError('');
-        } catch (err) {
-            updateError.style.display = 'block';
-            updateError.textContent = err.message;
-        }
-    }
-
-    function scheduleMetadataSave() {
-        if (!isOwner()) { return; }
-        clearTimeout(metadataSaveTimer);
-        metadataSaveTimer = setTimeout(saveChapterMetadata, 700); // debounce 700ms
-    }
-
-    document.getElementById('updateTitle').addEventListener('input', scheduleMetadataSave);
-    document.getElementById('updateDeadline').addEventListener('change', saveChapterMetadata);
-
-    // Xóa chapter (chỉ khi PLANNING)
-    document.getElementById('btnDelete').addEventListener('click', async function () {
-        if (!confirm('Delete this chapter? This cannot be undone.')) { return; }
-        try {
-            await callApi('DELETE', '/api/v1/chapters/' + chapterId);
-            window.location.href = ctx + '/main/chapters?seriesId=' + chapter.seriesId;
-        } catch (err) { showError(err.message); }
-    });
-
-    // Submit chapter sang editorial review (cần 100%)
-    document.getElementById('btnMarkDone').addEventListener('click', async function () {
-        try {
-            await callApi('POST', '/api/v1/chapters/' + chapterId + '/submit-review');
-            await loadData();
-            showError('');
-        } catch (err) { showError(err.message); }
-    });
-
-    // Thêm page slot mới
-    document.getElementById('btnAddPage').addEventListener('click', async function () {
-        try {
-            await callApi('POST', '/api/v1/pages', { chapterId: chapterId });
-            await loadData();
-        } catch (err) { showError(err.message); }
-    });
-
-    // Stage picker checkbox: sync khi thay đổi
-    document.getElementById('pageUploadStagePicker').addEventListener('change', function (e) {
-        if (e.target && e.target.type === 'checkbox') {
-            syncStagePickerFromClick(e.target);
-        }
-    });
-
-    // Preview ảnh được chọn trong file input của modal
-    document.getElementById('pageModalFileInput').addEventListener('change', function (e) {
-        var file = e.target.files && e.target.files[0];
-        var preview = document.getElementById('pageUploadPreview');
-        if (!file || !preview) { return; }
-        var reader = new FileReader();
-        reader.onload = function (ev) {
-            preview.innerHTML = '<img src="' + escapeHtml(ev.target.result) + '" alt="Selected page image" />';
-        };
-        reader.readAsDataURL(file);
-    });
-
-    // Upload nhanh (single file input ẩn, không qua modal)
-    document.getElementById('singleFileInput').addEventListener('change', async function (e) {
-        var file = e.target.files && e.target.files[0];
-        e.target.value = '';
-        if (!file || !pendingUploadPageId) { return; }
-        try {
-            var fd = new FormData();
-            fd.append('file', file);
-            fd.append('completedStage', selectedUploadStage(findPageById(pendingUploadPageId)));
-            await uploadMultipart('/api/v1/pages/' + pendingUploadPageId + '/upload', fd);
-            pendingUploadPageId = null;
-            showError('');
-            await loadData();
-        } catch (err) {
-            showError(err.message);
-        }
-    });
-
-    // Nút Save trong modal upload page
-    document.getElementById('pageUploadSave').addEventListener('click', async function () {
-        if (!pendingUploadPageId || !pendingUploadSlot) { return; }
-        var fileInput = document.getElementById('pageModalFileInput');
-        var file = fileInput.files && fileInput.files[0];
-        var hasExisting = !!pendingUploadSlot.imageUrl;
-        if (!file && !hasExisting) {
-            showPageUploadError('Choose an image file first.');
-            return;
-        }
-        try {
-            if (!file && hasExisting) {
-                showPageUploadError('Choose a replacement image to update this page.');
-                return;
-            }
-            var fd = new FormData();
-            fd.append('file', file);
-            fd.append('completedStage', selectedUploadStage(pendingUploadSlot));
-            await uploadMultipart('/api/v1/pages/' + pendingUploadPageId + '/upload', fd);
-            pendingUploadPageId = null;
-            pendingUploadSlot = null;
-            closeModals();
-            showError('');
-            await loadData();
-        } catch (err) {
-            showPageUploadError(err.message);
-        }
-    });
-
-    // Nút Delete page trong modal upload
-    document.getElementById('pageUploadDelete').addEventListener('click', async function () {
-        if (!pendingUploadPageId || !pendingUploadSlot) { return; }
-        if (!confirm('Delete page ' + pendingUploadSlot.pageNumber + '? This cannot be undone.')) { return; }
-        try {
-            await callApi('DELETE', '/api/v1/pages/' + pendingUploadPageId);
-            pendingUploadPageId = null;
-            pendingUploadSlot = null;
-            closeModals();
-            selectedPageIds = {};
-            showError('');
-            await loadData();
-        } catch (err) {
-            showPageUploadError(err.message);
-        }
-    });
-
-    /**
-     * Click trên page grid:
-     * - [data-add-page]: thêm page mới
-     * - [data-page-download]: bỏ qua (download link)
-     * - Shift + click: toggle selection
-     * - Click vào img: mở compare modal
-     * - Owner click page đã có ảnh/task: compare modal
-     * - Owner click page trống chưa gán: upload modal
-     */
-    document.getElementById('pageSlotGrid').addEventListener('click', function (e) {
-        var addBtn = e.target.closest('[data-add-page]');
-        if (addBtn && isOwner()) {
-            document.getElementById('btnAddPage').click();
-            return;
-        }
-        var slotEl = e.target.closest('[data-page-id]');
-        if (!slotEl) { return; }
-        if (e.target.closest('[data-page-download]')) {
-            return;
-        }
-        var pageId = slotEl.getAttribute('data-page-id');
-        var index = Number(slotEl.getAttribute('data-slot-index'));
-        var slot = findPageById(pageId);
-        if (!slot) { return; }
-
-        if (e.shiftKey) {
-            toggleSelectedPage(pageId, slot);
-            lastSlotIndex = index;
-            renderPageGrid();
-            return;
         }
 
-        lastSlotIndex = index;
-
-        if (slot.imageUrl && e.target.closest('img')) {
-            openPageCompare(slot);
-            return;
+        // BR-35: Mangaka không được tự giao cho mình
+        if (assistantId == mangakaId) {
+            throw new IllegalArgumentException("Mangaka cannot self-assign page task (BR-35)");
         }
 
-        if (!isOwner()) {
-            if (slot.imageUrl || slot.taskId) {
-                openPageCompare(slot);
-            }
-            return;
+        // BR-34: dueDate phải trước submissionDeadline ít nhất 3 ngày
+        Date deadline3DaysBefore = new Date(submissionDeadline.getTime() - (3L * 24L * 60L * 60L * 1000L));
+        if (dueDate.after(deadline3DaysBefore)) {
+            throw new IllegalArgumentException("Task dueDate must be at least 3 days before chapter submissionDeadline (BR-34)");
         }
 
-        if (selectedPageIds[String(pageId)]) {
-            delete selectedPageIds[String(pageId)];
-            renderPageGrid();
-            return;
-        }
-
-        if (slot.imageUrl || slot.taskId) {
-            openPageCompare(slot);
-            return;
-        }
-
-        if (isOwner() && !slot.taskId) {
-            openPageUploadModal(slot);
-            return;
-        }
-
-        renderPageGrid();
-    });
-
-    // Nút Clear Selection
-    document.getElementById('btnClearSelection').addEventListener('click', function () {
-        selectedPageIds = {};
-        lastSlotIndex = -1;
-        renderPageGrid();
-    });
-
-    // Nút Assign From Selection: mở modal gán task
-    document.getElementById('btnAssignFromSelection').addEventListener('click', function () {
-        if (!getSelectedPages().length) { return; }
-        openAssignModal();
-    });
-
-    /**
-     * Form gán task: nhóm các page đã chọn thành nhóm liên tiếp,
-     * tạo task riêng cho mỗi nhóm với taskType tự động theo stage.
-     */
-    document.getElementById('assignTaskForm').addEventListener('submit', async function (e) {
-        e.preventDefault();
-        var errEl = document.getElementById('assignTaskError');
-        errEl.style.display = 'none';
-        var selected = getSelectedPages();
-        if (!selected.length) {
-            errEl.style.display = 'block';
-            errEl.textContent = 'Chọn ít nhất một trang trên lưới Pages.';
-            return;
-        }
-        var groups = groupConsecutivePages(selected);
-        try {
-            for (var g = 0; g < groups.length; g++) {
-                var group = groups[g];
-                await callApi('POST', '/api/v1/chapters/' + chapterId + '/tasks', {
-                    assistantId: document.getElementById('assignAssistantId').value,
-                    pageRangeStart: group[0].pageNumber,
-                    pageRangeEnd: group[group.length - 1].pageNumber,
-                    taskType: nextTaskTypeForPages(group),
-                    dueDate: document.getElementById('assignDueDate').value,
-                    priority: document.getElementById('assignPriority').value,
-                    notes: document.getElementById('assignNotes').value
-                });
-            }
-            selectedPageIds = {};
-            e.target.reset();
-            closeModals();
-            showError('');
-            await Promise.all([loadPages(), loadTasks()]);
-        } catch (err) {
-            errEl.style.display = 'block';
-            errEl.textContent = err.message;
-        }
-    });
-
-    // Form reassign task: yêu cầu lý do ít nhất 5 ký tự
-    document.getElementById('taskReassignForm').addEventListener('submit', async function (e) {
-        e.preventDefault();
-        var errEl = document.getElementById('taskReassignError');
-        errEl.style.display = 'none';
-        var taskId = document.getElementById('taskReassignId').value;
-        var assistantId = document.getElementById('taskReassignAssistantId').value;
-        var reason = document.getElementById('taskReassignReason').value.trim();
-        if (reason.length < 5) {
-            errEl.style.display = 'block';
-            errEl.textContent = 'Lý do reassign phải có ít nhất 5 ký tự.';
-            return;
-        }
-        try {
-            await callApi('POST', '/api/v1/tasks/' + taskId + '/reassign', {
-                assistantId: assistantId,
-                reason: reason
-            });
-            closeModals();
-            showError('');
-            await loadData();
-        } catch (err) {
-            errEl.style.display = 'block';
-            errEl.textContent = err.message;
-        }
-    });
-
-    // Form extend deadline task (trong modal overdue)
-    document.getElementById('taskExtendForm').addEventListener('submit', async function (e) {
-        e.preventDefault();
-        var errEl = document.getElementById('taskExtendError');
-        errEl.style.display = 'none';
-        errEl.textContent = '';
-        var taskId = document.getElementById('taskExtendId').value;
-        var newDueDate = document.getElementById('taskExtendDueDate').value;
-        var reason = document.getElementById('taskExtendReason').value.trim();
-        try {
-            await callApi('POST', '/api/v1/tasks/' + taskId + '/extend', {
-                newDueDate: newDueDate,
-                reason: reason
-            });
-            closeModals();
-            showError('');
-            await loadData();
-        } catch (err) {
-            errEl.style.display = 'block';
-            errEl.textContent = err.message;
-        }
-    });
-
-    // Nút Reassign trong modal overdue decision
-    document.getElementById('taskOverdueReassignBtn').addEventListener('click', async function () {
-        var errEl = document.getElementById('taskOverdueDecisionError');
-        errEl.style.display = 'none';
-        errEl.textContent = '';
-        var assistantId = document.getElementById('taskOverdueReassignAssistantId').value;
-        var newDueDate = document.getElementById('taskOverdueReassignDueDate').value;
-        var reason = document.getElementById('taskOverdueReason').value.trim();
-        if (!activeOverdueTaskId) { return; }
-        if (!assistantId) {
-            errEl.style.display = 'block';
-            errEl.textContent = 'Choose a new assistant.';
-            return;
-        }
-        if (!newDueDate) {
-            errEl.style.display = 'block';
-            errEl.textContent = 'Choose a new due date.';
-            return;
-        }
-        if (reason.length < 5) {
-            errEl.style.display = 'block';
-            errEl.textContent = 'Reason must be at least 5 characters.';
-            return;
-        }
-        try {
-            await callApi('POST', '/api/v1/tasks/' + activeOverdueTaskId + '/reassign', {
-                assistantId: assistantId,
-                newDueDate: newDueDate,
-                reason: reason
-            });
-            closeModals();
-            showError('');
-            await loadData();
-        } catch (err) {
-            errEl.style.display = 'block';
-            errEl.textContent = err.message;
-        }
-    });
-
-    // Nút Delete task trong modal overdue decision
-    document.getElementById('taskOverdueDeleteBtn').addEventListener('click', async function () {
-        var errEl = document.getElementById('taskOverdueDeleteError');
-        errEl.style.display = 'none';
-        errEl.textContent = '';
-        var reason = document.getElementById('taskOverdueDeleteReason').value.trim();
-        if (!activeOverdueTaskId) { return; }
-        if (reason.length < 5) {
-            errEl.style.display = 'block';
-            errEl.textContent = 'Reason must be at least 5 characters.';
-            return;
-        }
-        try {
-            await callApi('POST', '/api/v1/tasks/' + activeOverdueTaskId + '/delete', { reason: reason });
-            closeModals();
-            showError('');
-            await loadData();
-        } catch (err) {
-            errEl.style.display = 'block';
-            errEl.textContent = err.message;
-        }
-    });
-
-    /**
-     * Global click handler (event delegation) xử lý các action buttons trong bảng task:
-     * - [data-overdue-action-choice]: chuyển panel trong modal overdue
-     * - [data-task-expand]: toggle expand/collapse inline pages
-     * - [data-task-overdue-decision]: mở modal overdue decision
-     * - [data-task-approve-pop]: mở approve popover
-     * - [data-task-reject-pop]: mở reject popover
-     * - [data-task-delete]: xóa task (prompt lý do)
-     * - [data-task-reassign]: mở modal reassign
-     * - [data-popover-cancel]: đóng popover
-     * - #taskPopoverScrim: đóng popover khi click scrim
-     * - Click ngoài popover/actions: đóng popover
-     * - [data-modal-close]: đóng modal
-     * - .modal-backdrop: đóng modal khi click backdrop
-     */
-    document.addEventListener('click', async function (e) {
-        var overdueChoiceBtn = e.target.closest('[data-overdue-action-choice]');
-        if (overdueChoiceBtn) {
-            setOverdueDecisionChoice(overdueChoiceBtn.getAttribute('data-overdue-action-choice'));
-            return;
-        }
-        var expandBtn = e.target.closest('[data-task-expand]');
-        if (expandBtn) {
-            var tid = expandBtn.getAttribute('data-task-expand');
-            var row = document.getElementById('task-inline-' + tid);
-            if (row) {
-                var isOpen = row.style.display !== 'none';
-                row.style.display = isOpen ? 'none' : '';
-                expandBtn.textContent = isOpen ? '▼ Trang' : '▲ Trang';
-                if (!isOpen) {
-                    loadTaskInlinePages(Number(tid));
+        // BR-36: Assistant phải trong danh sách của Mangaka
+        try (PreparedStatement enrollment = conn.prepareStatement(enrollmentSql)) {
+            enrollment.setLong(1, mangakaId);
+            enrollment.setLong(2, assistantId);
+            try (ResultSet rs = enrollment.executeQuery()) {
+                rs.next();
+                if (rs.getInt(1) == 0) {
+                    throw new IllegalArgumentException("Assistant must be assigned to mangaka (BR-36)");
                 }
             }
-            return;
         }
-        var overdueDecisionBtn = e.target.closest('[data-task-overdue-decision]');
-        if (overdueDecisionBtn) {
-            openOverdueDecisionModal(overdueDecisionBtn.getAttribute('data-task-overdue-decision'));
-            return;
-        }
-        var approvePopBtn = e.target.closest('[data-task-approve-pop]');
-        if (approvePopBtn) {
-            openPopover('approve', approvePopBtn.getAttribute('data-task-approve-pop'), approvePopBtn.closest('.task-actions-cell'));
-            return;
-        }
-        var rejectPopBtn = e.target.closest('[data-task-reject-pop]');
-        if (rejectPopBtn) {
-            openPopover('reject', rejectPopBtn.getAttribute('data-task-reject-pop'), rejectPopBtn.closest('.task-actions-cell'));
-            return;
-        }
-        var taskDeleteBtn = e.target.closest('[data-task-delete]');
-        if (taskDeleteBtn) {
-            var deleteTaskId = taskDeleteBtn.getAttribute('data-task-delete');
-            var reason = prompt('Lý do xóa task #' + deleteTaskId + ':');
-            if (!reason) { return; }
-            try {
-                await callApi('POST', '/api/v1/tasks/' + deleteTaskId + '/delete', { reason: reason });
-                await loadData();
-                showError('');
-            } catch (err) {
-                showError(err.message);
-            }
-            return;
-        }
-        var taskReassignBtn = e.target.closest('[data-task-reassign]');
-        if (taskReassignBtn) {
-            document.getElementById('taskReassignId').value = taskReassignBtn.getAttribute('data-task-reassign');
-            document.getElementById('taskReassignReason').value = '';
-            document.getElementById('taskReassignError').style.display = 'none';
-            document.getElementById('taskReassignError').textContent = '';
-            openModal('taskReassignModal');
-            return;
-        }
-        if (e.target.closest('[data-popover-cancel]')) {
-            closePopovers();
-            return;
-        }
-        if (e.target.id === 'taskPopoverScrim') {
-            closePopovers();
-            return;
-        }
-        var insidePopover = e.target.closest('.task-action-popover');
-        var insideActions = e.target.closest('.task-row-actions');
-        if (!insidePopover && !insideActions && activePopoverType) {
-            closePopovers();
-        }
-        if (e.target.closest('[data-modal-close]')) {
-            closeModals();
-            return;
-        }
-        if (e.target.classList.contains('modal-backdrop')) {
-            closeModals();
-        }
-    });
-
-    // Approve popover: gọi API approve, cập nhật task local, reload data
-    document.getElementById('approvePopoverConfirm').addEventListener('click', async function () {
-        if (!activePopoverTaskId) { return; }
-        try {
-            var taskId = activePopoverTaskId;
-            var comment = document.getElementById('approvePopoverComment').value.trim();
-            var payload = comment ? { comment: comment } : {};
-            await callApi('POST', '/api/v1/tasks/' + taskId + '/approve', payload);
-            closePopovers();
-            var t = findTask(taskId);
-            if (t) { t._decisionLabel = 'approved'; t.status = 'APPROVED'; }
-            renderChapterTasks();
-            await loadData();
-            showError('');
-        } catch (err) { showError(err.message); }
-    });
-
-    // Reject popover: validate lý do ≥ 5 ký tự, gọi API reject
-    document.getElementById('rejectPopoverConfirm').addEventListener('click', async function () {
-        if (!activePopoverTaskId) { return; }
-        var reason = document.getElementById('rejectPopoverReason').value.trim();
-        if (reason.length < 5) { return; }
-        try {
-            var taskId = activePopoverTaskId;
-            await callApi('POST', '/api/v1/tasks/' + taskId + '/reject', { reason: reason });
-            closePopovers();
-            var t = findTask(taskId);
-            if (t) { t._decisionLabel = 'rejected'; t.status = 'IN_PROGRESS'; }
-            renderChapterTasks();
-            await loadData();
-            showError('');
-        } catch (err) { showError(err.message); }
-    });
-
-    // Realtime validate textarea lý do reject
-    document.getElementById('rejectPopoverReason').addEventListener('input', updateRejectConfirmState);
-
-    // Đóng page compare modal
-    document.getElementById('pageCompareClose').addEventListener('click', function () {
-        document.getElementById('pageCompareModal').style.display = 'none';
-    });
-    document.getElementById('pageCompareModal').addEventListener('click', function (e) {
-        if (e.target === this) {
-            this.style.display = 'none';
-        }
-    });
-
-    // ============================================================
-    // INIT
-    // ============================================================
-
-    // Hiển thị lỗi từ URL param (nếu có)
-    if (urlError) {
-        showError(decodeURIComponent(urlError));
     }
 
-    switchTab('pages'); // Mở tab Pages mặc định
-    loadData();         // Load toàn bộ dữ liệu
-})();
+    /**
+     * Assistant nộp task để Mangaka review (chuyển sang SUBMITTED).
+     * Chỉ nộp được từ trạng thái IN_PROGRESS, REJECTED, hoặc OVERDUE (BR-TSK-01).
+     * Bắt buộc phải upload đủ ảnh cho tất cả trang trong range trước khi nộp.
+     */
+    public void updateStatusByAssistant(long taskId, long assistantId, String status) {
+        ensureTaskLifecycleSchemaReady();
+        String normalized = status == null ? "" : status.trim().toUpperCase();
+        if (!"SUBMITTED".equals(normalized)) {
+            throw new IllegalArgumentException("Assistant can only submit task for review");
+        }
+
+        String readSql = "SELECT chapterId, assistantId, pageRangeStart, pageRangeEnd, status, taskType FROM PageTask WHERE id = ?";
+        String updateSql = "UPDATE PageTask SET status = ?, updatedAt = GETDATE(), lastProgressAt = GETDATE() WHERE id = ?";
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement read = conn.prepareStatement(readSql)) {
+            read.setLong(1, taskId);
+            long chapterId;
+            long ownerAssistantId;
+            int pageRangeStart;
+            int pageRangeEnd;
+            String currentStatus;
+            try (ResultSet rs = read.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalArgumentException("Task not found");
+                }
+                chapterId = rs.getLong("chapterId");
+                ownerAssistantId = rs.getLong("assistantId");
+                pageRangeStart = rs.getInt("pageRangeStart");
+                pageRangeEnd = rs.getInt("pageRangeEnd");
+                currentStatus = rs.getString("status");
+            }
+
+            if (ownerAssistantId != assistantId) {
+                throw new IllegalArgumentException("Task not assigned to this assistant (BR-42)");
+            }
+
+            String current = normalizeStatus(currentStatus);
+            // Assistant vẫn có thể nộp khi task OVERDUE (Mangaka chưa quyết định)
+            if (!("IN_PROGRESS".equals(current)
+                    || "REJECTED".equals(current)
+                    || "OVERDUE".equals(current))) {
+                throw new IllegalArgumentException("Assistant can submit only from active/rework task state (BR-TSK-01)");
+            }
+
+            validateSubmittedTaskImages(conn, taskId, pageRangeStart, pageRangeEnd);
+
+            try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                ps.setString(1, normalized);
+                ps.setLong(2, taskId);
+                ps.executeUpdate();
+            }
+
+            refreshChapterProgress(chapterId);
+            long mangakaId = findChapterOwnerMangaka(chapterId);
+            createNotification(
+                    mangakaId,
+                    "TASK_SUBMITTED",
+                    "Task #" + taskId + " has been submitted for your review by assistant.",
+                    taskId,
+                    "TASK");
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot update task status", ex);
+        }
+    }
+
+    /**
+     * Kiểm tra assistant đã upload đủ ảnh cho tất cả trang trong range chưa.
+     * Mỗi pageNumber trong [pageRangeStart, pageRangeEnd] phải có ít nhất 1 ảnh active loại PAGE.
+     */
+    private void validateSubmittedTaskImages(Connection conn, long taskId, int pageRangeStart, int pageRangeEnd) throws SQLException {
+        int expected = pageRangeEnd - pageRangeStart + 1;
+        String sql = "SELECT COUNT(DISTINCT pageNumber) "
+                + "FROM ChapterImage "
+                + "WHERE pageTaskId = ? "
+                + "AND isActive = 1 "
+                + "AND imageType = 'PAGE' "
+                + "AND pageNumber BETWEEN ? AND ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, taskId);
+            ps.setInt(2, pageRangeStart);
+            ps.setInt(3, pageRangeEnd);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                int uploaded = rs.getInt(1);
+                if (uploaded < expected) {
+                    throw new IllegalArgumentException("Upload all task pages to ChapterImage before submitting (" + uploaded + "/" + expected + ")");
+                }
+            }
+        }
+    }
+
+    /**
+     * Mangaka duyệt task SUBMITTED (BR-39).
+     * Sau khi duyệt: ảnh task được promote lên Chapter, cập nhật tiến độ, gửi thông báo.
+     */
+    public void approveByMangaka(long taskId, long mangakaId, String comment) {
+        String readSql = "SELECT chapterId, assistantId, status, taskType FROM PageTask WHERE id = ?";
+        String updateExtendedSql = "UPDATE PageTask SET status = 'APPROVED', approvalComment = ?, updatedAt = GETDATE() WHERE id = ?";
+        String updateLegacySql = "UPDATE PageTask SET status = 'APPROVED', updatedAt = GETDATE() WHERE id = ?";
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement read = conn.prepareStatement(readSql)) {
+            read.setLong(1, taskId);
+            long chapterId;
+            long assistantId;
+            String currentStatus;
+            String taskType;
+            try (ResultSet rs = read.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalArgumentException("Task not found");
+                }
+                chapterId = rs.getLong("chapterId");
+                assistantId = rs.getLong("assistantId");
+                currentStatus = rs.getString("status");
+                taskType = rs.getString("taskType");
+            }
+
+            long ownerId = findChapterOwnerMangaka(chapterId);
+            if (ownerId != mangakaId) {
+                throw new IllegalArgumentException("Only chapter owner Mangaka can approve (BR-39)");
+            }
+
+            if (!"SUBMITTED".equals(normalizeStatus(currentStatus))) {
+                throw new IllegalArgumentException("Only SUBMITTED task can be approved (BR-39)");
+            }
+
+            boolean extended = isTaskSchemaExtended();
+            if (extended) {
+                try (PreparedStatement ps = conn.prepareStatement(updateExtendedSql)) {
+                    ps.setString(1, comment == null ? null : comment.trim());
+                    ps.setLong(2, taskId);
+                    ps.executeUpdate();
+                }
+            } else {
+                try (PreparedStatement ps = conn.prepareStatement(updateLegacySql)) {
+                    ps.setLong(1, taskId);
+                    ps.executeUpdate();
+                }
+            }
+
+            // Promote ảnh task lên Chapter
+            promoteTaskImagesToChapter(taskId, chapterId, mangakaId, taskType);
+            refreshChapterProgress(chapterId);
+
+            String approveMsg = "Task #" + taskId + " has been approved.";
+            if (comment != null && !comment.trim().isEmpty()) {
+                approveMsg += " Comment: " + comment.trim();
+            }
+            createNotification(assistantId, "TASK_APPROVED", approveMsg, taskId, "TASK");
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot approve task", ex);
+        }
+    }
+
+    /** Promote ảnh PAGE của task vào Chapter (cập nhật bảng Page với completedStage tương ứng) */
+    private void promoteTaskImagesToChapter(long taskId, long chapterId, long approvedBy, String completedStage) {
+        List<ChapterImageItem> images = chapterImageRepository.listByTask(taskId);
+        for (ChapterImageItem image : images) {
+            if (image.getPageNumber() == null || !"PAGE".equalsIgnoreCase(image.getImageType())) {
+                continue;
+            }
+            pageRepository.promoteTaskImage(
+                    chapterId,
+                    image.getPageNumber().intValue(),
+                    image.getFileUrl(),
+                    approvedBy,
+                    completedStage);
+        }
+    }
+
+    /**
+     * Mangaka từ chối task SUBMITTED (BR-38), trả về số lần bị từ chối.
+     * Task chuyển lại IN_PROGRESS; dueDate được gia hạn thêm 1 ngày nếu còn đủ buffer trước deadline.
+     */
+    public int rejectByMangaka(long taskId, long mangakaId, String reason) {
+        String readSql =
+                "SELECT t.chapterId, t.assistantId, t.status, t.rejectionCount, t.dueDate, s.publicationDate AS seriesDeadline "
+                + "FROM PageTask t "
+                + "JOIN Chapter c ON c.id = t.chapterId "
+                + "JOIN Series s ON s.id = c.seriesId "
+                + "WHERE t.id = ?";
+        String updateExtendedSql = "UPDATE PageTask SET status = 'IN_PROGRESS', rejectionCount = ?, rejectionReason = ?, dueDate = ?, updatedAt = GETDATE() WHERE id = ?";
+        String updateLegacySql = "UPDATE PageTask SET status = 'IN_PROGRESS', rejectionCount = ?, dueDate = ?, updatedAt = GETDATE() WHERE id = ?";
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement read = conn.prepareStatement(readSql)) {
+            read.setLong(1, taskId);
+            long chapterId;
+            long assistantId;
+            String currentStatus;
+            int currentReject;
+            Date currentDueDate;
+            Date seriesDeadline;
+            try (ResultSet rs = read.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalArgumentException("Task not found");
+                }
+                chapterId = rs.getLong("chapterId");
+                assistantId = rs.getLong("assistantId");
+                currentStatus = rs.getString("status");
+                currentReject = rs.getInt("rejectionCount");
+                currentDueDate = rs.getDate("dueDate");
+                seriesDeadline = rs.getDate("seriesDeadline");
+            }
+
+            long ownerId = findChapterOwnerMangaka(chapterId);
+            if (ownerId != mangakaId) {
+                throw new IllegalArgumentException("Only chapter owner Mangaka can reject (BR-38)");
+            }
+
+            if (!"SUBMITTED".equals(normalizeStatus(currentStatus))) {
+                throw new IllegalArgumentException("Only SUBMITTED task can be rejected (BR-38)");
+            }
+
+            int next = currentReject + 1;
+            Date nextDueDate = extendedRejectDueDate(currentDueDate, seriesDeadline);
+            boolean extended = isTaskSchemaExtended();
+            if (extended) {
+                try (PreparedStatement update = conn.prepareStatement(updateExtendedSql)) {
+                    update.setInt(1, next);
+                    update.setString(2, reason == null ? null : reason.trim());
+                    update.setDate(3, nextDueDate);
+                    update.setLong(4, taskId);
+                    update.executeUpdate();
+                }
+            } else {
+                try (PreparedStatement update = conn.prepareStatement(updateLegacySql)) {
+                    update.setInt(1, next);
+                    update.setDate(2, nextDueDate);
+                    update.setLong(3, taskId);
+                    update.executeUpdate();
+                }
+            }
+
+            refreshChapterProgress(chapterId);
+
+            String feedback = reason == null ? "" : reason.trim();
+            createNotification(
+                    assistantId,
+                    "TASK_REJECTED",
+                    "Task #" + taskId + " needs rework."
+                            + (feedback.isEmpty() ? "" : " Reason: " + feedback),
+                    taskId,
+                    "TASK");
+
+            return next;
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot reject task", ex);
+        }
+    }
+
+    /**
+     * Tính dueDate mới sau khi reject: cộng thêm 1 ngày, nhưng không vượt quá
+     * (seriesDeadline - 3 ngày). Nếu không còn đủ buffer, giữ nguyên dueDate cũ.
+     */
+    private Date extendedRejectDueDate(Date currentDueDate, Date seriesDeadline) {
+        if (currentDueDate == null || seriesDeadline == null) {
+            return currentDueDate;
+        }
+        LocalDate proposed = currentDueDate.toLocalDate().plusDays(1);
+        LocalDate latestAllowed = seriesDeadline.toLocalDate().minusDays(TASK_REJECT_SERIES_DEADLINE_BUFFER_DAYS);
+        if (proposed.isAfter(latestAllowed)) {
+            return currentDueDate;
+        }
+        return Date.valueOf(proposed);
+    }
+
+    // ============================================================
+    // [7] QUẢN LÝ OVERDUE
+    // ============================================================
+
+    /**
+     * Job hàng ngày: đánh dấu OVERDUE các task đã quá dueDate nhưng chưa hoàn tất.
+     * Gửi thông báo cho cả Mangaka (action required) và Assistant.
+     * Trả về số task vừa được cập nhật.
+     */
+    public int markOverdueTasks() {
+        String selectSql =
+            "SELECT t.id, t.chapterId, t.assistantId, s.mangakaId "
+            + "FROM PageTask t "
+            + "JOIN Chapter c ON c.id = t.chapterId "
+            + "JOIN Series s ON s.id = c.seriesId "
+            + "WHERE t.dueDate < CAST(GETDATE() AS DATE) AND t.status NOT IN (" + SQL_OVERDUE_SKIP_STATUSES + ")";
+        String updateSql = "UPDATE PageTask SET status = 'OVERDUE', updatedAt = GETDATE() WHERE id = ?";
+
+        int changed = 0;
+        Set<Long> chapters = new HashSet<Long>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement select = conn.prepareStatement(selectSql);
+             ResultSet rs = select.executeQuery()) {
+
+            List<long[]> rows = new ArrayList<long[]>();
+            while (rs.next()) {
+                rows.add(new long[] { rs.getLong("id"), rs.getLong("chapterId"), rs.getLong("assistantId"), rs.getLong("mangakaId") });
+            }
+
+            for (long[] row : rows) {
+                try (PreparedStatement update = conn.prepareStatement(updateSql)) {
+                    update.setLong(1, row[0]);
+                    if (update.executeUpdate() > 0) {
+                        changed++;
+                        chapters.add(row[1]);
+                        createNotificationIfAbsentToday(
+                                row[3],
+                                "TASK_OVERDUE_ACTION_REQUIRED",
+                                "Task #" + row[0] + " is overdue. Please decide: extend, reassign, or cancel.",
+                                row[0],
+                                "TASK");
+                        createNotificationIfAbsentToday(
+                                row[2],
+                                "TASK_OVERDUE",
+                                "Task #" + row[0] + " is overdue. Please contact your Mangaka.",
+                                row[0],
+                                "TASK");
+                    }
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot mark overdue tasks", ex);
+        }
+
+        for (Long chapterId : chapters) {
+            refreshChapterProgress(chapterId.longValue());
+        }
+        return changed;
+    }
+
+    /**
+     * Job hàng ngày (09:00): tự động huỷ (CANCELLED) các task OVERDUE mà Mangaka
+     * chưa có quyết định trong 3 ngày. Gửi thông báo cho assistant.
+     * Trả về số task bị huỷ.
+     */
+    public int escalatePendingOverdueDecisions() {
+        ensureTaskLifecycleSchemaReady();
+        String selectSql =
+            "SELECT t.id, t.chapterId, t.assistantId "
+            + "FROM PageTask t "
+            + "WHERE t.status = 'OVERDUE' "
+            + "AND DATEDIFF(DAY, t.updatedAt, GETDATE()) >= 3";
+        String updateSql =
+            "UPDATE PageTask SET status = 'CANCELLED', actionReason = 'Auto-cancelled: no mangaka decision within 3 days of overdue', "
+            + "updatedAt = GETDATE() WHERE id = ? AND status = 'OVERDUE'";
+
+        int cancelled = 0;
+        Set<Long> chapters = new HashSet<Long>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement select = conn.prepareStatement(selectSql);
+             ResultSet rs = select.executeQuery()) {
+
+            List<long[]> rows = new ArrayList<long[]>();
+            while (rs.next()) {
+                rows.add(new long[] { rs.getLong("id"), rs.getLong("chapterId"), rs.getLong("assistantId") });
+            }
+
+            for (long[] row : rows) {
+                try (PreparedStatement update = conn.prepareStatement(updateSql)) {
+                    update.setLong(1, row[0]);
+                    if (update.executeUpdate() > 0) {
+                        cancelled++;
+                        chapters.add(row[1]);
+                        createNotificationIfAbsentToday(
+                                row[2],
+                                "TASK_CANCELLED",
+                                "Task #" + row[0] + " has been auto-cancelled: no mangaka decision within 3 days of overdue.",
+                                row[0],
+                                "TASK");
+                    }
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot escalate overdue decisions", ex);
+        }
+
+        for (Long chapterId : chapters) {
+            refreshChapterProgress(chapterId.longValue());
+        }
+        return cancelled;
+    }
+
+    /**
+     * Mangaka gia hạn task OVERDUE: đặt dueDate mới, reset status về IN_PROGRESS.
+     * dueDate mới phải hợp lệ (không quá khứ, đủ buffer trước submissionDeadline).
+     */
+    public void extendOverdueTask(long taskId, long mangakaId, java.sql.Date newDueDate, String reason) {
+        ensureTaskLifecycleSchemaReady();
+        if (newDueDate == null) {
+            throw new IllegalArgumentException("newDueDate is required");
+        }
+        if (newDueDate.before(java.sql.Date.valueOf(java.time.LocalDate.now()))) {
+            throw new IllegalArgumentException("newDueDate cannot be in the past");
+        }
+        TaskSummary task = findById(taskId);
+        if (task == null) {
+            throw new IllegalArgumentException("Task not found");
+        }
+        if (findChapterOwnerMangaka(task.getChapterId()) != mangakaId) {
+            throw new IllegalArgumentException("Only chapter owner can extend task");
+        }
+        if (!"OVERDUE".equals(normalizeStatus(task.getStatus()))) {
+            throw new IllegalArgumentException("Only OVERDUE task can be extended");
+        }
+        validateOverdueDecisionDueDate(task.getChapterId(), newDueDate);
+
+        String sql = "UPDATE PageTask SET dueDate = ?, status = 'IN_PROGRESS', updatedAt = GETDATE() WHERE id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setDate(1, newDueDate);
+            ps.setLong(2, taskId);
+            if (ps.executeUpdate() == 0) {
+                throw new IllegalArgumentException("Task not found");
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot extend task", ex);
+        }
+
+        refreshChapterProgress(task.getChapterId());
+        String msg = "Task #" + taskId + " deadline extended to " + newDueDate + ".";
+        if (reason != null && !reason.trim().isEmpty()) {
+            msg += " Reason: " + reason.trim();
+        }
+        createNotification(task.getAssistantId(), "TASK_EXTENDED", msg, taskId, "TASK");
+    }
+
+    /**
+     * Kiểm tra dueDate cho quyết định trên task OVERDUE:
+     * không được quá khứ, không được vượt quá (submissionDeadline - 3 ngày).
+     */
+    private void validateOverdueDecisionDueDate(long chapterId, Date dueDate) {
+        if (dueDate.before(Date.valueOf(LocalDate.now()))) {
+            throw new IllegalArgumentException("Task dueDate cannot be in the past");
+        }
+        Date latestDueDate = findLatestTaskDueDate(chapterId);
+        if (dueDate.after(latestDueDate)) {
+            throw new IllegalArgumentException("Task dueDate must be at least 3 days before chapter submissionDeadline (BR-34)");
+        }
+    }
+
+    /** Trả về ngày tối đa cho dueDate của task: submissionDeadline - 3 ngày */
+    private Date findLatestTaskDueDate(long chapterId) {
+        String sql = "SELECT submissionDeadline FROM Chapter WHERE id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, chapterId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalArgumentException("Chapter not found");
+                }
+                Date submissionDeadline = rs.getDate("submissionDeadline");
+                return Date.valueOf(submissionDeadline.toLocalDate().minusDays(TASK_REJECT_SERIES_DEADLINE_BUFFER_DAYS));
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot validate task due date", ex);
+        }
+    }
+
+    // ============================================================
+    // [8] NHẮC NHỞ & THÔNG BÁO
+    // ============================================================
+
+    /**
+     * Job hàng ngày: gửi nhắc nhở cho assistant về task sắp đến hạn trong 24 giờ.
+     * Chỉ gửi 1 lần/ngày/task (createNotificationIfAbsentToday).
+     */
+    public int notifyDueSoonTasks() {
+        String sql =
+            "SELECT id, assistantId FROM PageTask "
+            + "WHERE dueDate = DATEADD(DAY, 1, CAST(GETDATE() AS DATE)) "
+            + "AND status IN ('PENDING','IN_PROGRESS','REJECTED','SUBMITTED')";
+        int sent = 0;
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                long taskId = rs.getLong("id");
+                long assistantId = rs.getLong("assistantId");
+                if (createNotificationIfAbsentToday(
+                        assistantId,
+                        "TASK_DUE_SOON",
+                        "Task #" + taskId + " is due within 24 hours.",
+                        taskId,
+                        "TASK")) {
+                    sent++;
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot send due-soon reminders", ex);
+        }
+        return sent;
+    }
+
+    /**
+     * BR-TSK-08: Nhắc Mangaka về task bị trễ tiến độ (không có cập nhật 3+ ngày kể từ khi giao).
+     * DELAYED chỉ là cờ cảnh báo, không thay đổi status của task.
+     */
+    public int markDelayedTasks() {
+        String sql =
+            "SELECT t.id, s.mangakaId "
+            + "FROM PageTask t "
+            + "JOIN Chapter c ON c.id = t.chapterId "
+            + "JOIN Series s ON s.id = c.seriesId "
+            + "WHERE t.status IN ('PENDING','IN_PROGRESS','REJECTED') "
+            + "AND DATEDIFF(DAY, t.assignedAt, GETDATE()) >= 3 "
+            + "AND DATEDIFF(DAY, COALESCE(t.lastProgressAt, t.assignedAt), GETDATE()) >= 3";
+
+        int sent = 0;
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                long taskId = rs.getLong("id");
+                long mangakaId = rs.getLong("mangakaId");
+                if (createNotificationIfAbsentToday(
+                        mangakaId,
+                        "TASK_DELAYED",
+                        "Task #" + taskId + " is delayed (no update for 3+ days since assignment).",
+                        taskId,
+                        "TASK")) {
+                    sent++;
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot mark delayed tasks", ex);
+        }
+        return sent;
+    }
+
+    // ============================================================
+    // [9] TIẾN ĐỘ CHAPTER
+    // ============================================================
+
+    /**
+     * Tính lại completionPct và status của Chapter dựa trên completedStage của từng Page.
+     * Thang điểm hoàn thành: SKETCHING=1/5, INKING=2/5, COLORING=3/5, SCREENTONE=4/5, LETTERING=5/5.
+     * Cũng cập nhật cờ atRisk:
+     *   - Đã qua submissionDeadline mà chưa xong: atRisk = true
+     *   - Đã qua 70% thời gian mà mới hoàn thành < 50%: atRisk = true
+     * Nếu chapter mới trở thành atRisk, gửi thông báo cho Tantou Editor.
+     */
+    public void refreshChapterProgress(long chapterId) {
+        pageRepository.ensurePageStageColumnReady();
+        String readRiskSql = "SELECT atRisk FROM Chapter WHERE id = ?";
+        String updateSql =
+            "UPDATE c SET "
+            + "completionPct = stats.completionPct, "
+            + "status = CASE "
+            + "  WHEN stats.totalPages = 0 AND c.status IN ('PLANNING','IN_PROGRESS','COMPLETE') THEN 'PLANNING' "
+            + "  WHEN stats.totalPages > 0 AND stats.completionPct >= 100 AND c.status IN ('PLANNING','IN_PROGRESS','COMPLETE') THEN 'COMPLETE' "
+            + "  WHEN stats.totalPages > 0 AND stats.completionPct < 100 AND c.status IN ('PLANNING','IN_PROGRESS','COMPLETE') THEN 'IN_PROGRESS' "
+            + "  ELSE c.status END, "
+            + "atRisk = CASE "
+            + "  WHEN c.submissionDeadline < CAST(GETDATE() AS DATE) AND stats.completionPct < 100 THEN 1 "
+            + "  WHEN DATEDIFF(DAY, CAST(c.createdAt AS DATE), c.submissionDeadline) > 0 "
+            + "       AND stats.completionPct < 50 "
+            + "       AND (100.0 * DATEDIFF(DAY, CAST(c.createdAt AS DATE), CAST(GETDATE() AS DATE)) / DATEDIFF(DAY, CAST(c.createdAt AS DATE), c.submissionDeadline)) > 70 "
+            + "  THEN 1 ELSE 0 END "
+            + "FROM Chapter c "
+            + "CROSS APPLY ( "
+            + "  SELECT "
+            + "    COUNT(1) AS totalPages, "
+            + "    CAST(ROUND(CASE WHEN COUNT(1)=0 THEN 0 ELSE (100.0 * SUM(CASE UPPER(ISNULL(p.completedStage, '')) "
+            + "      WHEN 'SKETCHING' THEN 1 WHEN 'INKING' THEN 2 WHEN 'COLORING' THEN 3 "
+            + "      WHEN 'SCREENTONE' THEN 4 WHEN 'LETTERING' THEN 5 ELSE 0 END) / (COUNT(1) * 5)) END, 2) AS DECIMAL(5,2)) AS completionPct "
+            + "  FROM " + PageRepository.TABLE_PAGE + " p WHERE p.chapterId = c.id "
+            + ") stats "
+            + "WHERE c.id = ?";
+
+        try (Connection conn = dataSource.getConnection()) {
+            boolean wasAtRisk = false;
+            try (PreparedStatement read = conn.prepareStatement(readRiskSql)) {
+                read.setLong(1, chapterId);
+                try (ResultSet rs = read.executeQuery()) {
+                    if (rs.next()) {
+                        wasAtRisk = rs.getBoolean("atRisk");
+                    }
+                }
+            }
+
+            try (PreparedStatement update = conn.prepareStatement(updateSql)) {
+                update.setLong(1, chapterId);
+                update.executeUpdate();
+            }
+
+            boolean nowAtRisk = false;
+            try (PreparedStatement read = conn.prepareStatement(readRiskSql)) {
+                read.setLong(1, chapterId);
+                try (ResultSet rs = read.executeQuery()) {
+                    if (rs.next()) {
+                        nowAtRisk = rs.getBoolean("atRisk");
+                    }
+                }
+            }
+
+            // Gửi thông báo cho Tantou Editor khi chapter lần đầu trở thành at-risk
+            if (!wasAtRisk && nowAtRisk) {
+                long tantouId = findChapterTantouEditor(chapterId);
+                createNotificationIfAbsentToday(
+                        tantouId,
+                        "CHAPTER_AT_RISK",
+                        "Chapter #" + chapterId + " is at risk (progress below expected timeline).",
+                        chapterId,
+                        "CHAPTER");
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot refresh chapter progress", ex);
+        }
+    }
+
+    /**
+     * Kiểm tra tất cả task active của chapter đã được APPROVED chưa.
+     * Task đã đóng (DELETED, REASSIGNED, CANCELLED) không tính vào denominator.
+     */
+    public boolean areAllTasksApproved(long chapterId) {
+        String sql = "SELECT "
+                + "SUM(CASE WHEN UPPER(status) = 'APPROVED' THEN 1 ELSE 0 END) AS approvedCount, "
+                + "SUM(CASE WHEN UPPER(status) NOT IN ('DELETED','REASSIGNED','CANCELLED') THEN 1 ELSE 0 END) AS totalCount "
+                + "FROM PageTask WHERE chapterId = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, chapterId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    int approvedCount = rs.getInt("approvedCount");
+                    int totalCount = rs.getInt("totalCount");
+                    return totalCount > 0 && approvedCount == totalCount;
+                }
+                return false;
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot check chapter task approval status", ex);
+        }
+    }
+
+    /** Kiểm tra tất cả trang của chapter đã đạt completedStage = LETTERING (giai đoạn cuối) chưa */
+    public boolean areAllPagesFullyCompleted(long chapterId) {
+        pageRepository.ensurePageStageColumnReady();
+        String sql = "SELECT "
+                + "COUNT(1) AS totalCount, "
+                + "SUM(CASE WHEN UPPER(ISNULL(p.completedStage, '')) = 'LETTERING' THEN 1 ELSE 0 END) AS completedCount "
+                + "FROM " + PageRepository.TABLE_PAGE + " WHERE chapterId = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, chapterId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    int totalCount = rs.getInt("totalCount");
+                    int completedCount = rs.getInt("completedCount");
+                    return totalCount > 0 && completedCount == totalCount;
+                }
+                return false;
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot check chapter page completion status", ex);
+        }
+    }
+
+    // ============================================================
+    // [10] THÔNG BÁO (Notification)
+    // ============================================================
+
+    /** Tạo thông báo cho người dùng */
+    public void createNotification(long userId, String type, String message, long referenceId, String referenceType) {
+        String sql = "INSERT INTO Notification (userId, type, title, message, viewUrl, referenceId, referenceType, isRead, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, 0, GETDATE())";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, userId);
+            ps.setString(2, type);
+            ps.setString(3, notificationTitle(type));
+            ps.setString(4, message);
+            ps.setString(5, notificationViewUrl(type, referenceId, referenceType));
+            ps.setLong(6, referenceId);
+            ps.setString(7, referenceType);
+            ps.executeUpdate();
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot create notification", ex);
+        }
+    }
+
+    /**
+     * Tạo thông báo nhưng chỉ khi chưa có thông báo cùng loại cho cùng referenceId trong ngày hôm nay.
+     * Trả về true nếu thông báo được tạo, false nếu đã tồn tại.
+     */
+    public boolean createNotificationIfAbsentToday(long userId, String type, String message, long referenceId, String referenceType) {
+        String checkSql =
+            "SELECT COUNT(1) FROM Notification "
+            + "WHERE userId = ? AND type = ? AND referenceId = ? "
+            + "AND CAST(createdAt AS DATE) = CAST(GETDATE() AS DATE)";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement check = conn.prepareStatement(checkSql)) {
+            check.setLong(1, userId);
+            check.setString(2, type);
+            check.setLong(3, referenceId);
+            try (ResultSet rs = check.executeQuery()) {
+                rs.next();
+                if (rs.getInt(1) > 0) {
+                    return false;
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot check notification duplication", ex);
+        }
+
+        createNotification(userId, type, message, referenceId, referenceType);
+        return true;
+    }
+
+    // ============================================================
+    // [11] HELPER / UTILITY
+    // ============================================================
+
+    /** Map notification type sang tiêu đề hiển thị */
+    private String notificationTitle(String type) {
+        if (type == null) {
+            return "Notification";
+        }
+        String normalized = type.trim().toUpperCase(Locale.ENGLISH);
+        if ("TASK_ASSIGNED".equals(normalized)) { return "New page task assigned"; }
+        if ("TASK_SUBMITTED".equals(normalized)) { return "Task submitted for review"; }
+        if ("TASK_APPROVED".equals(normalized)) { return "Task approved"; }
+        if ("TASK_REJECTED".equals(normalized)) { return "Task rejected - rework needed"; }
+        if ("TASK_DELETED".equals(normalized)) { return "Task deleted"; }
+        if ("TASK_REASSIGNED".equals(normalized)) { return "Task reassigned"; }
+        if ("TASK_DUE_SOON".equals(normalized)) { return "Task due in 24 hours"; }
+        if ("TASK_DELAYED".equals(normalized)) { return "Task delayed"; }
+        if ("TASK_OVERDUE".equals(normalized)) { return "Task overdue"; }
+        if ("TASK_OVERDUE_ACTION_REQUIRED".equals(normalized)) { return "Task overdue - action required"; }
+        if ("TASK_EXTENDED".equals(normalized)) { return "Task deadline extended"; }
+        if ("TASK_CANCELLED".equals(normalized)) { return "Task cancelled"; }
+        if ("TASK_ESCALATED".equals(normalized)) { return "Task escalated"; }
+        if ("CHAPTER_AT_RISK".equals(normalized)) { return "Chapter at risk"; }
+        if (normalized.startsWith("MANUSCRIPT")) { return "Manuscript update"; }
+        if (normalized.startsWith("CHAPTER")) { return "Chapter update"; }
+        return "Notification";
+    }
+
+    /** Tạo URL điều hướng cho thông báo dựa vào referenceType và type */
+    private String notificationViewUrl(String type, long referenceId, String referenceType) {
+        if (referenceId <= 0 || referenceType == null) {
+            return null;
+        }
+        String normalizedType = type == null ? "" : type.trim().toUpperCase(Locale.ENGLISH);
+        String normalizedRef = referenceType.trim().toUpperCase(Locale.ENGLISH);
+        if ("TASK".equals(normalizedRef) || "PAGETASK".equals(normalizedRef)) {
+            if ("TASK_ESCALATED".equals(normalizedType)) {
+                return "/main/tasks/" + referenceId + "?tab=history";
+            }
+            return "/main/tasks/" + referenceId;
+        }
+        if ("CHAPTER".equals(normalizedRef)) { return "/main/chapters/" + referenceId; }
+        if ("MANUSCRIPT".equals(normalizedRef)) { return "/main/notifications"; }
+        if ("DECISION".equals(normalizedRef) || "DECISION_SESSION".equals(normalizedRef)) { return "/main/decisions/" + referenceId; }
+        if ("PROPOSAL".equals(normalizedRef)) { return "/main/proposals/" + referenceId; }
+        if ("SERIES".equals(normalizedRef)) { return "/main/notifications"; }
+        return null;
+    }
+
+    /** Map đầy đủ ResultSet → TaskSummary kèm thông tin chapter/series/assistant */
+    private TaskSummary mapDetailed(ResultSet rs) throws SQLException {
+        TaskSummary t = map(rs);
+        t.setChapterTitle(rs.getString("chapterTitle"));
+        t.setChapterNumber(rs.getInt("chapterNumber"));
+        t.setSeriesTitle(rs.getString("seriesTitle"));
+        t.setAssistantName(rs.getString("assistantName"));
+        t.setDelayed(rs.getBoolean("isDelayed"));
+        return t;
+    }
+
+    /** Map các cột cơ bản của PageTask từ ResultSet */
+    private TaskSummary map(ResultSet rs) throws SQLException {
+        TaskSummary t = new TaskSummary();
+        t.setId(rs.getLong("id"));
+        t.setChapterId(rs.getLong("chapterId"));
+        t.setAssistantId(rs.getLong("assistantId"));
+        t.setPageRangeStart(rs.getInt("pageRangeStart"));
+        t.setPageRangeEnd(rs.getInt("pageRangeEnd"));
+        t.setTaskType(rs.getString("taskType"));
+        t.setDueDate(rs.getDate("dueDate"));
+        t.setStatus(rs.getString("status"));
+        t.setRejectionCount(rs.getInt("rejectionCount"));
+        if (hasColumn(rs, "priority")) {
+            t.setPriority(rs.getString("priority"));
+        } else {
+            t.setPriority("NORMAL");
+        }
+        if (hasColumn(rs, "notes")) { t.setNotes(rs.getString("notes")); }
+        if (hasColumn(rs, "rejectionReason")) { t.setRejectionReason(rs.getString("rejectionReason")); }
+        if (hasColumn(rs, "approvalComment")) { t.setApprovalComment(rs.getString("approvalComment")); }
+        if (hasColumn(rs, "actionReason")) { t.setActionReason(rs.getString("actionReason")); }
+        if (hasColumn(rs, "previousAssistantId")) {
+            long previousAssistantId = rs.getLong("previousAssistantId");
+            t.setPreviousAssistantId(rs.wasNull() ? null : Long.valueOf(previousAssistantId));
+        }
+        return t;
+    }
+
+    /** Lấy ID Mangaka sở hữu chapter (qua series) */
+    public long findChapterOwnerMangaka(long chapterId) {
+        String sql = "SELECT s.mangakaId FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, chapterId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalArgumentException("Chapter not found");
+                }
+                return rs.getLong(1);
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot load chapter owner", ex);
+        }
+    }
+
+    /** Lấy ID Tantou Editor phụ trách chapter (qua series) */
+    public long findChapterTantouEditor(long chapterId) {
+        String sql = "SELECT s.tantouEditorId FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, chapterId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalArgumentException("Chapter not found");
+                }
+                return rs.getLong(1);
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot load chapter tantou", ex);
+        }
+    }
+
+    /** Lấy assistantId của task */
+    public long findTaskAssistantId(long taskId) {
+        String sql = "SELECT assistantId FROM PageTask WHERE id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, taskId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalArgumentException("Task not found");
+                }
+                return rs.getLong("assistantId");
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot load task assistant", ex);
+        }
+    }
+
+    /** Lấy chapterId của task */
+    public long findTaskChapterId(long taskId) {
+        String sql = "SELECT chapterId FROM PageTask WHERE id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, taskId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalArgumentException("Task not found");
+                }
+                return rs.getLong("chapterId");
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot load task chapter", ex);
+        }
+    }
+
+    /** Lấy ID Mangaka sở hữu task (qua chapter → series) */
+    public long getTaskOwnerMangaka(long taskId) {
+        return findChapterOwnerMangaka(findTaskChapterId(taskId));
+    }
+
+    /** Lấy ID Tantou Editor phụ trách task (qua chapter → series) */
+    public long getTaskTantouEditor(long taskId) {
+        return findChapterTantouEditor(findTaskChapterId(taskId));
+    }
+
+    /**
+     * Mangaka cập nhật dueDate, priority, notes của task (không thay đổi assignment).
+     * Task APPROVED không được chỉnh sửa (BR-TSK-06).
+     */
+    public void updateTaskProgress(long taskId, long mangakaId, Date dueDate, String priority, String notes) {
+        String readSql = "SELECT chapterId, status FROM PageTask WHERE id = ?";
+        String updateExtendedSql = "UPDATE PageTask SET dueDate = ?, priority = ?, notes = ?, updatedAt = GETDATE() WHERE id = ?";
+        String updateLegacySql = "UPDATE PageTask SET dueDate = ?, updatedAt = GETDATE() WHERE id = ?";
+        try (Connection conn = dataSource.getConnection()) {
+            long chapterId;
+            String status;
+            try (PreparedStatement ps = conn.prepareStatement(readSql)) {
+                ps.setLong(1, taskId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        throw new IllegalArgumentException("Task not found");
+                    }
+                    chapterId = rs.getLong("chapterId");
+                    status = rs.getString("status");
+                }
+            }
+            long ownerId = findChapterOwnerMangaka(chapterId);
+            if (ownerId != mangakaId) {
+                throw new IllegalArgumentException("Only chapter owner can update task");
+            }
+            if ("APPROVED".equalsIgnoreCase(status)) {
+                throw new IllegalArgumentException("Approved task cannot be edited. Create a new task instead (BR-TSK-06)");
+            }
+            if (isTaskSchemaExtended()) {
+                String normalizedPriority = normalizePriority(priority);
+                try (PreparedStatement ps = conn.prepareStatement(updateExtendedSql)) {
+                    ps.setDate(1, dueDate);
+                    ps.setString(2, normalizedPriority);
+                    ps.setString(3, notes == null ? null : notes.trim());
+                    ps.setLong(4, taskId);
+                    ps.executeUpdate();
+                }
+            } else {
+                try (PreparedStatement ps = conn.prepareStatement(updateLegacySql)) {
+                    ps.setDate(1, dueDate);
+                    ps.setLong(2, taskId);
+                    ps.executeUpdate();
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot update task progress", ex);
+        }
+    }
+
+    /**
+     * Validate và chuẩn hóa priority.
+     * Các giá trị hợp lệ: NORMAL, HIGH, URGENT. Mặc định là NORMAL nếu null/rỗng.
+     */
+    private String normalizePriority(String priority) {
+        if (priority == null || priority.trim().isEmpty()) {
+            return "NORMAL";
+        }
+        String normalized = priority.trim().toUpperCase(Locale.ENGLISH);
+        if (!"NORMAL".equals(normalized) && !"HIGH".equals(normalized) && !"URGENT".equals(normalized)) {
+            throw new IllegalArgumentException("priority must be NORMAL, HIGH, or URGENT");
+        }
+        return normalized;
+    }
+}
