@@ -200,7 +200,7 @@ public class DecisionRepository {
                 }
 
                 // BR-DEC-06: Audit log for vote submitted
-                auditLogRepository.insertLog(voterId, "DECISION_VOTE_SUBMITTED", "DECISION_SESSION", sessionId,
+                auditLogRepository.insertLog(voterId, "DECISION_VOTE_SUBMITTED", "DECISION", sessionId,
                         "Voter " + voterId + " submitted decision: " + normalized);
 
                 // Step 6: Kiểm tra quorum và finalize nếu đủ (BR-62)
@@ -274,7 +274,7 @@ public class DecisionRepository {
             ps.executeUpdate();
         }
         // BR-DEC-06: Audit log for session resolved
-        auditLogRepository.insertLog(triggeringVoterId, "DECISION_SESSION_RESOLVED", "DECISION_SESSION", sessionId,
+        auditLogRepository.insertLog(triggeringVoterId, "DECISION_SESSION_RESOLVED", "DECISION", sessionId,
                 "Decision session " + sessionId + " resolved with result: " + result);
 
         // Nếu CANCEL → update Series.status = CANCELLED (BR-69)
@@ -354,12 +354,21 @@ public class DecisionRepository {
             try ( PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
                 int paramIndex = 1;
                 for (Object param : params) {
-                    if (param instanceof Long) {
+
+                    if (param == null) {
+                        ps.setNull(paramIndex++, java.sql.Types.VARCHAR);
+
+                    } else if (param instanceof Long) {
                         ps.setLong(paramIndex++, (Long) param);
+
                     } else if (param instanceof String) {
                         ps.setString(paramIndex++, (String) param);
+
+                    } else {
+                        ps.setObject(paramIndex++, param);
                     }
                 }
+
                 ps.executeUpdate();
                 try ( ResultSet rs = ps.getGeneratedKeys()) {
                     if (rs.next()) {
@@ -380,6 +389,7 @@ public class DecisionRepository {
                 conn.setAutoCommit(true);
             }
         } catch (SQLException ex) {
+            System.out.println("Creating decision session for seriesId = " + seriesId);
             throw new RuntimeException("Cannot create decision session", ex);
         }
     }
@@ -408,7 +418,6 @@ public class DecisionRepository {
 
     // ------------------------------------------------------------------ //
     //  finalizeSession — manually finalize session (for ADMIN)           //
-
     // ------------------------------------------------------------------ //
     // ------------------------------------------------------------------ //
     //  mapSession helper — không thay đổi                                 //

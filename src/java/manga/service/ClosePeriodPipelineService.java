@@ -373,6 +373,15 @@ public class ClosePeriodPipelineService {
 
             // Reverse to get chronological order
             java.util.Collections.reverse(revenueTrend);
+            // Keep only last 6 periods for decision analysis
+            if (revenueTrend.size() > 6) {
+                revenueTrend = new ArrayList<>(
+                        revenueTrend.subList(
+                                revenueTrend.size() - 6,
+                                revenueTrend.size()
+                        )
+                );
+            }
             String suggestion = calculateSystemSuggestion(revenueTrend);
 
             // Serialize revenue trend to JSON for snapshot storage (manual serialization)
