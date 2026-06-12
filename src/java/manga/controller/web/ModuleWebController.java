@@ -576,7 +576,7 @@ public class ModuleWebController {
         model.addAttribute("editing", false);
         model.addAttribute("availableRoles", availableRoles());
         model.addAttribute("adminRoleLocked", userAdminRepository.hasAnyAdmin());
-        model.addAttribute("selectedRolesCsv", "");
+        model.addAttribute("selectedRoleOption", "");
         return "user/form";
     }
 
@@ -606,19 +606,18 @@ public class ModuleWebController {
             HttpSession session,
             @RequestParam("username") String username,
             @RequestParam("password") String password,
-            @RequestParam("confirmPassword") String confirmPassword,
             @RequestParam("fullName") String fullName,
             @RequestParam("email") String email,
-            @RequestParam(value = "roles", required = false) String[] roles,
+            @RequestParam(value = "roleOption", required = false) String roleOption,
             Model model) {
         AuthenticatedUser user = requireUser(session);
+        List<String> roles = parseRoleOption(roleOption);
         try {
             requireAdmin(user);
-            validateCreateUser(username, password, confirmPassword, fullName, email, roles);
+            validateCreateUser(username, password, fullName, email, roles);
             long id = userAdminRepository.createUser(username, password, fullName, email);
             for (String role : roles) {
-                String normalizedRole = role.trim().toUpperCase();
-                userAdminRepository.addRole(id, normalizedRole);
+                userAdminRepository.addRole(id, role);
             }
             notificationService.notifyUser(id, "ACCOUNT_CREATED", "Your MangaFlow account has been created.", 0, null);
             return "redirect:/main/users?created=" + id + "&username=" + username.trim();
@@ -629,8 +628,7 @@ public class ModuleWebController {
             model.addAttribute("formFullName", fullName);
             model.addAttribute("formEmail", email);
             model.addAttribute("formPassword", password);
-            model.addAttribute("selectedRoles", roles == null ? new String[0] : roles);
-            model.addAttribute("selectedRolesCsv", rolesCsv(roles));
+            model.addAttribute("selectedRoleOption", roleOption == null ? "" : roleOption.trim().toUpperCase());
             model.addAttribute("availableRoles", availableRoles());
             model.addAttribute("adminRoleLocked", userAdminRepository.hasAnyAdmin());
             return "user/form";
@@ -762,19 +760,6 @@ public class ModuleWebController {
         return Arrays.asList("MANGAKA", "ASSISTANT", "TANTOU_EDITOR", "EDITORIAL_BOARD");
     }
 
-    private String rolesCsv(String[] roles) {
-        if (roles == null || roles.length == 0) {
-            return "";
-        }
-        StringBuilder builder = new StringBuilder("|");
-        for (String role : roles) {
-            if (!isBlank(role)) {
-                builder.append(role.trim().toUpperCase()).append("|");
-            }
-        }
-        return builder.toString();
-    }
-
     private List<String> selectedRoles(String role, String[] roles) {
         List<String> selected = new ArrayList<String>();
         if (!isBlank(role)) {
@@ -784,6 +769,18 @@ public class ModuleWebController {
             for (String item : roles) {
                 addSelectedRole(selected, item);
             }
+        }
+        return selected;
+    }
+
+    private List<String> parseRoleOption(String roleOption) {
+        List<String> selected = new ArrayList<String>();
+        if (isBlank(roleOption)) {
+            return selected;
+        }
+        String[] roleValues = roleOption.split(",");
+        for (String role : roleValues) {
+            addSelectedRole(selected, role);
         }
         return selected;
     }
@@ -798,12 +795,9 @@ public class ModuleWebController {
         }
     }
 
-    private void validateCreateUser(String username, String password, String confirmPassword, String fullName, String email, String[] roles) {
-        if (isBlank(username) || isBlank(password) || isBlank(confirmPassword) || isBlank(fullName) || isBlank(email)) {
+    private void validateCreateUser(String username, String password, String fullName, String email, List<String> roles) {
+        if (isBlank(username) || isBlank(password) || isBlank(fullName) || isBlank(email)) {
             throw new IllegalArgumentException("All user fields are required");
-        }
-        if (!password.equals(confirmPassword)) {
-            throw new IllegalArgumentException("Password confirmation does not match");
         }
         if (password.length() < 5) {
             throw new IllegalArgumentException("Password must be at least 5 characters");
@@ -811,17 +805,13 @@ public class ModuleWebController {
         if (!email.contains("@")) {
             throw new IllegalArgumentException("Email is invalid");
         }
-        if (roles == null || roles.length == 0) {
+        if (roles == null || roles.isEmpty()) {
             throw new IllegalArgumentException("Select at least one role");
         }
         if (containsRole(roles, "ADMIN") && userAdminRepository.hasAnyAdmin()) {
             throw new IllegalArgumentException("Only one ADMIN account is allowed");
         }
-        List<String> selected = new ArrayList<String>();
-        for (String role : roles) {
-            addSelectedRole(selected, role);
-        }
-        manga.common.util.RoleCombinationValidator.validate(selected);
+        manga.common.util.RoleCombinationValidator.validate(roles);
     }
 
     private boolean isBlank(String value) {
@@ -1300,7 +1290,7 @@ public class ModuleWebController {
     // ============================================================
     // Private Helper Methods
     // ============================================================
-    private boolean containsRole(String[] roles, String roleName) {
+    private boolean containsRole(List<String> roles, String roleName) {
         if (roles == null) {
             return false;
         }

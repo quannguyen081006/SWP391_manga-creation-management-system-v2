@@ -23,17 +23,7 @@
    * @return {void}
    */
   function enforceRoleRules(root, changed) {
-    var isCreateUserForm = root.classList.contains('role-choice-grid');
     var boxes = root.querySelectorAll('input[name="roles"]');
-    for (var i = 0; i < boxes.length; i++) {
-      // ADMIN is system-controlled in the create-user form and cannot be assigned there.
-      if (isCreateUserForm && boxes[i].value === 'ADMIN') {
-        boxes[i].checked = false;
-        boxes[i].disabled = true;
-      } else {
-        boxes[i].disabled = false;
-      }
-    }
 
     if (!changed) {
       // On initial load, re-apply single-role rules to any prechecked value.
@@ -73,14 +63,20 @@
   }
 
   /**
-   * Binds role validation to create/edit user role grids.
+   * Binds role validation to checkbox-based role assignment grids.
    *
    * @return {void}
    */
   function bindRoleForms() {
-    var forms = document.querySelectorAll('.role-choice-grid, .role-check-grid');
+    var forms = document.querySelectorAll('.role-check-grid');
+    if (!forms || forms.length === 0) {
+      return;
+    }
     for (var i = 0; i < forms.length; i++) {
       (function (root) {
+        if (!root) {
+          return;
+        }
         root.addEventListener('change', function (event) {
           if (event.target && event.target.matches('input[name="roles"]')) {
             enforceRoleRules(root, event.target);

@@ -924,25 +924,6 @@ input, textarea, select {
     .page-title { font-size: 34px; }
 }
 
-.role-switch-links {
-    margin-top: 4px;
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-}
-.role-switch-links a {
-    font-size: 11px;
-    color: #374151;
-    border: 1px solid #d1d5db;
-    border-radius: 999px;
-    padding: 2px 8px;
-    background: #fff;
-}
-.role-switch-links a:hover {
-    border-color: #9ca3af;
-    background: #f9fafb;
-}
-
 /* FX hover upgrade */
 .side-bottom { display: none; }
 
@@ -1012,16 +993,6 @@ input, textarea, select {
     box-shadow: inset 3px 0 0 #fb7185;
 }
 
-.role-switch-links a {
-    transition: transform .14s ease, background-color .16s ease, border-color .16s ease, box-shadow .16s ease;
-}
-
-.role-switch-links a:hover {
-    transform: translateY(-1px);
-    border-color: #fb7185;
-    box-shadow: 0 8px 16px rgba(15, 23, 42, 0.12);
-}
-
 @keyframes brandPulse {
     0% { box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.45); }
     70% { box-shadow: 0 0 0 12px rgba(225, 29, 72, 0); }
@@ -1057,74 +1028,6 @@ input, textarea, select {
 .avatar.role-board,
 .bell-dot.role-board {
     background: linear-gradient(135deg, #059669, #34d399);
-}
-
-/* Switch role dropdown */
-.role-switcher {
-    position: relative;
-    display: inline-block;
-    margin-top: 2px;
-}
-
-.role-switcher summary {
-    list-style: none;
-    cursor: pointer;
-    user-select: none;
-}
-
-.role-switcher summary::-webkit-details-marker {
-    display: none;
-}
-
-.switch-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 15px;
-    color: #4b5563;
-}
-
-.switch-toggle::after {
-    content: "?";
-    font-size: 12px;
-    transition: transform .15s ease;
-}
-
-.role-switcher[open] .switch-toggle::after {
-    transform: rotate(180deg);
-}
-
-.role-switch-menu {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    min-width: 180px;
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
-    padding: 8px;
-    z-index: 30;
-}
-
-.role-switch-item {
-    display: block;
-    padding: 8px 10px;
-    border-radius: 8px;
-    color: #1f2937;
-    font-size: 14px;
-    transition: background-color .15s ease, transform .12s ease;
-}
-
-.role-switch-item:hover {
-    background: #f3f4f6;
-    transform: translateX(2px);
-}
-
-.role-switch-item.active {
-    background: #eef2ff;
-    color: #3730a3;
-    font-weight: 700;
 }
 
 /* Login refresh */
@@ -1648,11 +1551,6 @@ input, textarea, select {
     .login-subtitle {
         font-size: 15px;
     }
-}
-
-/* Fix caret symbol in dropdown */
-.switch-toggle::after {
-    content: "\25BE";
 }
 
 /* Notification bell + small count beside icon */
@@ -2373,7 +2271,6 @@ select,
 .role-check,
 .role-choice,
 .notify-menu,
-.role-switch-menu,
 .role-check-form {
     border-radius: 8px;
 }

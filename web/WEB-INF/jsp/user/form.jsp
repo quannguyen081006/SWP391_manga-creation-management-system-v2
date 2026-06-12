@@ -1,6 +1,5 @@
 ﻿<%@page contentType="text/html" pageEncoding="UTF-8"%>
 <%@taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
-<%@taglib uri="http://java.sun.com/jsp/jstl/functions" prefix="fn" %>
 <!DOCTYPE html>
 <html>
 <head>
@@ -56,23 +55,31 @@
                 <label>Password</label>
                 <input type="password" name="password" value="${formPassword}" required autocomplete="new-password" />
             </div>
-            <div class="form-row">
-                <label>Confirm Password</label>
-                <input type="password" name="confirmPassword" required autocomplete="new-password" />
-            </div>
         </div>
 
         <div class="form-row">
             <label>Roles</label>
             <div class="role-choice-grid">
-                <c:forEach items="${availableRoles}" var="r">
-                    <c:if test="${r ne 'ADMIN'}">
-                        <label class="role-choice">
-                            <input type="checkbox" name="roles" value="${r}" ${fn:contains(selectedRolesCsv, r) ? 'checked' : ''} />
-                            <span>${r}</span>
-                        </label>
-                    </c:if>
-                </c:forEach>
+                <label class="role-choice">
+                    <input type="radio" name="roleOption" value="MANGAKA" ${selectedRoleOption eq 'MANGAKA' ? 'checked' : ''} required />
+                    <span>MANGAKA</span>
+                </label>
+                <label class="role-choice">
+                    <input type="radio" name="roleOption" value="ASSISTANT" ${selectedRoleOption eq 'ASSISTANT' ? 'checked' : ''} required />
+                    <span>ASSISTANT</span>
+                </label>
+                <label class="role-choice">
+                    <input type="radio" name="roleOption" value="TANTOU_EDITOR" ${selectedRoleOption eq 'TANTOU_EDITOR' ? 'checked' : ''} required />
+                    <span>TANTOU_EDITOR</span>
+                </label>
+                <label class="role-choice">
+                    <input type="radio" name="roleOption" value="EDITORIAL_BOARD" ${selectedRoleOption eq 'EDITORIAL_BOARD' ? 'checked' : ''} required />
+                    <span>EDITORIAL_BOARD</span>
+                </label>
+                <label class="role-choice">
+                    <input type="radio" name="roleOption" value="TANTOU_EDITOR,EDITORIAL_BOARD" ${selectedRoleOption eq 'TANTOU_EDITOR,EDITORIAL_BOARD' ? 'checked' : ''} required />
+                    <span>TANTOU_EDITOR + EDITORIAL_BOARD</span>
+                </label>
             </div>
             <c:if test="${adminRoleLocked}">
                 <p class="form-note">ADMIN is reserved for the single system administrator.</p>
@@ -88,7 +95,7 @@
 </c:choose>
 </div>
 
-<%-- Role checkbox behavior: enforces single-role and valid dual-role combinations. --%>
+<%-- Shared role-assignment behavior; create radios need no combination enforcement. --%>
 <script src="${pageContext.request.contextPath}/assets/role-assignment.js"></script>
 <jsp:include page="../common/footer.jsp" />
 </body>
