@@ -26,7 +26,8 @@
      * filterSeriesId: nếu có → chỉ hiện chapter của series đó (URL ?seriesId=X).
      * serverCanCreateChapter: cờ từ server để kiểm tra quyền tạo chapter.
      * ========================================================== */
-    var ctx = (window.CHAPTER_LIST_CONFIG && window.CHAPTER_LIST_CONFIG.contextPath) || '';
+    var configScript = document.currentScript;
+    var ctx = configScript ? configScript.getAttribute('data-context-path') || '' : '';
     var box = document.getElementById('chapterResult');     // vùng hiện thông báo lỗi/success
     var currentUser = null;                                 // user đang đăng nhập (load từ /api/v1/auth/me)
     var seriesList = [];                                    // tất cả series user có quyền xem
@@ -37,7 +38,7 @@
     var sortDir = 'asc';                                    // chiều sort
     var completedVisible = false;                           // nhóm "Completed" có đang mở không
     var chapterStatusFilter = 'ALL';                        // filter status đang chọn
-    var serverCanCreateChapter = !!(window.CHAPTER_LIST_CONFIG && window.CHAPTER_LIST_CONFIG.canCreateChapter);
+    var serverCanCreateChapter = configScript && configScript.getAttribute('data-can-create-chapter') === 'true';
 
     /* ==========================================================
      * 2. HELPER / UTILITY

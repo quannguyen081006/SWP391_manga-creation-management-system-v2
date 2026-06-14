@@ -30,7 +30,7 @@ public class UserRepository {
      * @return authenticated user with role set populated, or {@code null}
      */
     public AuthenticatedUser findByUsername(String username) {
-        String sql = "SELECT id, username, passwordHash, fullName, status FROM [User] WHERE username = ?";
+        String sql = "SELECT id, username, passwordHash, fullName, email, avatarUrl, status FROM [User] WHERE username = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, username);
@@ -43,6 +43,8 @@ public class UserRepository {
                 user.setUsername(rs.getString("username"));
                 user.setPasswordHash(rs.getString("passwordHash"));
                 user.setFullName(rs.getString("fullName"));
+                user.setEmail(rs.getString("email"));
+                user.setAvatarUrl(rs.getString("avatarUrl"));
                 user.setStatus(rs.getString("status"));
                 loadRoles(conn, user);
                 return user;

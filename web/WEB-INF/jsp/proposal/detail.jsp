@@ -8,6 +8,7 @@
     <meta charset="UTF-8">
     <title>Proposal Detail</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css?v=board-vote-ui-2" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/proposal.css" />
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
@@ -63,7 +64,7 @@
 
                     <div class="proposal-quorum-track" aria-label="Voting progress">
                         <span class="proposal-quorum-fill"
-                              style="width:${proposal.boardEligibleVoterCount > 0 ? (proposal.boardTotalVotes * 100 / proposal.boardEligibleVoterCount) : 0}%"></span>
+                              data-progress-width="${proposal.boardEligibleVoterCount > 0 ? (proposal.boardTotalVotes * 100 / proposal.boardEligibleVoterCount) : 0}"></span>
                     </div>
                     <div class="proposal-quorum-meta">
                         <span>${proposal.boardTotalVotes} vote(s) submitted</span>
@@ -115,17 +116,16 @@
                                                 <c:choose>
                                                     <c:when test="${v.isConflict}">-</c:when>
                                                     <c:when test="${v.voteDecision == 'APPROVED'}">
-                                                        <span style="color:#16a34a;font-weight:600;">Approve</span>
+                                                        <span class="proposal-vote-label approve">Approve</span>
                                                     </c:when>
                                                     <c:when test="${v.voteDecision == 'REVISE_REQUESTED'}">
-                                                        <span style="color:#d97706;font-weight:600;">Revise</span>
+                                                        <span class="proposal-vote-label revise">Revise</span>
                                                     </c:when>
                                                     <c:when test="${v.voteDecision == 'REJECTED'}">
-                                                        <span style="color:#dc2626;font-weight:600;">Reject</span>
+                                                        <span class="proposal-vote-label reject">Reject</span>
                                                         <c:if test="${not empty v.voteNote}">
                                                             <button type="button"
-                                                                    class="btn small"
-                                                                    style="margin-left:6px;padding:2px 8px;font-size:11px;"
+                                                                    class="btn small reject-reason-button"
                                                                     data-reject-reason="${fn:escapeXml(v.voteNote)}">Lý do</button>
                                                         </c:if>
                                                     </c:when>
@@ -140,7 +140,7 @@
                     </c:if>
                 </c:when>
                 <c:otherwise>
-                    <span style="color:#9ca3af;">Board voting has not started.</span>
+                    <span class="proposal-voting-pending">Board voting has not started.</span>
                 </c:otherwise>
             </c:choose>
         </div>
@@ -186,17 +186,6 @@
                 <button type="submit" class="btn primary">Submit Review</button>
             </form>
         </div>
-        <script>
-            (function () {
-                var decision = document.querySelector('select[name="decision"]');
-                var note = document.getElementById('reviewNote');
-                function syncNoteRequired() {
-                    note.required = decision.value === 'REJECT' || decision.value === 'REVISE';
-                }
-                decision.addEventListener('change', syncNoteRequired);
-                syncNoteRequired();
-            }());
-        </script>
     </c:if>
 
     <c:if test="${isTantou && isBoard && proposal.assignedEditorId == sessionScope.AUTH_USER.id && proposal.status == 'BOARD_REVIEW'}">
@@ -245,41 +234,7 @@
                 </div>
             </form>
         </div>
-        <script>
-            (function () {
-                var decisions = document.querySelectorAll('form[action$="/board-vote"] input[name="decision"]');
-                var note = document.getElementById('boardVoteNote');
-                var hint = document.getElementById('boardVoteHint');
-                var cards = document.querySelectorAll('.board-decision-card');
-                function syncNoteRequired() {
-                    var selected = document.querySelector('form[action$="/board-vote"] input[name="decision"]:checked');
-                    var needsNote = selected && (selected.value === 'REVISE' || selected.value === 'REJECT');
-                    note.required = needsNote;
-                    hint.textContent = needsNote ? 'Required for this decision.' : 'Optional for approval. Required for revision or rejection.';
-                    for (var j = 0; j < cards.length; j++) {
-                        cards[j].classList.remove('is-selected');
-                    }
-                    if (selected) {
-                        selected.closest('.board-decision-card').classList.add('is-selected');
-                    }
-                }
-                for (var i = 0; i < decisions.length; i++) {
-                    decisions[i].addEventListener('change', syncNoteRequired);
-                }
-                syncNoteRequired();
-            }());
-        </script>
     </c:if>
-    <script>
-        document.addEventListener('click', function (e) {
-            var btn = e.target.closest ? e.target.closest('[data-reject-reason]') : null;
-            if (!btn) {
-                return;
-            }
-            alert(btn.getAttribute('data-reject-reason') || 'Không có lý do.');
-        });
-    </script>
-
     <div class="panel">
         <h2>Revision History</h2>
         <table class="data-table">
@@ -311,6 +266,7 @@
     <p><a href="${pageContext.request.contextPath}/main/proposals">Back to list</a></p>
 </main>
 
+<script src="${pageContext.request.contextPath}/assets/js/proposal.js"></script>
 <jsp:include page="../common/footer.jsp" />
 </body>
 </html>

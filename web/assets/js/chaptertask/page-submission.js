@@ -32,10 +32,22 @@
 (function () {
     'use strict';
 
-    // Thoát sớm nếu trang không inject PAGE_TASK (không phải trang task detail)
-    if (typeof PAGE_TASK === 'undefined') {
+    var configScript = document.currentScript;
+    if (!configScript) {
         return;
     }
+
+    var PAGE_TASK = {
+        taskId: Number(configScript.getAttribute('data-task-id')),
+        chapterId: Number(configScript.getAttribute('data-chapter-id')),
+        pageStart: Number(configScript.getAttribute('data-page-start')),
+        pageEnd: Number(configScript.getAttribute('data-page-end')),
+        taskType: configScript.getAttribute('data-task-type') || '',
+        status: configScript.getAttribute('data-status') || '',
+        canUpdate: configScript.getAttribute('data-can-update') === 'true',
+        canSubmit: configScript.getAttribute('data-can-submit') === 'true',
+        ctx: configScript.getAttribute('data-context-path') || ''
+    };
 
     // ─── 1. KHỞI TẠO & BIẾN TRẠNG THÁI ──────────────────────────────────────
     // pageImages: map pageNumber → image object (null nếu chưa upload)

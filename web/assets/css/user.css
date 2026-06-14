@@ -1,0 +1,30 @@
+.role-choice-grid,
+.role-check-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-2);
+}
+
+.role-choice,
+.role-check {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: 9px 12px;
+    background: var(--neutral-50);
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-md);
+}
+
+.role-choice:hover,
+.role-check:hover {
+    border-color: #93c5fd;
+    background: #eff6ff;
+}
+
+.role-remove {
+    color: var(--danger-color);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+}

@@ -8,6 +8,8 @@ public class AuthenticatedUser {
     private long id;
     private String username;
     private String fullName;
+    private String email;
+    private String avatarUrl;
     private String passwordHash;
     private String status;
     private final Set<String> roles = new HashSet<String>();
@@ -34,6 +36,22 @@ public class AuthenticatedUser {
 
     public void setFullName(String fullName) {
         this.fullName = fullName;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
     }
 
     public String getPasswordHash() {

@@ -227,16 +227,18 @@ public class NotificationRepository {
                     return null;
                 }
                 String type = rs.getString("type");
+                String viewUrl = rs.getString("viewUrl");
                 /*
                  * Notification viewUrl should be stored at creation time. This branch keeps
                  * older SERIES_DEADLINE_UPDATED rows usable when they were saved before the
-                 * chapters route was supported.
+                 * series detail route was supported.
                  */
-                if ("SERIES_DEADLINE_UPDATED".equalsIgnoreCase(type)) {
+                if ("SERIES_DEADLINE_UPDATED".equalsIgnoreCase(type)
+                        && (viewUrl == null || viewUrl.trim().isEmpty())) {
                     long referenceId = rs.getLong("referenceId");
-                    return rs.wasNull() ? "/main/notifications" : "/main/chapters?seriesId=" + referenceId;
+                    return rs.wasNull() ? "/main/notifications" : "/main/series/" + referenceId;
                 }
-                return rs.getString("viewUrl");
+                return viewUrl;
             }
         } catch (SQLException ex) {
             throw new RuntimeException("Cannot load notification view URL", ex);
@@ -326,7 +328,7 @@ public class NotificationRepository {
             return "/main/decisions/" + referenceId;
         }
         if (ref.equals("SERIES")) {
-            return "/main/notifications";
+            return "/main/series/" + referenceId;
         }
         return null;
     }

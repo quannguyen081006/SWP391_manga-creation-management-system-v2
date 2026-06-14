@@ -1,0 +1,119 @@
+.brand-version {
+    margin-left: 6px;
+    color: #94a3b8;
+    font-size: 10px;
+}
+
+.page-heading-label {
+    margin-right: 12px;
+    color: var(--text-color);
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0;
+    line-height: 1;
+}
+
+.profile-avatar-link {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+    color: inherit;
+    text-decoration: none;
+}
+
+.profile-avatar-link:hover .profile-name-link {
+    color: var(--primary-color);
+}
+
+.profile-name-link {
+    color: inherit;
+    transition: color var(--transition-fast);
+}
+
+.header-avatar-image {
+    object-fit: cover;
+    border: 2px solid var(--neutral-200);
+}
+
+.noti-item,
+.noti-actions {
+    position: relative;
+}
+
+.noti-actions {
+    z-index: 10;
+}
+
+.noti-menu-btn {
+    padding: 0;
+    background: transparent;
+    border: 0;
+    color: var(--text-muted);
+    font-size: 16px;
+    line-height: 1;
+}
+
+.noti-actions-menu {
+    position: absolute;
+    z-index: 1000;
+    top: 24px;
+    right: 0;
+    display: none;
+    min-width: 160px;
+    padding: var(--spacing-2) 0;
+    background: var(--surface-color);
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+}
+
+.noti-actions-menu.is-open {
+    display: block;
+}
+
+.noti-actions-menu .noti-menu-item {
+    display: block;
+    width: 100%;
+    padding: 10px 16px;
+    background: var(--surface-color);
+    border: 0;
+    text-align: left;
+    font-size: 13px;
+    line-height: 1.2;
+}
+
+.noti-actions-menu .noti-menu-item:hover {
+    background: var(--neutral-100);
+}
+
+.noti-menu-delete {
+    color: var(--danger-color);
+}
+
+.noti-menu-toggle {
+    color: var(--primary-color);
+}
+
+.nav-item,
+.side-brand,
+.notify-toggle,
+.logout-link {
+    transition: color var(--transition-fast), background-color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+@media (max-width: 760px) {
+    .top-shell {
+        align-items: flex-start;
+        gap: var(--spacing-3);
+        padding: var(--spacing-3) var(--spacing-4);
+    }
+
+    .top-user {
+        gap: var(--spacing-2);
+    }
+
+    .profile-name-link,
+    .role-pill {
+        display: none;
+    }
+}

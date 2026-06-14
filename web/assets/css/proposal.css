@@ -1,0 +1,19 @@
+.proposal-vote-counts {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.proposal-vote-label {
+    font-weight: 600;
+}
+
+.proposal-vote-label.approve { color: var(--success-color); }
+.proposal-vote-label.revise { color: var(--warning-color); }
+.proposal-vote-label.reject { color: var(--danger-color); }
+.proposal-voting-pending { color: #9ca3af; }
+.reject-reason-button { margin-left: 6px; padding: 2px 8px; font-size: 11px; }
+.proposal-form-actions { display: flex; gap: 10px; margin-top: var(--spacing-2); }
+
+@media (max-width: 640px) {
+    .proposal-form-actions { flex-direction: column; }
+}

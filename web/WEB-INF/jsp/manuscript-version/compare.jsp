@@ -1,133 +1,13 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
 <%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
 <%@ taglib prefix="fmt" uri="http://java.sun.com/jsp/jstl/fmt" %>
+<%@ taglib prefix="fn" uri="http://java.sun.com/jsp/jstl/functions" %>
 <!DOCTYPE html>
 <html>
 <head>
     <title>Version Comparison</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css">
-    <style>
-        .compare-container {
-            max-width: 1400px;
-            margin: 40px auto;
-            padding: 30px;
-        }
-        .compare-header {
-            margin-bottom: 30px;
-        }
-        .versions-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            margin-bottom: 30px;
-        }
-        .version-panel {
-            background: #fff;
-            padding: 25px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .version-panel.version1 {
-            border-top: 4px solid #228be6;
-        }
-        .version-panel.version2 {
-            border-top: 4px solid #40c057;
-        }
-        .version-title {
-            font-size: 20px;
-            font-weight: bold;
-            margin-bottom: 15px;
-        }
-        .version-info {
-            margin-bottom: 20px;
-        }
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #dee2e6;
-        }
-        .info-row:last-child {
-            border-bottom: none;
-        }
-        .info-label {
-            color: #666;
-            font-weight: 500;
-        }
-        .info-value {
-            font-weight: bold;
-            color: #333;
-        }
-        .status-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-        .status-draft { background: #ffd43b; color: #333; }
-        .status-under_review { background: #74c0fc; color: #fff; }
-        .status-approved { background: #51cf66; color: #fff; }
-        .status-rejected { background: #ff6b6b; color: #fff; }
-        .status-published { background: #845ef7; color: #fff; }
-        .status-archived { background: #868e96; color: #fff; }
-        .changes-section {
-            background: #fff;
-            padding: 25px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .changes-title {
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 20px;
-        }
-        .change-item {
-            padding: 15px;
-            border-left: 4px solid #228be6;
-            background: #f8f9fa;
-            margin-bottom: 15px;
-            border-radius: 4px;
-        }
-        .change-item.added {
-            border-left-color: #40c057;
-            background: #f6fff9;
-        }
-        .change-item.removed {
-            border-left-color: #fa5252;
-            background: #fff5f5;
-        }
-        .change-item.modified {
-            border-left-color: #ffd43b;
-            background: #fffbf0;
-        }
-        .change-label {
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        .change-detail {
-            font-size: 14px;
-            color: #666;
-        }
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            text-decoration: none;
-            display: inline-block;
-        }
-        .btn-primary { background: #228be6; color: #fff; }
-        .btn-secondary { background: #868e96; color: #fff; }
-        .btn:hover { opacity: 0.9; }
-        .no-changes {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-        }
-    </style>
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/manuscript-version.css" />
 </head>
 <body>
     <jsp:include page="/WEB-INF/jsp/common/header.jsp"/>
@@ -212,7 +92,7 @@
             </c:if>
 
             <c:if test="${not empty comparison.addedPages}">
-                <h3 style="margin-bottom: 15px;">Added Pages</h3>
+                <h3 class="change-subtitle">Added Pages</h3>
                 <c:forEach var="page" items="${comparison.addedPages}">
                     <div class="change-item added">
                         <div class="change-label">ADDED: Page ${page.pageNumber}</div>
@@ -222,7 +102,7 @@
             </c:if>
 
             <c:if test="${not empty comparison.removedPages}">
-                <h3 style="margin-bottom: 15px; margin-top: 30px;">Removed Pages</h3>
+                <h3 class="change-subtitle change-subtitle-spaced">Removed Pages</h3>
                 <c:forEach var="page" items="${comparison.removedPages}">
                     <div class="change-item removed">
                         <div class="change-label">REMOVED: Page ${page.pageNumber}</div>
@@ -232,7 +112,7 @@
             </c:if>
 
             <c:if test="${not empty comparison.changedPages}">
-                <h3 style="margin-bottom: 15px; margin-top: 30px;">Changed Pages</h3>
+                <h3 class="change-subtitle change-subtitle-spaced">Changed Pages</h3>
                 <c:forEach var="page" items="${comparison.changedPages}">
                     <div class="change-item modified">
                         <div class="change-label">CHANGED: Page ${page.pageNumber}</div>
@@ -242,7 +122,7 @@
             </c:if>
 
             <c:if test="${not empty comparison.reorderedPages}">
-                <h3 style="margin-bottom: 15px; margin-top: 30px;">Reordered Pages</h3>
+                <h3 class="change-subtitle change-subtitle-spaced">Reordered Pages</h3>
                 <c:forEach var="page" items="${comparison.reorderedPages}">
                     <div class="change-item modified">
                         <div class="change-label">REORDERED: Page ${page.pageNumber}</div>
@@ -252,7 +132,7 @@
             </c:if>
         </div>
 
-        <div style="margin-top: 30px;">
+        <div class="content-section-large">
             <a href="javascript:history.back()" class="btn btn-secondary">Back</a>
         </div>
     </div>

@@ -7,16 +7,17 @@
     <meta charset="UTF-8">
     <title>Series</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/series.css" />
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
 
-<div id="seriesMessage" class="alert" style="display:none;"></div>
+<div id="seriesMessage" class="alert series-message is-hidden-initial"></div>
 
 <div class="list-cards">
     <c:forEach items="${seriesList}" var="s">
         <article class="tile">
-            <div class="section-head" style="margin-bottom:8px">
+            <div class="section-head series-card-head">
                 <h3>${s.title}</h3>
                 <div class="score ${s.progressPct >= 70 ? 'metric-ok' : (s.progressPct >= 45 ? 'metric-amber' : 'metric-danger')}"><fmt:formatNumber value="${s.progressPct}" maxFractionDigits="0" />%</div>
             </div>
@@ -27,7 +28,7 @@
             </div>
 
             <div class="metric-label series-progress-label">Current chapter progress</div>
-            <div class="progress ${s.progressPct < 40 ? 'red' : ''}"><span style="width:${s.progressPct}%"></span></div>
+            <div class="progress ${s.progressPct < 40 ? 'red' : ''}"><span data-progress-width="${s.progressPct}"></span></div>
 
             <c:if test="${sessionScope.AUTH_USER != null && sessionScope.AUTH_USER.hasRole('TANTOU_EDITOR') && sessionScope.AUTH_USER.id == s.tantouEditorId}">
                 <form class="series-deadline-form" data-series-id="${s.id}">
@@ -52,58 +53,8 @@
     <c:if test="${empty seriesList}"><div>No series found.</div></c:if>
 </div>
 
-<script>
-    (function () {
-        var ctx = '${pageContext.request.contextPath}';
-        var message = document.getElementById('seriesMessage');
-
-        function showMessage(text, isError) {
-            if (!message) { return; }
-            message.textContent = text;
-            message.style.display = 'block';
-            message.className = 'alert ' + (isError ? 'error' : 'success');
-        }
-
-        function todayIso() {
-            var date = new Date();
-            var month = String(date.getMonth() + 1);
-            var day = String(date.getDate());
-            return date.getFullYear() + '-' + (month.length < 2 ? '0' + month : month) + '-' + (day.length < 2 ? '0' + day : day);
-        }
-
-        var deadlineInputs = document.querySelectorAll('.series-deadline-form input[type="date"]');
-        for (var i = 0; i < deadlineInputs.length; i++) {
-            deadlineInputs[i].min = todayIso();
-        }
-
-        document.addEventListener('submit', async function (e) {
-            if (!e.target.classList || !e.target.classList.contains('series-deadline-form')) {
-                return;
-            }
-            e.preventDefault();
-
-            var form = e.target;
-            var seriesId = form.getAttribute('data-series-id');
-            var publicationDate = form.querySelector('[name="publicationDate"]').value;
-            try {
-                var res = await fetch(ctx + '/api/v1/series/' + seriesId + '/deadline?publicationDate=' + encodeURIComponent(publicationDate), {
-                    method: 'PUT',
-                    headers: {
-                        'Accept': 'application/json'
-                    }
-                });
-                var body = await res.json();
-                if (!res.ok || body.success === false) {
-                    throw new Error(body.message || 'Cannot update deadline');
-                }
-                showMessage('Series deadline updated.', false);
-                window.location.reload();
-            } catch (err) {
-                showMessage(err.message, true);
-            }
-        });
-    })();
-</script>
+<script src="${pageContext.request.contextPath}/assets/js/series.js"
+        data-context-path="${pageContext.request.contextPath}"></script>
 
 <jsp:include page="../common/footer.jsp" />
 </body>

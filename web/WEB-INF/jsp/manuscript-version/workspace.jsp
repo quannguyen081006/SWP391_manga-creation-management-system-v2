@@ -7,523 +7,10 @@
     <head>
         <title>Manuscript Workspace - Chapter ${chapter.chapterNumber}</title>
         <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css">
-        <script>
-            window.isMangaka = ${isMangakaOwner};
-
-            console.log(
-                    "isMangaka =",
-                    window.isMangaka
-                    );
-        </script>
-        <script src="${pageContext.request.contextPath}/assets/manuscript-workspace.js"></script>
-        <style>
-            /* Professional Light Editorial Workspace Styles */
-
-            .workspace-container {
-                display: flex;
-                height: calc(100vh - 64px);
-                background: #f8f9fa;
-            }
-
-            /* Left Sidebar - Version & Metadata */
-            .workspace-sidebar {
-                width: 300px;
-                background: #ffffff;
-                border-right: 1px solid #e5e7eb;
-                padding: 24px 20px;
-                overflow-y: auto;
-                flex-shrink: 0;
-            }
-
-            /* Right Sidebar - Annotations & Feedback */
-            .workspace-right-sidebar {
-                width: 340px;
-                background: #ffffff;
-                border-left: 1px solid #e5e7eb;
-                padding: 24px 20px;
-                overflow-y: auto;
-                flex-shrink: 0;
-            }
-
-            /* Main Content - Manga Workspace */
-            .workspace-main {
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-                min-width: 0;
-                background: #f1f3f4;
-            }
-
-            /* Toolbar */
-            .workspace-toolbar {
-                background: #ffffff;
-                border-bottom: 1px solid #e5e7eb;
-                padding: 16px 24px;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-                flex-shrink: 0;
-            }
-
-            .workspace-toolbar > div:first-child {
-                display: flex;
-                align-items: center;
-                gap: 16px;
-                flex-wrap: wrap;
-            }
-
-            .workspace-toolbar > div:last-child {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                flex-wrap: wrap;
-            }
-
-            /* Pages Area */
-            .workspace-pages {
-                flex: 1;
-                overflow-y: auto;
-                padding: 32px 24px;
-                background: #f1f3f4;
-            }
-
-            /* Page Card */
-            .page-card {
-                background: #ffffff;
-                border: 1px solid #e5e7eb;
-                border-radius: 12px;
-                margin-bottom: 32px;
-                overflow: hidden;
-                position: relative;
-                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-                transition: box-shadow 0.2s ease, border-color 0.2s ease;
-            }
-
-            .page-card:hover {
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-                border-color: #d1d5db;
-            }
-
-            /* Page Image Container - Neutral Reading Area */
-            .page-image-container {
-                position: relative;
-                width: 100%;
-                min-height: 500px;
-                background: #e8eaed;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 24px;
-            }
-
-            .page-image {
-                max-width: 100%;
-                max-height: 700px;
-                object-fit: contain;
-                border-radius: 4px;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            }
-
-            /* Annotation Markers */
-            .annotation-marker {
-                position:absolute;
-                transform: translate(-50%, -50%);
-                border: 2px solid #ef4444;
-                background: rgba(239, 68, 68, 0.15);
-                cursor: pointer;
-                transition: all 0.2s ease;
-                border-radius: 2px;
-            }
-
-            .annotation-marker:hover {
-                background: rgba(239, 68, 68, 0.3);
-                border-width: 3px;
-                box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.1);
-            }
-
-            .annotation-marker.resolved {
-                border-color: #10b981;
-                background: rgba(16, 185, 129, 0.15);
-            }
-
-            .annotation-marker.resolved:hover {
-                background: rgba(16, 185, 129, 0.3);
-                box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
-            }
-
-            .annotation-marker.dismissed {
-                border-color: #9ca3af;
-                background: rgba(156, 163, 175, 0.15);
-            }
-
-            .annotation-marker.dismissed:hover {
-                background: rgba(156, 163, 175, 0.3);
-                box-shadow: 0 0 0 4px rgba(156, 163, 175, 0.1);
-            }
-
-            /* Page Info */
-            .page-info {
-                padding: 16px 20px;
-                border-top: 1px solid #e5e7eb;
-                background: #fafbfc;
-            }
-
-            /* Status Badges */
-            .status-badge {
-                display: inline-block;
-                padding: 6px 14px;
-                border-radius: 999px;
-                font-size: 12px;
-                font-weight: 600;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-            }
-
-            .status-draft {
-                background: #fef3c7;
-                color: #92400e;
-                border: 1px solid #fcd34d;
-            }
-            .status-under_review {
-                background: #dbeafe;
-                color: #1d4ed8;
-                border: 1px solid #93c5fd;
-            }
-            .status-approved {
-                background: #d1fae5;
-                color: #065f46;
-                border: 1px solid #6ee7b7;
-            }
-            .status-rejected {
-                background: #fee2e2;
-                color: #991b1b;
-                border: 1px solid #fca5a5;
-            }
-
-            /* Buttons */
-            .btn {
-                padding: 10px 18px;
-                border: 1px solid #d1d5db;
-                border-radius: 8px;
-                cursor: pointer;
-                font-size: 14px;
-                font-weight: 500;
-                margin-right: 8px;
-                transition: all 0.2s ease;
-                background: #ffffff;
-                color: #374151;
-            }
-
-            .btn:hover {
-                background: #f9fafb;
-                border-color: #9ca3af;
-                transform: translateY(-1px);
-            }
-
-            .btn-primary {
-                background: #2563eb;
-                border-color: #2563eb;
-                color: #ffffff;
-            }
-
-            .btn-primary:hover {
-                background: #1d4ed8;
-                border-color: #1d4ed8;
-                box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
-            }
-
-            .btn-success {
-                background: #059669;
-                border-color: #059669;
-                color: #ffffff;
-            }
-
-            .btn-success:hover {
-                background: #047857;
-                border-color: #047857;
-                box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25);
-            }
-
-            .btn-danger {
-                background: #dc2626;
-                border-color: #dc2626;
-                color: #ffffff;
-            }
-
-            .btn-danger:hover {
-                background: #b91c1c;
-                border-color: #b91c1c;
-                box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
-            }
-
-            .btn-secondary {
-                background: #6b7280;
-                border-color: #6b7280;
-                color: #ffffff;
-            }
-
-            .btn-secondary:hover {
-                background: #4b5563;
-                border-color: #4b5563;
-            }
-
-            .btn:disabled {
-                opacity: 0.5;
-                cursor: not-allowed;
-                transform: none;
-            }
-
-            /* Sidebar Sections */
-            .sidebar-section {
-                margin-bottom: 28px;
-            }
-
-            .sidebar-title {
-                font-weight: 700;
-                font-size: 13px;
-                text-transform: uppercase;
-                letter-spacing: 0.08em;
-                color: #6b7280;
-                margin-bottom: 14px;
-                padding-bottom: 8px;
-                border-bottom: 2px solid #e5e7eb;
-            }
-
-            /* Dashboard Stats */
-            .dashboard-stat {
-                display: flex;
-                justify-content: space-between;
-                padding: 10px 0;
-                border-bottom: 1px solid #f3f4f6;
-                font-size: 14px;
-            }
-
-            .dashboard-stat:last-child {
-                border-bottom: none;
-            }
-
-            .stat-label {
-                color: #6b7280;
-                font-weight: 500;
-            }
-
-            .stat-value {
-                font-weight: 600;
-                color: #111827;
-            }
-
-            /* Version Items */
-            .version-item {
-                padding: 14px 16px;
-                border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                margin-bottom: 10px;
-                cursor: pointer;
-                transition: all 0.2s ease;
-                background: #ffffff;
-            }
-
-            .version-item:hover {
-                background: #eff6ff;
-                border-color: #bfdbfe;
-                transform: translateX(2px);
-            }
-
-            .version-item.current {
-                border-color: #3b82f6;
-                background: #eff6ff;
-                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-            }
-
-            .version-item strong {
-                display: block;
-                color: #111827;
-                font-weight: 600;
-            }
-
-            /* Annotation List */
-            .annotation-list {
-                margin-top: 12px;
-            }
-
-            .annotation-item {
-                padding: 14px 16px;
-                border-left: 4px solid #ef4444;
-                background: #fef2f2;
-                margin-bottom: 10px;
-                border-radius: 0 8px 8px 0;
-                cursor: pointer;
-                transition: all 0.2s ease;
-            }
-
-            .annotation-item:hover {
-                background: #fee2e2;
-                transform: translateX(2px);
-            }
-
-            .annotation-item.resolved {
-                border-left-color: #10b981;
-                background: #ecfdf5;
-            }
-
-            .annotation-item.resolved:hover {
-                background: #d1fae5;
-            }
-
-            .annotation-item.dismissed {
-                border-left-color: #9ca3af;
-                background: #f3f4f6;
-            }
-
-            .annotation-item.dismissed:hover {
-                background: #e5e7eb;
-            }
-
-            .annotation-item > div:first-child {
-                font-weight: 600;
-                color: #111827;
-                margin-bottom: 4px;
-            }
-
-            .annotation-item > div:nth-child(2) {
-                font-size: 13px;
-                color: #4b5563;
-                line-height: 1.4;
-            }
-
-            .annotation-item > div:last-child {
-                font-size: 11px;
-                color: #6b7280;
-                margin-top: 6px;
-                font-weight: 500;
-            }
-
-            /* Feedback Panel */
-            .feedback-panel {
-                background: #fffbeb;
-                border: 1px solid #fcd34d;
-                border-radius: 8px;
-                padding: 16px;
-                margin-bottom: 20px;
-            }
-
-            .feedback-panel.empty {
-                background: #f9fafb;
-                border: 1px dashed #d1d5db;
-            }
-
-            .feedback-title {
-                font-weight: 600;
-                font-size: 13px;
-                color: #92400e;
-                margin-bottom: 10px;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-            }
-
-            .feedback-content {
-                font-size: 14px;
-                color: #78350f;
-                line-height: 1.5;
-                background: #ffffff;
-                padding: 12px;
-                border-radius: 6px;
-                border: 1px solid #fde68a;
-            }
-
-            .feedback-empty {
-                color: #9ca3af;
-                font-size: 13px;
-                font-style: italic;
-                text-align: center;
-                padding: 12px;
-            }
-
-            /* Error Message */
-            .error-message {
-                background: #fef2f2;
-                color: #991b1b;
-                padding: 14px 18px;
-                border-radius: 8px;
-                margin-bottom: 20px;
-                border: 1px solid #fca5a5;
-                font-weight: 500;
-            }
-
-            /* Empty States */
-            .empty-state {
-                text-align: center;
-                padding: 80px 40px;
-                color: #6b7280;
-                background: #ffffff;
-                border-radius: 12px;
-                border: 2px dashed #e5e7eb;
-            }
-
-            .empty-state h3 {
-                margin: 0 0 8px;
-                color: #374151;
-                font-size: 20px;
-                font-weight: 600;
-            }
-
-            .empty-state p {
-                margin: 0;
-                font-size: 14px;
-            }
-
-            /*Annotation focus*/
-            .annotation-marker.active {
-                border: 4px solid blue;
-                background: rgba(255,165,0,.3);
-
-                transform: translate(-50%, -50%);
-
-                box-shadow:
-                    0 0 0 4px rgba(37,99,235,0.15),
-                    0 0 12px rgba(37,99,235,0.35);
-
-                animation: pulseFocus 1.2s infinite;
-            }
-
-            .image-wrapper{
-                position:relative;
-                display:inline-block;
-            }
-
-            @keyframes pulseFocus {
-                0% {
-                    transform: translate(-50%, -50%) scale(1);
-                }
-                50% {
-                    transform: translate(-50%, -50%) scale(1.05);
-                }
-                100% {
-                    transform: translate(-50%, -50%) scale(1);
-                }
-            }
-            /* Responsive */
-            @media (max-width: 1400px) {
-                .workspace-sidebar {
-                    width: 260px;
-                }
-                .workspace-right-sidebar {
-                    width: 300px;
-                }
-            }
-
-            @media (max-width: 1200px) {
-                .workspace-sidebar {
-                    width: 240px;
-                    padding: 20px 16px;
-                }
-                .workspace-right-sidebar {
-                    width: 280px;
-                    padding: 20px 16px;
-                }
-            }
-        </style>
+        <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/manuscript-version.css" />
+        <script src="${pageContext.request.contextPath}/assets/manuscript-workspace.js"
+                data-is-mangaka="${isMangakaOwner}"
+                data-context-path="${pageContext.request.contextPath}"></script>
     </head>
     <body>
         <jsp:include page="/WEB-INF/jsp/common/header.jsp"/>
@@ -551,12 +38,12 @@
                     </div>
                     <div class="dashboard-stat">
                         <span class="stat-label">Created</span>
-                        <span class="stat-value" style="font-size: 12px;">${createdAtFormatted}</span>
+                        <span class="stat-value stat-value-compact">${createdAtFormatted}</span>
                     </div>
                     <c:if test="${not empty submittedAtFormatted}">
                         <div class="dashboard-stat">
                             <span class="stat-label">Submitted</span>
-                            <span class="stat-value" style="font-size: 12px;">${submittedAtFormatted}</span>
+                            <span class="stat-value stat-value-compact">${submittedAtFormatted}</span>
                         </div>
                     </c:if>
                 </div>
@@ -564,9 +51,9 @@
                 <div class="sidebar-section">
                     <div class="sidebar-title">Version History</div>
                     <c:forEach var="v" items="${versionHistory}">
-                        <a href="${pageContext.request.contextPath}/main/manuscript-workspace/${v.id}" class="version-item ${v.id == version.id ? 'current' : ''}" style="text-decoration: none; display: block;">
+                        <a href="${pageContext.request.contextPath}/main/manuscript-workspace/${v.id}" class="version-item ${v.id == version.id ? 'current' : ''}">
                             <div><strong>v${v.version}</strong> - ${v.status}</div>
-                            <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+                            <div class="version-date">
                                 ${versionHistoryDates[v.id]}
                             </div>
                         </a>
@@ -579,49 +66,49 @@
                 <div class="workspace-toolbar">
                     <div>
                         <strong>Chapter ${chapter.chapterNumber}: ${chapter.title}</strong>
-                        <span style="margin-left: 15px; color: #666; font-size: 13px;">
+                        <span class="workspace-version-meta">
                             v${version.version} - <span class="status-badge status-${version.status}">${version.status}</span>
                         </span>
                         <c:if test="${isReadonly}">
-                            <span style="margin-left: 15px; color: #868e96; font-size: 12px;">
+                            <span class="workspace-lock">
                                 🔒 Readonly
                             </span>
                         </c:if>
                         <c:if test="${productionLocked}">
-                            <span style="margin-left: 15px; color: #fa5252; font-size: 12px;">
+                            <span class="workspace-lock is-production">
                                 🔒 Production Locked
                             </span>
                         </c:if>
                     </div>
-                    <div style="font-size: 12px; color: #666;">
+                    <div class="workspace-summary">
                         Pages: ${version.totalPageCount} | 
-                        Open Annotations: <span style="color: ${dashboard.openAnnotations > 0 ? '#fa5252' : '#40c057'}">${dashboard.openAnnotations}</span> |
+                        Open Annotations: <span class="${dashboard.openAnnotations > 0 ? 'text-danger' : 'text-success'}">${dashboard.openAnnotations}</span> |
                         Progress: ${dashboard.reviewProgress}%
                     </div>
                     <div>
                         <c:if test="${!isReadonly && version.status == 'DRAFT' && empty pages}">
-                            <form method="post" action="${pageContext.request.contextPath}/main/manuscript-workspace/${version.id}/import-pages" style="display: inline;">
+                            <form class="inline-form" method="post" action="${pageContext.request.contextPath}/main/manuscript-workspace/${version.id}/import-pages">
                                 <button type="submit" class="btn btn-primary">Import Pages</button>
                             </form>
                         </c:if>
                         <c:if test="${!isReadonly && version.status == 'DRAFT' && not empty pages}">
-                            <form method="post" action="${pageContext.request.contextPath}/main/manuscript-workspace/${version.id}/submit" style="display: inline;">
+                            <form class="inline-form" method="post" action="${pageContext.request.contextPath}/main/manuscript-workspace/${version.id}/submit">
                                 <button type="submit" class="btn btn-primary">Submit for Review</button>
                             </form>
                         </c:if>
                         <c:if test="${!isReadonly && version.status == 'UNDER_REVIEW' && (isAssignedTantou || isAdmin)}">
-                            <form method="post" action="${pageContext.request.contextPath}/main/manuscript-workspace/${version.id}/approve" style="display: inline;">
+                            <form class="inline-form" method="post" action="${pageContext.request.contextPath}/main/manuscript-workspace/${version.id}/approve">
                                 <button type="submit" class="btn btn-success" ${dashboard.openAnnotations > 0 ? 'disabled' : ''}>Approve</button>
                             </form>
-                            <button type="button" class="btn btn-danger" onclick="showRejectModal()">Reject</button>
+                            <button type="button" class="btn btn-danger" data-open-reject-modal>Reject</button>
                         </c:if>
                         <c:if test="${!isReadonly && version.status == 'REJECTED' && isMangakaOwner}">
-                            <form method="post" action="${pageContext.request.contextPath}/main/chapters/${chapter.id}/manuscript-workspace/new-version" style="display: inline;">
+                            <form class="inline-form" method="post" action="${pageContext.request.contextPath}/main/chapters/${chapter.id}/manuscript-workspace/new-version">
                                 <button type="submit" class="btn btn-primary">Create New Version</button>
                             </form>
                         </c:if>
                         <c:if test="${!isReadonly && version.status == 'APPROVED'}">
-                            <form method="post" action="${pageContext.request.contextPath}/main/manuscript-workspace/${version.id}/publish" style="display: inline;">
+                            <form class="inline-form" method="post" action="${pageContext.request.contextPath}/main/manuscript-workspace/${version.id}/publish">
                                 <button type="submit" class="btn btn-success">Publish</button>
                             </form>
                         </c:if>
@@ -646,12 +133,28 @@
                             <div class="page-image-container">
                                 <div class="image-wrapper">
                                     <img data-original-url="${page.snapshotFileUrl}" alt="Page ${page.pageNumber}" class="page-image" id="img-${page.id}">
-                                    <!-- Annotation markers will be rendered here via JavaScript -->
+                                    <c:forEach var="ann" items="${annotations}">
+                                        <c:if test="${ann.manuscriptPageId == page.id}">
+                                            <button type="button"
+                                                    class="annotation-marker ${ann.status == 'RESOLVED' ? 'resolved' : ann.status == 'DISMISSED' ? 'dismissed' : ''}"
+                                                    data-position-left="${ann.getXPercent()}"
+                                                    data-position-top="${ann.getYPercent()}"
+                                                    data-position-width="${ann.getWidthPercent()}"
+                                                    data-position-height="${ann.getHeightPercent()}"
+                                                    data-annotation-focus
+                                                    data-annotation-id="${ann.id}"
+                                                    data-page-id="${ann.manuscriptPageId}"
+                                                    data-category="${ann.category}"
+                                                    data-content="<c:out value='${ann.content}' />"
+                                                    data-severity="${ann.severity}"
+                                                    title="${ann.category}: <c:out value='${ann.content}' />"></button>
+                                        </c:if>
+                                    </c:forEach>
                                 </div>
                             </div>
                             <div class="page-info">
-                                <div style="font-weight: 600; color: #111827; margin-bottom: 4px;">Page ${page.pageNumber}</div>
-                                <div style="font-size: 12px; color: #6b7280;">
+                                <div class="page-info-title">Page ${page.pageNumber}</div>
+                                <div class="page-info-meta">
                                     Display Order: ${page.displayOrder} | Checksum: ${page.snapshotChecksum}
                                 </div>
                             </div>
@@ -683,16 +186,12 @@
                         <c:forEach var="annotation" items="${annotations}">
                             <div
                                 class="annotation-item ${annotation.status == 'RESOLVED' ? 'resolved' : annotation.status == 'DISMISSED' ? 'dismissed' : ''}"
-                                style="cursor:pointer;"
-                                onclick="
-                                        focusAnnotation(
-                                ${annotation.id},
-                                ${annotation.manuscriptPageId},
-                                                '${annotation.category}',
-                                                '${annotation.content}',
-                                                '${annotation.severity}'
-                                                )
-                                "
+                                data-annotation-focus
+                                data-annotation-id="${annotation.id}"
+                                data-page-id="${annotation.manuscriptPageId}"
+                                data-category="${annotation.category}"
+                                data-content="<c:out value='${annotation.content}' />"
+                                data-severity="${annotation.severity}"
                                 >
 
                                 <div>${annotation.category}</div>
@@ -705,12 +204,11 @@
                                 </div>
 
                                 <c:if test="${version.status == 'UNDER_REVIEW' && (isAssignedTantou || isAdmin) && !isMangakaRole}">
-                                    <div style="margin-top: 8px;">
+                                    <div class="annotation-item-actions">
                                         <button
                                             type="button"
-                                            class="btn btn-danger"
-                                            style="padding: 4px 10px; font-size: 11px;"
-                                            onclick="event.stopPropagation(); deleteAnnotation(${annotation.id})"
+                                            class="btn btn-danger annotation-delete-btn"
+                                            data-delete-annotation="${annotation.id}"
                                         >
                                             Delete
                                         </button>
@@ -725,113 +223,22 @@
         </div>
 
         <!-- Reject Modal -->
-        <div id="rejectModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
-            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; padding: 32px; border-radius: 16px; width: 480px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
-                <h3 style="margin: 0 0 20px; font-size: 20px; font-weight: 700; color: #111827;">Reject Manuscript</h3>
+        <div id="rejectModal" class="modal-backdrop is-hidden">
+            <div class="modal-card">
+                <h3 class="modal-title">Reject Manuscript</h3>
                 <form method="post" action="${pageContext.request.contextPath}/main/manuscript-workspace/${version.id}/reject">
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 14px;">Feedback (required):</label>
-                        <textarea name="feedback" rows="5" style="width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical;" required placeholder="Please provide feedback for rejection..."></textarea>
+                    <div class="modal-field">
+                        <label>Feedback (required):</label>
+                        <textarea name="feedback" rows="5" required placeholder="Please provide feedback for rejection..."></textarea>
                     </div>
-                    <div style="text-align: right; display: flex; gap: 12px; justify-content: flex-end;">
-                        <button type="button" class="btn btn-secondary" onclick="hideRejectModal()">Cancel</button>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" data-close-reject-modal>Cancel</button>
                         <button type="submit" class="btn btn-danger">Reject Manuscript</button>
                     </div>
                 </form>
             </div>
         </div>
-        <script>
-            window.contextPath = '${pageContext.request.contextPath}';
-
-            function imageUrl(fileUrl) {
-                var url = String(fileUrl || '');
-
-                if (url.indexOf('http://') === 0 || url.indexOf('https://') === 0) {
-                    return url;
-                }
-
-                if (url.indexOf(window.contextPath + '/') === 0) {
-                    return url;
-                }
-
-                return window.contextPath + url;
-            }
-
-            function showRejectModal() {
-                document.getElementById('rejectModal').style.display = 'block';
-            }
-
-            function hideRejectModal() {
-                document.getElementById('rejectModal').style.display = 'none';
-            }
-
-            function scrollToPage(pageId) {
-                var pageElement = document.getElementById('page-' + pageId);
-                if (pageElement) {
-                    pageElement.scrollIntoView({behavior: 'smooth', block: 'center'});
-                }
-            }
-
-            // Normalize image URLs on page load
-            (function () {
-                var images = document.querySelectorAll('img.page-image[data-original-url]');
-                for (var i = 0; i < images.length; i++) {
-                    var img = images[i];
-                    var originalUrl = img.getAttribute('data-original-url');
-                    if (originalUrl) {
-                        console.log('Manuscript workspace image normalization:');
-                        console.log('  Original URL:', originalUrl);
-                        var normalizedUrl = imageUrl(originalUrl);
-                        console.log('  Normalized URL:', normalizedUrl);
-                        img.src = normalizedUrl;
-                    }
-                }
-            })();
-
-            // Render annotation markers on pages
-            <c:forEach var="ann" items="${annotations}">
-                <c:if test="${ann.manuscriptPageId != null}">
-            var pageImg = document.getElementById('img-${ann.manuscriptPageId}');
-            if (pageImg) {
-                var wrapper = pageImg.parentElement;
-                var marker = document.createElement('div');
-                marker.setAttribute(
-                        'data-annotation-id',
-                        '${ann.id}'
-                        );
-                marker.className = 'annotation-marker ${ann.status == 'RESOLVED' ? 'resolved' : ann.status == 'DISMISSED' ? 'dismissed' : ''}';
-                marker.style.left = '${ann.getXPercent()}%';
-                marker.style.top = '${ann.getYPercent()}%';
-                marker.style.width = '${ann.getWidthPercent()}%';
-                marker.style.height = '${ann.getHeightPercent()}%';
-                marker.title = '${ann.category}: ${ann.content}';
-
-                        marker.onclick = function () {
-                            alert(
-                                    'Category: ${ann.getCategory()}\n' +
-                                    'Content: ${ann.getContent()}\n' +
-                                    'Status: ${ann.getStatus()}\n' +
-                                    'Severity: ${ann.getSeverity()}'
-                                    );
-                        };
-                        wrapper.appendChild(marker);
-                    }
-
-                </c:if>
-            </c:forEach>
-        </script>
-        <div id="annotationPopup"
-             style="
-             display:none;
-             position:fixed;
-             z-index:9999;
-             background:white;
-             border:1px solid #d1d5db;
-             border-radius:8px;
-             padding:12px;
-             min-width:250px;
-             box-shadow:0 4px 12px rgba(0,0,0,.15);
-             ">
+        <div id="annotationPopup" class="annotation-popup">
 
             <div id="annotationPopupContent"></div>
 

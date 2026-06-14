@@ -6,6 +6,7 @@
     <meta charset="UTF-8">
     <title>Something went wrong</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/error.css" />
 </head>
 <body>
 <jsp:include page="header.jsp" />
@@ -21,7 +22,7 @@
         </div>
     </c:if>
 
-    <div style="display:flex; gap:10px;">
+    <div class="error-actions">
         <a class="btn" href="${pageContext.request.contextPath}/main/dashboard">Back to Dashboard</a>
         <a class="btn" href="${pageContext.request.contextPath}/main/logout">Re-login</a>
     </div>

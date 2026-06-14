@@ -6,12 +6,13 @@
     <meta charset="UTF-8">
     <title>Notifications</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/notification.css" />
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
 
 <%-- Notification page header: unread count and mark-all action. --%>
-<div style="display:flex; justify-content:flex-end; align-items:center; margin-bottom:20px;">
+<div class="page-actions">
     <form method="post" action="${pageContext.request.contextPath}/main/notifications/mark-all-read">
         <button class="btn primary" type="submit" ${unreadCount == 0 ? 'disabled' : ''}>Mark all read</button>
     </form>
@@ -27,8 +28,8 @@
         </c:when>
         <c:otherwise>
             <c:forEach items="${notifications}" var="n">
-                <div class="notification-row noti-item ${n.read ? 'is-read read' : 'is-unread unread'}" data-noti-id="${n.id}" data-is-read="${n.read}" style="position:relative;">
-                    <a href="${pageContext.request.contextPath}/main/notifications/${n.id}/click" class="notification-main text-decoration-none" style="flex:1; min-width:0;">
+                <div class="notification-row noti-item ${n.read ? 'is-read read' : 'is-unread unread'}" data-noti-id="${n.id}" data-is-read="${n.read}">
+                    <a href="${pageContext.request.contextPath}/main/notifications/${n.id}/click" class="notification-main text-decoration-none notification-main-link">
                         <div class="notification-row-head">
                             <span class="notification-title">${empty n.title ? n.type : n.title}</span>
                             <span class="notification-time noti-time" data-time="${n.createdAt}"></span>
@@ -41,20 +42,18 @@
                     <c:if test="${!n.read}">
                         <span class="noti-dot notification-dot" aria-hidden="true"></span>
                     </c:if>
-                    <div class="noti-actions ms-2" style="position:relative; z-index:10;">
+                    <div class="noti-actions ms-2">
                         <button type="button"
                                 class="btn btn-sm p-0 text-muted noti-menu-btn"
                                 data-id="${n.id}"
                                 data-read="${n.read}"
                                 data-menu-id="list-noti-menu-${n.id}"
-                                style="background:none; border:none; font-size:16px; line-height:1;"
-                                onclick="event.preventDefault(); event.stopPropagation(); toggleNotiMenu(this);">...</button>
-                        <div class="noti-menu" id="list-noti-menu-${n.id}"
-                             style="display:none; position:absolute; right:0; top:24px; background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.15); min-width:160px; z-index:1000; padding:8px 0;">
+                                data-notification-menu>...</button>
+                        <div class="noti-actions-menu" id="list-noti-menu-${n.id}">
                             <button type="button" class="noti-menu-item noti-menu-delete"
-                                    onclick="event.stopPropagation(); deleteNoti(${n.id})">Delete</button>
+                                    data-notification-delete="${n.id}">Delete</button>
                             <button type="button" class="noti-menu-item noti-menu-toggle"
-                                    onclick="event.stopPropagation(); toggleReadNoti(${n.id}, ${n.read})">
+                                    data-notification-toggle="${n.id}" data-read="${n.read}">
                                 ${n.read ? 'Mark as unread' : 'Mark as read'}
                             </button>
                         </div>

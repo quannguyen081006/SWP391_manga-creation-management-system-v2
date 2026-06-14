@@ -1,0 +1,8 @@
+.notification-main-link {
+    min-width: 0;
+    flex: 1;
+}
+
+.notification-row {
+    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}

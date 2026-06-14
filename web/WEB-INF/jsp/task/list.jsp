@@ -203,12 +203,8 @@
 </div>
 
 <%-- [9] CONFIG SCRIPT: truyền contextPath xuống task-list.js để fetch đúng API URL --%>
-<script>
-window.TASK_LIST_CONFIG = {
-    contextPath: '${pageContext.request.contextPath}'
-};
-</script>
-<script src="${pageContext.request.contextPath}/assets/js/chaptertask/task-list.js?v=20260608split"></script>
+<script src="${pageContext.request.contextPath}/assets/js/chaptertask/task-list.js?v=20260608split"
+        data-context-path="${pageContext.request.contextPath}"></script>
 
 <jsp:include page="../common/footer.jsp" />
 </body>

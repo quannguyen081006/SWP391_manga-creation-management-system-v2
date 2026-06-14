@@ -29,7 +29,7 @@ public class UserAdminRepository {
      * @return all user rows with a `roles` list added to each map
      */
     public List<Map<String, Object>> listUsers() {
-        String sql = "SELECT id, username, fullName, email, status, createdAt, updatedAt FROM [User] ORDER BY id";
+        String sql = "SELECT id, username, fullName, email, avatarUrl, status, createdAt, updatedAt FROM [User] ORDER BY id";
         List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
@@ -51,7 +51,7 @@ public class UserAdminRepository {
      * @return active users with `roles` and display-oriented `switchItems`
      */
     public List<Map<String, Object>> listActiveUsersForSwitch() {
-        String sql = "SELECT id, username, fullName, email, status, createdAt, updatedAt FROM [User] WHERE status = 'ACTIVE' ORDER BY id";
+        String sql = "SELECT id, username, fullName, email, avatarUrl, status, createdAt, updatedAt FROM [User] WHERE status = 'ACTIVE' ORDER BY id";
         List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
@@ -118,7 +118,7 @@ public class UserAdminRepository {
      * @return user map with roles, or {@code null} when no row exists
      */
     public Map<String, Object> getUser(long id) {
-        String sql = "SELECT id, username, fullName, email, status, createdAt, updatedAt FROM [User] WHERE id = ?";
+        String sql = "SELECT id, username, fullName, email, avatarUrl, status, createdAt, updatedAt FROM [User] WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, id);
@@ -368,6 +368,83 @@ public class UserAdminRepository {
     }
 
     /**
+     * Updates the fields a signed-in user may edit on their own profile.
+     */
+    public void updateProfile(long userId, String fullName, String email, String avatarUrl) {
+        if (isBlank(fullName) || !isValidEmail(email)) {
+            throw new IllegalArgumentException("Full name and valid email are required");
+        }
+        String normalizedEmail = email.trim();
+        String sql = "UPDATE [User] SET fullName = ?, email = ?, avatarUrl = ?, updatedAt = GETDATE() WHERE id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            if (existsByColumnExceptId(conn, "email", normalizedEmail, userId)) {
+                throw new IllegalArgumentException("Email already exists");
+            }
+            ps.setString(1, fullName.trim());
+            ps.setString(2, normalizedEmail);
+            ps.setString(3, avatarUrl);
+            ps.setLong(4, userId);
+            if (ps.executeUpdate() == 0) {
+                throw new IllegalArgumentException("User not found");
+            }
+        } catch (SQLException ex) {
+            throwDuplicateUserMessage(ex);
+            throw new RuntimeException("Cannot update profile", ex);
+        }
+    }
+
+    /**
+     * Updates the password value used by the current authentication flow.
+     */
+    public void updatePassword(long userId, String newPasswordHash) {
+        if (isBlank(newPasswordHash) || newPasswordHash.length() < 5) {
+            throw new IllegalArgumentException("Password must be at least 5 characters");
+        }
+        String sql = "UPDATE [User] SET passwordHash = ?, updatedAt = GETDATE() WHERE id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, newPasswordHash);
+            ps.setLong(2, userId);
+            if (ps.executeUpdate() == 0) {
+                throw new IllegalArgumentException("User not found");
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot update password", ex);
+        }
+    }
+
+    /**
+     * Loads the current password value for password verification.
+     */
+    public String getPasswordHash(long userId) {
+        String sql = "SELECT passwordHash FROM [User] WHERE id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString("passwordHash") : null;
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot load password", ex);
+        }
+    }
+
+    /**
+     * Checks email uniqueness while allowing the current user to keep their email.
+     */
+    public boolean emailExistsExcludingUser(String email, long userId) {
+        if (isBlank(email)) {
+            return false;
+        }
+        try (Connection conn = dataSource.getConnection()) {
+            return existsByColumnExceptId(conn, "email", email.trim(), userId);
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot check email", ex);
+        }
+    }
+
+    /**
      * Checks whether a user has a specific role.
      *
      * @param userId target user id
@@ -490,6 +567,10 @@ public class UserAdminRepository {
         return value == null || value.trim().isEmpty();
     }
 
+    private boolean isValidEmail(String email) {
+        return !isBlank(email) && email.trim().matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
+    }
+
     private void throwDuplicateUserMessage(SQLException ex) {
         String message = ex.getMessage() == null ? "" : ex.getMessage().toLowerCase();
         if (message.contains("uq_user_username")) {
@@ -527,6 +608,7 @@ public class UserAdminRepository {
         row.put("username", rs.getString("username"));
         row.put("fullName", rs.getString("fullName"));
         row.put("email", rs.getString("email"));
+        row.put("avatarUrl", rs.getString("avatarUrl"));
         row.put("status", rs.getString("status"));
         row.put("createdAt", rs.getTimestamp("createdAt"));
         row.put("updatedAt", rs.getTimestamp("updatedAt"));

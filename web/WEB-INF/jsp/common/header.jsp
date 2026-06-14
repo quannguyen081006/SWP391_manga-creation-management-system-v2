@@ -3,8 +3,11 @@
 <%@taglib uri="http://java.sun.com/jsp/jstl/functions" prefix="fn" %>
 <c:set var="uri" value="${pageContext.request.requestURI}" />
 <c:set var="ctx" value="${pageContext.request.contextPath}" />
-<script>window.MANGA_CTX = '${ctx}';</script>
-<script src="${ctx}/assets/auth-session.js"></script>
+<link rel="stylesheet" href="${ctx}/assets/css/header.css" />
+<script src="${ctx}/assets/auth-session.js" data-context-path="${ctx}"></script>
+<script src="${ctx}/assets/js/common.js"></script>
+<script src="${ctx}/assets/role-assignment.js"></script>
+<script src="${ctx}/assets/js/header.js"></script>
 
 <%-- Current user context: derive display role, role flags, and avatar text. --%>
 <c:set var="displayRole" value="User" />
@@ -67,6 +70,7 @@
     else if (uri.contains("/manuscript-review") || uri.contains("/manuscripts")) pageName = "Manuscript Reviews";
     else if (uri.contains("/ranking")) pageName = "Ranking";
     else if (uri.contains("/decisions")) pageName = "Decisions";
+    else if (uri.contains("/profile")) pageName = "Profile";
     else if (uri.contains("/users")) pageName = "Users";
     else if (uri.contains("/analytics")) pageName = "Analytics";
     request.setAttribute("_pageName", pageName);
@@ -78,7 +82,7 @@
         <a class="side-brand" href="${ctx}/main/dashboard" title="Back to Dashboard">
             <div class="brand-icon">MF</div>
             <div>
-                <div class="brand-name">MangaFlow <span style="font-size:10px; color:#aaa; margin-left:6px;">v2.2</span></div>
+                <div class="brand-name">MangaFlow <span class="brand-version">v2.3</span></div>
                 <div class="brand-sub">Manga Studio Ops</div>
             </div>
         </a>
@@ -119,7 +123,7 @@
             </a>
         </c:if>
         <c:if test="${isTantou}">
-            <a class="nav-item nav-manuscript-review ${fn:contains(uri, '/main/manuscript-review') ? 'active' : ''}" href="${ctx}/main/manuscript-review" title="Manuscript Reviews">
+            <a class="nav-item nav-manuscripts nav-manuscript-review ${fn:contains(uri, '/main/manuscript-review') ? 'active' : ''}" href="${ctx}/main/manuscript-review" title="Manuscript Reviews">
                 <span class="nav-icon" aria-hidden="true"></span>
                 <span class="nav-label">Manuscript Reviews</span>
             </a>
@@ -142,7 +146,7 @@
         <header class="top-shell">
             <%-- Top header: dashboard title, active role pills, notifications, and account actions. --%>
             <div class="page-head">
-                <span style="font-weight:800; color:#111827; font-size:18px; margin-right:12px; line-height:1; letter-spacing:0;"><%= pageName %></span>
+                <span class="page-heading-label"><%= pageName %></span>
                 <c:if test="${sessionScope.AUTH_USER != null && sessionScope.AUTH_USER.hasRole('ADMIN')}">
                     <span class="role-pill role-admin">Admin</span>
                 </c:if>
@@ -160,30 +164,6 @@
                 </c:if>
             </div>
             <div class="top-user">
-                <style>
-                    .noti-actions .noti-menu-item {
-                        display: block;
-                        width: 100%;
-                        padding: 10px 16px;
-                        border: none;
-                        background: #fff;
-                        text-align: left;
-                        font-size: 13px;
-                        line-height: 1.2;
-                    }
-
-                    .noti-actions .noti-menu-item:hover {
-                        background: #f0f2f5;
-                    }
-
-                    .noti-actions .noti-menu-delete {
-                        color: #e74c3c;
-                    }
-
-                    .noti-actions .noti-menu-toggle {
-                        color: #1877f2;
-                    }
-                </style>
                 <%-- Notification dropdown: click item to mark read and redirect through web controller. --%>
                 <details class="notify-switcher">
                     <summary class="notify-toggle" title="Notifications">
@@ -208,7 +188,7 @@
                             </c:when>
                             <c:otherwise>
                                 <c:forEach items="${headerNotifications}" var="n">
-                                    <div class="notify-item noti-item ${n.read ? 'is-read read' : 'is-unread unread'}" data-noti-id="${n.id}" data-is-read="${n.read}" style="position:relative;">
+                                    <div class="notify-item noti-item ${n.read ? 'is-read read' : 'is-unread unread'}" data-noti-id="${n.id}" data-is-read="${n.read}">
                                         <a href="${ctx}/main/notifications/${n.id}/click" class="notify-item-main text-decoration-none">
                                             <div class="noti-title">${empty n.title ? n.type : n.title}</div>
                                             <div class="noti-message">${n.message}</div>
@@ -217,20 +197,18 @@
                                         <c:if test="${!n.read}">
                                             <span class="noti-dot" aria-hidden="true"></span>
                                         </c:if>
-                                        <div class="noti-actions ms-2" style="position:relative; z-index:10;">
+                                        <div class="noti-actions ms-2">
                                             <button type="button"
                                                     class="btn btn-sm p-0 text-muted noti-menu-btn"
                                                     data-id="${n.id}"
                                                     data-read="${n.read}"
                                                     data-menu-id="header-noti-menu-${n.id}"
-                                                    style="background:none; border:none; font-size:16px; line-height:1;"
-                                                    onclick="event.preventDefault(); event.stopPropagation(); toggleNotiMenu(this);">...</button>
-                                            <div class="noti-menu" id="header-noti-menu-${n.id}"
-                                                 style="display:none; position:absolute; right:0; top:24px; background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.15); min-width:160px; z-index:999; padding:8px 0;">
+                                                    data-notification-menu>...</button>
+                                            <div class="noti-actions-menu" id="header-noti-menu-${n.id}">
                                                 <button type="button" class="noti-menu-item noti-menu-delete"
-                                                        onclick="event.stopPropagation(); deleteNoti(${n.id})">Delete</button>
+                                                        data-notification-delete="${n.id}">Delete</button>
                                                 <button type="button" class="noti-menu-item noti-menu-toggle"
-                                                        onclick="event.stopPropagation(); toggleReadNoti(${n.id}, ${n.read})">
+                                                        data-notification-toggle="${n.id}" data-read="${n.read}">
                                                     ${n.read ? 'Mark as unread' : 'Mark as read'}
                                                 </button>
                                             </div>
@@ -247,144 +225,17 @@
                     </div>
                 </details>
 
-                <div class="avatar role-${roleKey}" title="${displayName}">${avatarText}</div>
-                <div>
-                    <div class="user-name"><c:out value="${displayName}" default="Yuki Tanaka"/></div>
-                    <div class="user-actions">
-                        <a class="logout-link" href="${ctx}/main/logout">Logout</a>
-                    </div>
-                </div>
+                <a class="profile-avatar-link" href="${ctx}/main/profile" title="Open profile">
+                    <c:choose>
+                        <c:when test="${not empty sessionScope.AUTH_USER.avatarUrl}">
+                            <img class="avatar header-avatar-image" src="${ctx}${sessionScope.AUTH_USER.avatarUrl}" alt="Profile avatar" />
+                        </c:when>
+                        <c:otherwise>
+                            <span class="avatar role-${roleKey}">${avatarText}</span>
+                        </c:otherwise>
+                    </c:choose>
+                    <span class="user-name profile-name-link"><c:out value="${displayName}" default="Yuki Tanaka"/></span>
+                </a>
             </div>
         </header>
         <main class="page-wrap">
-            <%-- Sidebar state script: persists collapsed/expanded preference. --%>
-            <script>
-                (function () {
-                    var shell = document.querySelector('.app-shell');
-                    var sidebar = document.querySelector('.side-nav');
-                    var pinButton = document.querySelector('.sidebar-pin');
-                    if (!shell || !pinButton) {
-                        return;
-                    }
-
-                    function setPinned(isPinned) {
-                        var wasPinned = shell.classList.contains('sidebar-pinned');
-                        shell.classList.toggle('sidebar-pinned', isPinned);
-                        shell.classList.toggle('sidebar-hover-suspended', wasPinned && !isPinned);
-                        pinButton.setAttribute('aria-pressed', isPinned ? 'true' : 'false');
-                        pinButton.setAttribute('title', 'Collapse sidebar');
-                        var label = pinButton.querySelector('.pin-label');
-                        if (label) {
-                            label.textContent = 'Collapse';
-                        }
-                        localStorage.setItem('mangaflow.sidebarPinned', isPinned ? 'true' : 'false');
-                        pinButton.blur();
-                    }
-
-                    setPinned(localStorage.getItem('mangaflow.sidebarPinned') === 'true');
-                    pinButton.addEventListener('click', function () {
-                        setPinned(!shell.classList.contains('sidebar-pinned'));
-                    });
-                    if (sidebar) {
-                        sidebar.addEventListener('mouseleave', function () {
-                            shell.classList.remove('sidebar-hover-suspended');
-                        });
-                    }
-                }());
-            </script>
-            <%-- Notification item menu: delete and toggle read state without triggering row redirect. --%>
-            <script>
-                function closeAllNotiMenus() {
-                    document.querySelectorAll('.noti-menu').forEach(function (menu) {
-                        menu.style.display = 'none';
-                    });
-                }
-
-                function toggleNotiMenu(btn) {
-                    var menuId = btn.dataset.menuId || ('noti-menu-' + btn.dataset.id);
-                    var menu = document.getElementById(menuId);
-                    if (!menu) {
-                        return;
-                    }
-                    var item = btn.closest('.noti-item');
-                    var isRead = item ? item.dataset.isRead === 'true' : btn.dataset.read === 'true';
-                    var toggleButton = menu.querySelector('.noti-menu-toggle');
-                    if (toggleButton) {
-                        toggleButton.textContent = isRead ? 'Mark as unread' : 'Mark as read';
-                        toggleButton.onclick = function (event) {
-                            event.stopPropagation();
-                            toggleReadNoti(btn.dataset.id, isRead);
-                        };
-                    }
-                    var isOpen = menu.style.display === 'block';
-                    closeAllNotiMenus();
-                    if (!isOpen) {
-                        menu.style.display = 'block';
-                    }
-                }
-
-                document.addEventListener('click', function () {
-                    closeAllNotiMenus();
-                });
-
-                function deleteNoti(id) {
-                    closeAllNotiMenus();
-                    fetch((window.MANGA_CTX || '') + '/api/v1/notifications/' + id, {
-                        method: 'DELETE',
-                        credentials: 'same-origin'
-                    }).then(function (res) {
-                        if (res.ok) {
-                            document.querySelectorAll('[data-noti-id="' + id + '"]').forEach(function (item) {
-                                item.remove();
-                            });
-                        }
-                    });
-                }
-
-                function toggleReadNoti(id, isRead) {
-                    closeAllNotiMenus();
-                    var currentlyRead = isRead === true || isRead === 'true';
-                    var url = (window.MANGA_CTX || '') + '/api/v1/notifications/' + id + (currentlyRead ? '/unread' : '/read');
-                    fetch(url, {
-                        method: 'PATCH',
-                        credentials: 'same-origin'
-                    }).then(function (res) {
-                        if (res.ok) {
-                            location.reload();
-                        }
-                    });
-                }
-            </script>
-            <%-- Notification timestamp script: converts database timestamps to relative time. --%>
-            <script>
-                function timeAgo(dateStr) {
-                    if (!dateStr) {
-                        return '';
-                    }
-                    var normalized = String(dateStr).trim().replace(' ', 'T');
-                    var date = new Date(normalized);
-                    if (isNaN(date.getTime())) {
-                        return dateStr;
-                    }
-                    var now = new Date();
-                    var diff = Math.floor((now - date) / 1000);
-                    if (diff < 60) return 'Just now';
-                    if (diff < 3600) return Math.floor(diff / 60) + ' minutes ago';
-                    if (diff < 86400) return Math.floor(diff / 3600) + ' hours ago';
-                    if (diff < 604800) return Math.floor(diff / 86400) + ' days ago';
-                    return Math.floor(diff / 604800) + ' weeks ago';
-                }
-
-                function renderNotificationTimes() {
-                    document.querySelectorAll('.noti-time').forEach(function (el) {
-                        var raw = el.dataset.time || el.textContent.trim();
-                        el.textContent = timeAgo(raw);
-                    });
-                }
-
-                if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', renderNotificationTimes);
-                } else {
-                    renderNotificationTimes();
-                }
-            </script>

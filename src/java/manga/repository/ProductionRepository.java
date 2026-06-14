@@ -136,7 +136,7 @@ public class ProductionRepository {
                 notify.setString(2, "SERIES_DEADLINE_UPDATED");
                 notify.setString(3, "Series deadline updated");
                 notify.setString(4, "Deadline for series \"" + title + "\" was updated to " + publicationDate + ".");
-                notify.setString(5, "/main/chapters?seriesId=" + seriesId);
+                notify.setString(5, "/main/series/" + seriesId);
                 notify.setLong(6, seriesId);
                 notify.setString(7, "SERIES");
                 notify.executeUpdate();

@@ -377,6 +377,11 @@ public class PageTaskRepository {
      * Sau khi tạo: gửi thông báo cho assistant và cập nhật tiến độ chapter.
      */
     public long create(long chapterId, long assistantId, int start, int end, String taskType, Date dueDate, String priority, String notes) {
+        return create(chapterId, assistantId, start, end, taskType, dueDate, priority, notes, true);
+    }
+
+    private long create(long chapterId, long assistantId, int start, int end, String taskType, Date dueDate,
+            String priority, String notes, boolean notifyAssignment) {
         ensureTaskLifecycleSchemaReady();
         // Chỉ task đang active mới block tái sử dụng page range; task đã đóng thì không
         String overlapSql = "SELECT COUNT(1) FROM PageTask WHERE chapterId = ? AND UPPER(status) NOT IN (" + SQL_CLOSED_TASK_STATUSES + ") AND NOT (pageRangeEnd < ? OR pageRangeStart > ?)";
@@ -414,12 +419,14 @@ public class PageTaskRepository {
             }
 
             refreshChapterProgress(chapterId);
-            createNotification(
-                    assistantId,
-                    "TASK_ASSIGNED",
-                    "You have been assigned task #" + newId + ".",
-                    newId,
-                    "TASK");
+            if (notifyAssignment) {
+                createNotification(
+                        assistantId,
+                        "TASK_ASSIGNED",
+                        "You have been assigned task #" + newId + ".",
+                        newId,
+                        "TASK");
+            }
             return newId;
         } catch (SQLException ex) {
             throw new RuntimeException("Cannot create task", ex);
@@ -562,8 +569,15 @@ public class PageTaskRepository {
                 task.getTaskType(),
                 dueDateForNewTask,
                 task.getPriority(),
-                task.getNotes());
+                task.getNotes(),
+                false);
         setPreviousAssistantAndReason(newTaskId, task.getAssistantId(), reason.trim());
+        createNotification(
+                newAssistantId,
+                "TASK_REASSIGNED",
+                "Task #" + newTaskId + " has been reassigned to you.",
+                newTaskId,
+                "TASK");
         createNotification(
                 task.getAssistantId(),
                 "TASK_REASSIGNED",
@@ -1074,13 +1088,13 @@ public class PageTaskRepository {
                     if (update.executeUpdate() > 0) {
                         changed++;
                         chapters.add(row[1]);
-                        createNotificationIfAbsentToday(
+                        createNotificationIfAbsent(
                                 row[3],
                                 "TASK_OVERDUE_ACTION_REQUIRED",
                                 "Task #" + row[0] + " is overdue. Please decide: extend, reassign, or cancel.",
                                 row[0],
                                 "TASK");
-                        createNotificationIfAbsentToday(
+                        createNotificationIfAbsent(
                                 row[2],
                                 "TASK_OVERDUE",
                                 "Task #" + row[0] + " is overdue. Please contact your Mangaka.",
@@ -1107,8 +1121,10 @@ public class PageTaskRepository {
     public int escalatePendingOverdueDecisions() {
         ensureTaskLifecycleSchemaReady();
         String selectSql =
-            "SELECT t.id, t.chapterId, t.assistantId "
+            "SELECT t.id, t.chapterId, t.assistantId, s.mangakaId "
             + "FROM PageTask t "
+            + "JOIN Chapter c ON c.id = t.chapterId "
+            + "JOIN Series s ON s.id = c.seriesId "
             + "WHERE t.status = 'OVERDUE' "
             + "AND DATEDIFF(DAY, t.updatedAt, GETDATE()) >= 3";
         String updateSql =
@@ -1123,7 +1139,12 @@ public class PageTaskRepository {
 
             List<long[]> rows = new ArrayList<long[]>();
             while (rs.next()) {
-                rows.add(new long[] { rs.getLong("id"), rs.getLong("chapterId"), rs.getLong("assistantId") });
+                rows.add(new long[] {
+                    rs.getLong("id"),
+                    rs.getLong("chapterId"),
+                    rs.getLong("assistantId"),
+                    rs.getLong("mangakaId")
+                });
             }
 
             for (long[] row : rows) {
@@ -1132,7 +1153,13 @@ public class PageTaskRepository {
                     if (update.executeUpdate() > 0) {
                         cancelled++;
                         chapters.add(row[1]);
-                        createNotificationIfAbsentToday(
+                        createNotificationIfAbsent(
+                                row[3],
+                                "TASK_CANCELLED",
+                                "Task #" + row[0] + " has been auto-cancelled: no action was taken within 3 days of overdue.",
+                                row[0],
+                                "TASK");
+                        createNotificationIfAbsent(
                                 row[2],
                                 "TASK_CANCELLED",
                                 "Task #" + row[0] + " has been auto-cancelled: no mangaka decision within 3 days of overdue.",
@@ -1160,8 +1187,8 @@ public class PageTaskRepository {
         if (newDueDate == null) {
             throw new IllegalArgumentException("newDueDate is required");
         }
-        if (newDueDate.before(java.sql.Date.valueOf(java.time.LocalDate.now()))) {
-            throw new IllegalArgumentException("newDueDate cannot be in the past");
+        if (!newDueDate.toLocalDate().isAfter(java.time.LocalDate.now())) {
+            throw new IllegalArgumentException("newDueDate must be after today");
         }
         TaskSummary task = findById(taskId);
         if (task == null) {
@@ -1200,8 +1227,8 @@ public class PageTaskRepository {
      * không được quá khứ, không được vượt quá (submissionDeadline - 3 ngày).
      */
     private void validateOverdueDecisionDueDate(long chapterId, Date dueDate) {
-        if (dueDate.before(Date.valueOf(LocalDate.now()))) {
-            throw new IllegalArgumentException("Task dueDate cannot be in the past");
+        if (!dueDate.toLocalDate().isAfter(LocalDate.now())) {
+            throw new IllegalArgumentException("Task dueDate must be after today");
         }
         Date latestDueDate = findLatestTaskDueDate(chapterId);
         if (dueDate.after(latestDueDate)) {
@@ -1447,6 +1474,29 @@ public class PageTaskRepository {
         } catch (SQLException ex) {
             throw new RuntimeException("Cannot create notification", ex);
         }
+    }
+
+    /** Creates one notification per user/type/reference across scheduler runs. */
+    public boolean createNotificationIfAbsent(long userId, String type, String message, long referenceId, String referenceType) {
+        String checkSql =
+            "SELECT COUNT(1) FROM Notification "
+            + "WHERE userId = ? AND type = ? AND referenceId = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement check = conn.prepareStatement(checkSql)) {
+            check.setLong(1, userId);
+            check.setString(2, type);
+            check.setLong(3, referenceId);
+            try (ResultSet rs = check.executeQuery()) {
+                if (rs.next() && rs.getInt(1) > 0) {
+                    return false;
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot check notification duplication", ex);
+        }
+
+        createNotification(userId, type, message, referenceId, referenceType);
+        return true;
     }
 
     /**

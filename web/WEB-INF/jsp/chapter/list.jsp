@@ -203,13 +203,9 @@
     - canCreateChapter: true nếu session có role MANGAKA, false với role khác
                         → JS dùng để ẩn sidebar tạo chapter với non-Mangaka
 --%>
-<script>
-window.CHAPTER_LIST_CONFIG = {
-    contextPath: '${pageContext.request.contextPath}',
-    canCreateChapter: ${sessionScope.AUTH_USER != null && sessionScope.AUTH_USER.hasRole('MANGAKA') ? 'true' : 'false'}
-};
-</script>
-<script src="${pageContext.request.contextPath}/assets/js/chaptertask/chapter-list.js?v=20260608split"></script>
+<script src="${pageContext.request.contextPath}/assets/js/chaptertask/chapter-list.js?v=20260608split"
+        data-context-path="${pageContext.request.contextPath}"
+        data-can-create-chapter="${sessionScope.AUTH_USER != null && sessionScope.AUTH_USER.hasRole('MANGAKA') ? 'true' : 'false'}"></script>
 
 <jsp:include page="../common/footer.jsp" />
 </body>

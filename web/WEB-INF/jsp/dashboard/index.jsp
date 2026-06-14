@@ -6,6 +6,7 @@
     <meta charset="UTF-8">
     <title>Dashboard</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/dashboard.css" />
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
@@ -62,12 +63,12 @@
     <c:choose>
         <c:when test="${not empty activeProposal}">
             <h3>${activeProposal.title}</h3>
-            <p class="page-sub" style="margin-top:2px">${activeProposal.genre}</p>
+            <p class="page-sub dashboard-proposal-genre">${activeProposal.genre}</p>
             <div class="inline-meta">
                 <span>Status: ${activeProposal.status}</span>
                 <span>Submit attempt ${activeProposal.submitAttemptCount}/2</span>
             </div>
-            <div style="margin-top:14px"><a class="btn" href="${pageContext.request.contextPath}/main/proposals/${activeProposal.id}">View Details</a></div>
+            <div class="dashboard-card-action"><a class="btn" href="${pageContext.request.contextPath}/main/proposals/${activeProposal.id}">View Details</a></div>
         </c:when>
         <c:otherwise>
             <p class="page-sub">No active proposal right now.</p>

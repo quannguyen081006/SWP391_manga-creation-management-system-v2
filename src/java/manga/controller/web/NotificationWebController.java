@@ -112,6 +112,7 @@ public class NotificationWebController {
                 || path.matches("/main/chapters")
                 || path.matches("/main/chapters/\\d+")
                 || path.matches("/main/chapters/detail")
+                || path.startsWith("/main/series/")
                 || path.matches("/main/decisions/\\d+")
                 || path.matches("/main/ranking/periods(/\\d+/(results|mangaka))?");
     }

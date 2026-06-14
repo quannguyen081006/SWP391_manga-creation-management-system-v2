@@ -38,7 +38,8 @@
     // ============================================================
     // 1. BIẾN TOÀN CỤC (state)
     // ============================================================
-    var ctx = (window.CHAPTER_DETAIL_CONFIG && window.CHAPTER_DETAIL_CONFIG.contextPath) || ''; // context path từ JSP config
+    var configScript = document.currentScript;
+    var ctx = configScript ? configScript.getAttribute('data-context-path') || '' : '';
     var params = new URLSearchParams(window.location.search);
     var chapterId = params.get('id');       // ID chapter từ query string
     var urlError = params.get('error');     // Lỗi được truyền qua URL (nếu có)

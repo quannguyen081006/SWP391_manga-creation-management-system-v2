@@ -2,6 +2,10 @@
 // Handles annotation creation, resolution, dismissal, and display
 console.log('=== NEW MANUSCRIPT JS VERSION ===');
 
+const workspaceScript = document.currentScript;
+window.isMangaka = workspaceScript && workspaceScript.getAttribute('data-is-mangaka') === 'true';
+window.contextPath = workspaceScript ? workspaceScript.getAttribute('data-context-path') || '' : '';
+
 let currentManuscriptVersionId = null;
 let currentManuscriptPageId = null;
 
@@ -41,7 +45,77 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
     }
+
+    initializeWorkspacePage();
 });
+
+function imageUrl(fileUrl) {
+    const url = String(fileUrl || '');
+    if (url.indexOf('http://') === 0 || url.indexOf('https://') === 0 || url.indexOf(window.contextPath + '/') === 0) {
+        return url;
+    }
+    return window.contextPath + url;
+}
+
+function scrollToPage(pageId) {
+    const pageElement = document.getElementById('page-' + pageId);
+    if (pageElement) {
+        pageElement.scrollIntoView({behavior: 'smooth', block: 'center'});
+    }
+}
+
+function showRejectModal() {
+    const modal = document.getElementById('rejectModal');
+    if (modal) modal.classList.remove('is-hidden');
+}
+
+function hideRejectModal() {
+    const modal = document.getElementById('rejectModal');
+    if (modal) modal.classList.add('is-hidden');
+}
+
+function initializeWorkspacePage() {
+    document.querySelectorAll('img.page-image[data-original-url]').forEach(function (image) {
+        const originalUrl = image.getAttribute('data-original-url');
+        if (originalUrl) image.src = imageUrl(originalUrl);
+    });
+
+    if (window.MangaUi) window.MangaUi.applyDynamicStyles(document);
+
+    document.addEventListener('click', function (event) {
+        const rejectOpen = event.target.closest ? event.target.closest('[data-open-reject-modal]') : null;
+        if (rejectOpen) {
+            showRejectModal();
+            return;
+        }
+        const rejectClose = event.target.closest ? event.target.closest('[data-close-reject-modal]') : null;
+        if (rejectClose) {
+            hideRejectModal();
+            return;
+        }
+        const annotationClose = event.target.closest ? event.target.closest('[data-close-annotation-modal]') : null;
+        if (annotationClose) {
+            hideAnnotationModal();
+            return;
+        }
+        const deleteButton = event.target.closest ? event.target.closest('[data-delete-annotation]') : null;
+        if (deleteButton) {
+            event.stopPropagation();
+            deleteAnnotation(deleteButton.getAttribute('data-delete-annotation'));
+            return;
+        }
+        const focusTarget = event.target.closest ? event.target.closest('[data-annotation-focus]') : null;
+        if (focusTarget) {
+            focusAnnotation(
+                    focusTarget.getAttribute('data-annotation-id'),
+                    focusTarget.getAttribute('data-page-id'),
+                    focusTarget.getAttribute('data-category'),
+                    focusTarget.getAttribute('data-content'),
+                    focusTarget.getAttribute('data-severity')
+                    );
+        }
+    });
+}
 
 // Handle page image click
 function handlePageImageClick(event, img) {

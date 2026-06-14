@@ -7,12 +7,13 @@
     <meta charset="UTF-8">
     <title>Proposals</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css?v=board-vote-ui-2" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/proposal.css" />
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
 
 <c:if test="${isMangaka}">
-    <div style="display:flex; justify-content:flex-end; align-items:center; margin-bottom:20px;">
+    <div class="page-actions">
         <a class="btn primary" href="${pageContext.request.contextPath}/main/proposals/create">+ New Proposal</a>
     </div>
 </c:if>
@@ -52,7 +53,7 @@
                                         <span class="compact-round ${p.boardRoundStatus == 'OPEN' ? 'is-open' : ''}">${p.boardRoundStatus}</span>
                                     </div>
                                     <div class="compact-vote-track">
-                                        <span style="width:${p.boardEligibleVoterCount > 0 ? (p.boardTotalVotes * 100 / p.boardEligibleVoterCount) : 0}%"></span>
+                                        <span data-progress-width="${p.boardEligibleVoterCount > 0 ? (p.boardTotalVotes * 100 / p.boardEligibleVoterCount) : 0}"></span>
                                     </div>
                                     <div class="compact-vote-meta">
                                         <span>Round #${p.boardRoundNumber}</span>
@@ -72,7 +73,7 @@
                             </c:when>
                             <c:when test="${p.boardTotalVotes > 0}">
                                 <strong>${p.boardTotalVotes} cast</strong>
-                                <span style="color:#6b7280;font-size:12px;">(${p.boardApproveVotes} approve, ${p.boardReviseVotes} revise, ${p.boardRejectVotes} reject)</span>
+                                <span class="proposal-vote-counts">(${p.boardApproveVotes} approve, ${p.boardReviseVotes} revise, ${p.boardRejectVotes} reject)</span>
                             </c:when>
                             <c:otherwise>
                                 <span class="proposal-vote-not-started">Not started</span>

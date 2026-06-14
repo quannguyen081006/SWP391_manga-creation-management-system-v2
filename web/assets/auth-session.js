@@ -1,7 +1,9 @@
 (function () {
   'use strict';
 
-  var ctx = window.MANGA_CTX || '';
+  var script = document.currentScript;
+  var ctx = window.MANGA_CTX || (script ? script.getAttribute('data-context-path') : '') || '';
+  window.MANGA_CTX = ctx;
   var loginPath = (ctx || '') + '/login';
 
   function redirectToLogin() {

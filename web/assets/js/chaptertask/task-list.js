@@ -28,7 +28,8 @@
 (function () {
     // ─── 1. KHỞI TẠO & BIẾN TRẠNG THÁI ──────────────────────────────────────
     // ctx: context path của app (lấy từ TASK_LIST_CONFIG hoặc rỗng)
-    var ctx = (window.TASK_LIST_CONFIG && window.TASK_LIST_CONFIG.contextPath) || '';
+    var configScript = document.currentScript;
+    var ctx = configScript ? configScript.getAttribute('data-context-path') || '' : '';
     var resultBox = document.getElementById('taskResult');   // div hiển thị thông báo chung
     var currentUser = null;      // user đang đăng nhập (lấy từ /api/v1/auth/me)
     var seriesList = [];         // danh sách series

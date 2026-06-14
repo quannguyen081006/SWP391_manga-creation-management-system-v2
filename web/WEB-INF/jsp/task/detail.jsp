@@ -117,7 +117,7 @@
                 <button class="btn success-soft" type="submit">Approve</button>
             </form>
             <form method="post" action="${pageContext.request.contextPath}/main/tasks/${task.id}/reject">
-                <button class="btn danger-soft" type="submit" onclick="return confirm('Reject this task?');">Reject</button>
+                <button class="btn danger-soft" type="submit" data-confirm="Reject this task?">Reject</button>
             </form>
         </div>
     </div>
@@ -170,20 +170,16 @@
     canSubmit: assistant có thể bấm Submit không
     page-submission.js dùng các flag này để ẩn/hiện nút, khóa slot khi không có quyền
 --%>
-<script>
-const PAGE_TASK = {
-    taskId: ${task.id},
-    chapterId: ${task.chapterId},
-    pageStart: ${task.pageRangeStart},
-    pageEnd: ${task.pageRangeEnd},
-    taskType: '${task.taskType}',
-    status: '${task.status}',
-    canUpdate: ${canAssistantUpdate},
-    canSubmit: ${canAssistantSubmit},
-    ctx: '${pageContext.request.contextPath}'
-};
-</script>
-<script src="${pageContext.request.contextPath}/assets/js/chaptertask/page-submission.js?v=20260605fix1"></script>
+<script src="${pageContext.request.contextPath}/assets/js/chaptertask/page-submission.js?v=20260605fix1"
+        data-task-id="${task.id}"
+        data-chapter-id="${task.chapterId}"
+        data-page-start="${task.pageRangeStart}"
+        data-page-end="${task.pageRangeEnd}"
+        data-task-type="${task.taskType}"
+        data-status="${task.status}"
+        data-can-update="${canAssistantUpdate}"
+        data-can-submit="${canAssistantSubmit}"
+        data-context-path="${pageContext.request.contextPath}"></script>
 
 <jsp:include page="../common/footer.jsp" />
 </body>

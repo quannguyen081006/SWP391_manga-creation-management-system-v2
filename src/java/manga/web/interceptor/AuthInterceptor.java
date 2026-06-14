@@ -33,6 +33,7 @@ public class AuthInterceptor implements HandlerInterceptor {
             return true;
         }
 
+        //check session
         HttpSession session = request.getSession(false);
         AuthenticatedUser user = null;
         if (session != null && session.getAttribute("AUTH_USER") instanceof AuthenticatedUser) {
@@ -49,6 +50,7 @@ public class AuthInterceptor implements HandlerInterceptor {
             return false;
         }
 
+        //dã login, check RBAC
         request.setAttribute("AUTH_USER_CHECKED", user);
         preventCachedAuthenticatedPage(response, uri);
 
@@ -102,6 +104,9 @@ public class AuthInterceptor implements HandlerInterceptor {
             return user.hasRole("ADMIN") || user.hasRole("EDITORIAL_BOARD");
         }
         if (path.startsWith("/main/ranking")) {
+            return true;
+        }
+        if (path.startsWith("/main/profile")) {
             return true;
         }
         if (path.startsWith("/main/tasks")) {

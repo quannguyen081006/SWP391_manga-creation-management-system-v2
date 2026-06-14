@@ -50,9 +50,9 @@
     - btnManuscriptWorkspace: link sang trang review manuscript
 --%>
 <div class="chapter-detail-inline-7">
-    <button id="btnDelete" class="btn small chapter-detail-inline-8" type="button" style="display:none;">Delete chapter</button>
-    <button id="btnMarkDone" class="btn primary chapter-detail-inline-9" type="button" style="display:none;">Submit for review</button>
-    <a id="btnManuscriptWorkspace" href="#" class="btn small chapter-detail-inline-10" style="display:none;">📝 Manuscript Workspace</a>
+    <button id="btnDelete" class="btn small chapter-detail-inline-8 is-hidden-initial" type="button">Delete chapter</button>
+    <button id="btnMarkDone" class="btn primary chapter-detail-inline-9 is-hidden-initial" type="button">Submit for review</button>
+    <a id="btnManuscriptWorkspace" href="#" class="btn small chapter-detail-inline-10 is-hidden-initial">📝 Manuscript Workspace</a>
 </div>
 
 <div class="chapter-workspace">
@@ -173,7 +173,7 @@
     BR-CHP-02: deadline phải cách publication date ít nhất 14 ngày
 --%>
         <div id="tabEdit" class="chapter-tab-panel chapter-detail-inline-28">
-            <form id="chapterUpdateForm" class="form-grid chapter-inline-update-form" onsubmit="return false;">
+            <form id="chapterUpdateForm" class="form-grid chapter-inline-update-form" data-prevent-submit>
                 <input name="chapterId" type="hidden" id="updateChapterId" />
                 <label class="field-label" for="updateTitle">Title</label>
                 <input id="updateTitle" name="title" type="text" required />
@@ -400,12 +400,8 @@ Mở khi: click "Compare" trên page slot đã có lịch sử upload--%>
     Cần thiết để fetch() gọi đúng API URL khi app deploy trên subdirectory
     Đặt trước chapter-detail.js để JS đọc được ngay khi load
 --%>
-<script>
-window.CHAPTER_DETAIL_CONFIG = {
-    contextPath: '${pageContext.request.contextPath}'
-};
-</script>
-<script src="${pageContext.request.contextPath}/assets/js/chaptertask/chapter-detail.js?v=20260608split"></script>
+<script src="${pageContext.request.contextPath}/assets/js/chaptertask/chapter-detail.js?v=20260608split"
+        data-context-path="${pageContext.request.contextPath}"></script>
 
 <jsp:include page="../common/footer.jsp" />
 </body>

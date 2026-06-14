@@ -6,6 +6,7 @@
     <meta charset="UTF-8">
     <title>User Form</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/user.css" />
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
@@ -96,7 +97,6 @@
 </div>
 
 <%-- Shared role-assignment behavior; create radios need no combination enforcement. --%>
-<script src="${pageContext.request.contextPath}/assets/role-assignment.js"></script>
 <jsp:include page="../common/footer.jsp" />
 </body>
 </html>

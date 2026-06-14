@@ -6,6 +6,7 @@
     <meta charset="UTF-8">
     <title>Edit Proposal</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/proposal.css" />
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
@@ -36,7 +37,7 @@
         <label>Approximate Chapter</label>
         <input type="number" name="approximateChapter" min="1" value="${proposal.approximateChapter}" required />
 
-        <div style="display:flex; gap:10px; margin-top:8px;">
+        <div class="proposal-form-actions">
             <button class="btn primary" type="submit">Save Draft</button>
             <a class="btn" href="${pageContext.request.contextPath}/main/proposals/${proposal.id}">Cancel</a>
         </div>
