@@ -66,21 +66,25 @@ function scrollToPage(pageId) {
 
 function showRejectModal() {
     const modal = document.getElementById('rejectModal');
-    if (modal) modal.classList.remove('is-hidden');
+    if (modal)
+        modal.classList.remove('is-hidden');
 }
 
 function hideRejectModal() {
     const modal = document.getElementById('rejectModal');
-    if (modal) modal.classList.add('is-hidden');
+    if (modal)
+        modal.classList.add('is-hidden');
 }
 
 function initializeWorkspacePage() {
     document.querySelectorAll('img.page-image[data-original-url]').forEach(function (image) {
         const originalUrl = image.getAttribute('data-original-url');
-        if (originalUrl) image.src = imageUrl(originalUrl);
+        if (originalUrl)
+            image.src = imageUrl(originalUrl);
     });
 
-    if (window.MangaUi) window.MangaUi.applyDynamicStyles(document);
+    if (window.MangaUi)
+        window.MangaUi.applyDynamicStyles(document);
 
     document.addEventListener('click', function (event) {
         const rejectOpen = event.target.closest ? event.target.closest('[data-open-reject-modal]') : null;
@@ -114,6 +118,66 @@ function initializeWorkspacePage() {
                     focusTarget.getAttribute('data-severity')
                     );
         }
+    });
+    // Intercept replace-page form submissions
+    document.querySelectorAll('form[action*="/replace"]').forEach(function (form) {
+        form.addEventListener('submit', async function (event) {
+            event.preventDefault();
+
+            const pageCard = form.closest('.page-card');
+            if (!pageCard)
+                return;
+
+            const pageId = pageCard.id.replace('page-', '');
+            const img = document.getElementById('img-' + pageId);
+
+            const formData = new FormData(form);
+            const url = form.getAttribute('action');
+
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Replacing...';
+            }
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    body: formData   // multipart/form-data sent automatically
+                });
+
+                const result = await response.json();
+
+                if (result.success && result.data) {
+                    const newUrl = imageUrl(result.data.snapshotFileUrl);
+                    // Bust the browser cache so the new image is actually fetched
+                    img.src = newUrl + '?t=' + Date.now();
+                    img.setAttribute('data-original-url', result.data.snapshotFileUrl);
+
+                    // Optionally update the checksum/display-order meta text
+                    const meta = pageCard.querySelector('.page-info-meta');
+                    if (meta && result.data.snapshotChecksum) {
+                        meta.textContent =
+                                'Display Order: ' + result.data.displayOrder +
+                                ' | Checksum: ' + result.data.snapshotChecksum;
+                    }
+
+                    // Reset the file input so the user can replace again
+                    form.reset();
+                } else {
+                    alert('Replace failed: ' + (result.message || 'Unknown error'));
+                }
+            } catch (err) {
+                console.error('Replace page error:', err);
+                alert('Error replacing page. Please try again.');
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Replace Page';
+                }
+            }
+        });
     });
 }
 

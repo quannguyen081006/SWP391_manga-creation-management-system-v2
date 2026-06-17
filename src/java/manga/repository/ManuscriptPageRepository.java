@@ -13,27 +13,77 @@ import org.springframework.stereotype.Repository;
 
 /**
  * Repository for ManuscriptPage entity using JDBC pattern.
- * 
- * Provides data access methods for manuscript page management.
- * Pages are immutable snapshots of production assets.
+ *
+ * Provides data access methods for manuscript page management. Pages are
+ * immutable snapshots of production assets.
  */
 @Repository
 public class ManuscriptPageRepository {
-    
+
     @Autowired
     private DataSource dataSource;
-    
+
+    public ManuscriptPage findById(Long id) {
+        String sql
+                = "SELECT id, manuscriptVersionId, displayOrder, "
+                + "snapshotFileUrl, originalFileUrl, "
+                + "sourceChapterImageId, sourcePageTaskId, "
+                + "pageNumber, snapshotCreatedAt, snapshotChecksum "
+                + "FROM ManuscriptPage WHERE id = ?";
+
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setLong(1, id);
+
+            try ( ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return map(rs);
+                }
+            }
+
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot find manuscript page", ex);
+        }
+
+        return null;
+    }
+
+    public void update(ManuscriptPage page) {
+
+        String sql
+                = "UPDATE ManuscriptPage "
+                + "SET snapshotFileUrl = ?, "
+                + "originalFileUrl = ?, "
+                + "snapshotChecksum = ?, "
+                + "snapshotCreatedAt = GETDATE() "
+                + "WHERE id = ?";
+
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setString(1, page.getSnapshotFileUrl());
+            ps.setString(2, page.getOriginalFileUrl());
+            ps.setString(3, page.getSnapshotChecksum());
+            ps.setLong(4, page.getId());
+
+            ps.executeUpdate();
+
+        } catch (SQLException ex) {
+            throw new RuntimeException(
+                    "Cannot update manuscript page",
+                    ex);
+        }
+    }
+
     /**
      * Find all pages for a manuscript version, ordered by display order.
      */
     public List<ManuscriptPage> findByManuscriptVersionIdOrderByDisplayOrder(Long manuscriptVersionId) {
-        String sql = "SELECT id, manuscriptVersionId, displayOrder, snapshotFileUrl, originalFileUrl, sourceChapterImageId, sourcePageTaskId, pageNumber, snapshotCreatedAt, snapshotChecksum " +
-                    "FROM ManuscriptPage WHERE manuscriptVersionId = ? ORDER BY displayOrder ASC";
+        String sql = "SELECT id, manuscriptVersionId, displayOrder, snapshotFileUrl, originalFileUrl, sourceChapterImageId, sourcePageTaskId, pageNumber, snapshotCreatedAt, snapshotChecksum "
+                + "FROM ManuscriptPage WHERE manuscriptVersionId = ? ORDER BY displayOrder ASC";
         List<ManuscriptPage> results = new ArrayList<>();
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, manuscriptVersionId);
-            try (ResultSet rs = ps.executeQuery()) {
+            try ( ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     results.add(map(rs));
                 }
@@ -43,18 +93,17 @@ public class ManuscriptPageRepository {
         }
         return results;
     }
-    
+
     /**
      * Find a specific page by manuscript version and display order.
      */
     public ManuscriptPage findByManuscriptVersionIdAndDisplayOrder(Long manuscriptVersionId, Integer displayOrder) {
-        String sql = "SELECT id, manuscriptVersionId, displayOrder, snapshotFileUrl, originalFileUrl, sourceChapterImageId, sourcePageTaskId, pageNumber, snapshotCreatedAt, snapshotChecksum " +
-                    "FROM ManuscriptPage WHERE manuscriptVersionId = ? AND displayOrder = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+        String sql = "SELECT id, manuscriptVersionId, displayOrder, snapshotFileUrl, originalFileUrl, sourceChapterImageId, sourcePageTaskId, pageNumber, snapshotCreatedAt, snapshotChecksum "
+                + "FROM ManuscriptPage WHERE manuscriptVersionId = ? AND displayOrder = ?";
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, manuscriptVersionId);
             ps.setInt(2, displayOrder);
-            try (ResultSet rs = ps.executeQuery()) {
+            try ( ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     return map(rs);
                 }
@@ -64,16 +113,15 @@ public class ManuscriptPageRepository {
         }
         return null;
     }
-    
+
     /**
      * Verify snapshot integrity by checksum.
      */
     public boolean verifyChecksum(Long pageId, String expectedChecksum) {
         String sql = "SELECT snapshotChecksum FROM ManuscriptPage WHERE id = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, pageId);
-            try (ResultSet rs = ps.executeQuery()) {
+            try ( ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     String actualChecksum = rs.getString("snapshotChecksum");
                     return actualChecksum != null && actualChecksum.equals(expectedChecksum);
@@ -84,19 +132,18 @@ public class ManuscriptPageRepository {
         }
         return false;
     }
-    
+
     /**
-     * Find pages by source chapter image ID.
-     * Used for tracking which production assets are used in manuscripts.
+     * Find pages by source chapter image ID. Used for tracking which production
+     * assets are used in manuscripts.
      */
     public List<ManuscriptPage> findBySourceChapterImageId(Long sourceChapterImageId) {
-        String sql = "SELECT id, manuscriptVersionId, displayOrder, snapshotFileUrl, originalFileUrl, sourceChapterImageId, sourcePageTaskId, pageNumber, snapshotCreatedAt, snapshotChecksum " +
-                    "FROM ManuscriptPage WHERE sourceChapterImageId = ?";
+        String sql = "SELECT id, manuscriptVersionId, displayOrder, snapshotFileUrl, originalFileUrl, sourceChapterImageId, sourcePageTaskId, pageNumber, snapshotCreatedAt, snapshotChecksum "
+                + "FROM ManuscriptPage WHERE sourceChapterImageId = ?";
         List<ManuscriptPage> results = new ArrayList<>();
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, sourceChapterImageId);
-            try (ResultSet rs = ps.executeQuery()) {
+            try ( ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     results.add(map(rs));
                 }
@@ -106,16 +153,15 @@ public class ManuscriptPageRepository {
         }
         return results;
     }
-    
+
     /**
      * Count pages for a manuscript version.
      */
     public long countByManuscriptVersionId(Long manuscriptVersionId) {
         String sql = "SELECT COUNT(*) FROM ManuscriptPage WHERE manuscriptVersionId = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, manuscriptVersionId);
-            try (ResultSet rs = ps.executeQuery()) {
+            try ( ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     return rs.getLong(1);
                 }
@@ -125,15 +171,14 @@ public class ManuscriptPageRepository {
         }
         return 0;
     }
-    
+
     /**
      * Create new manuscript page.
      */
     public long create(ManuscriptPage page) {
-        String sql = "INSERT INTO ManuscriptPage (manuscriptVersionId, displayOrder, snapshotFileUrl, originalFileUrl, sourceChapterImageId, sourcePageTaskId, pageNumber, snapshotCreatedAt, snapshotChecksum) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, GETDATE(), ?)";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
+        String sql = "INSERT INTO ManuscriptPage (manuscriptVersionId, displayOrder, snapshotFileUrl, originalFileUrl, sourceChapterImageId, sourcePageTaskId, pageNumber, snapshotCreatedAt, snapshotChecksum) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, GETDATE(), ?)";
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
             ps.setLong(1, page.getManuscriptVersionId());
             ps.setInt(2, page.getDisplayOrder());
             ps.setString(3, page.getSnapshotFileUrl());
@@ -151,32 +196,32 @@ public class ManuscriptPageRepository {
             ps.setInt(7, page.getPageNumber());
             ps.setString(8, page.getSnapshotChecksum());
             ps.executeUpdate();
-            try (ResultSet rs = ps.getGeneratedKeys()) {
+            try ( ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
                     return rs.getLong(1);
                 }
             }
         } catch (SQLException ex) {
+            ex.printStackTrace();
             throw new RuntimeException("Cannot create manuscript page", ex);
         }
         throw new RuntimeException("Failed to create manuscript page");
     }
-    
+
     /**
-     * Delete all pages for a manuscript version.
-     * Used when deleting a manuscript version.
+     * Delete all pages for a manuscript version. Used when deleting a
+     * manuscript version.
      */
     public void deleteByManuscriptVersionId(Long manuscriptVersionId) {
         String sql = "DELETE FROM ManuscriptPage WHERE manuscriptVersionId = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, manuscriptVersionId);
             ps.executeUpdate();
         } catch (SQLException ex) {
             throw new RuntimeException("Cannot delete manuscript pages", ex);
         }
     }
-    
+
     private ManuscriptPage map(ResultSet rs) throws SQLException {
         ManuscriptPage page = new ManuscriptPage();
         page.setId(rs.getLong("id"));

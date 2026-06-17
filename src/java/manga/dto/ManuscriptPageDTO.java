@@ -14,7 +14,7 @@ public class ManuscriptPageDTO {
     private Long sourceChapterImageId;
     private Long sourcePageTaskId;
     private Integer pageNumber;
-    private LocalDateTime snapshotCreatedAt;
+    private String snapshotCreatedAt;
     private String snapshotChecksum;
 
     // Getters and Setters
@@ -82,11 +82,11 @@ public class ManuscriptPageDTO {
         this.pageNumber = pageNumber;
     }
 
-    public LocalDateTime getSnapshotCreatedAt() {
+    public String getSnapshotCreatedAt() {
         return snapshotCreatedAt;
     }
 
-    public void setSnapshotCreatedAt(LocalDateTime snapshotCreatedAt) {
+    public void setSnapshotCreatedAt(String snapshotCreatedAt) {
         this.snapshotCreatedAt = snapshotCreatedAt;
     }
 

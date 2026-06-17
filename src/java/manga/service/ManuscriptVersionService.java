@@ -24,7 +24,7 @@ import java.util.List;
 
 /**
  * Service for ManuscriptVersion entity.
- * 
+ *
  * Implements the new visual workspace workflow for manuscript management.
  * Enforces business rules BR-1 through BR-9.
  */
@@ -49,7 +49,7 @@ public class ManuscriptVersionService {
 
     @Autowired
     private NotificationService notificationService;
-    
+
     @Autowired
     private ReviewDecisionRepository reviewDecisionRepository;
 
@@ -63,9 +63,9 @@ public class ManuscriptVersionService {
     private DataSource dataSource;
 
     /**
-     * Validate that manuscript version can be edited.
-     * Centralized immutability enforcement.
-     * Enforces review locking rules: DRAFT and IN_PROGRESS are editable, others are not.
+     * Validate that manuscript version can be edited. Centralized immutability
+     * enforcement. Enforces review locking rules: DRAFT and IN_PROGRESS are
+     * editable, others are not.
      */
     private void validateEditable(Long manuscriptVersionId) {
         ManuscriptVersion version = manuscriptVersionRepository.findById(manuscriptVersionId);
@@ -76,28 +76,32 @@ public class ManuscriptVersionService {
     }
 
     /**
-     * Validate that manuscript version can be modified (add pages, reorder, etc.).
-     * Enforces review locking rules: only DRAFT and IN_PROGRESS are mutable.
-     * SUBMITTED_FOR_REVIEW and UNDER_REVIEW are read-only.
-     * APPROVED, PUBLISHED, REJECTED, ARCHIVED are immutable.
+     * Validate that manuscript version can be modified (add pages, reorder,
+     * etc.). Enforces review locking rules: only DRAFT and IN_PROGRESS are
+     * mutable. SUBMITTED_FOR_REVIEW and UNDER_REVIEW are read-only. APPROVED,
+     * PUBLISHED, REJECTED, ARCHIVED are immutable.
      */
     private void validateMutable(Long manuscriptVersionId) {
         ManuscriptVersion version = manuscriptVersionRepository.findById(manuscriptVersionId);
         if (version == null) {
             throw new BusinessRuleException("Manuscript version not found");
         }
+        if (version.getStatus() != ManuscriptStatus.DRAFT) {
+            throw new BusinessRuleException("Only DRAFT manuscript can be modified");
+        }
         version.validateMutable();
     }
 
     /**
-     * Create new manuscript workspace (idempotent).
-     * BR-1: Only chapters in EDITORIAL_REVIEW can create manuscripts
-     * BR-2: Only one active workspace per chapter (DRAFT, IN_PROGRESS, SUBMITTED_FOR_REVIEW, UNDER_REVIEW)
-     * 
-     * If an active workspace already exists, returns the existing one.
-     * Only creates a new workspace if no active workspace exists.
-     * 
-     * Transaction Safety: Uses SELECT FOR UPDATE locking to prevent race conditions.
+     * Create new manuscript workspace (idempotent). BR-1: Only chapters in
+     * EDITORIAL_REVIEW can create manuscripts BR-2: Only one active workspace
+     * per chapter (DRAFT, IN_PROGRESS, SUBMITTED_FOR_REVIEW, UNDER_REVIEW)
+     *
+     * If an active workspace already exists, returns the existing one. Only
+     * creates a new workspace if no active workspace exists.
+     *
+     * Transaction Safety: Uses SELECT FOR UPDATE locking to prevent race
+     * conditions.
      */
     @Transactional
     public ManuscriptVersion createWorkspace(Long chapterId, AuthenticatedUser user) {
@@ -152,18 +156,22 @@ public class ManuscriptVersionService {
     }
 
     /**
-     * Get active workspace for a chapter.
-     * Returns the latest manuscript version with status in: DRAFT, IN_PROGRESS, SUBMITTED_FOR_REVIEW, UNDER_REVIEW
+     * Get active workspace for a chapter. Returns the latest manuscript version
+     * with status in: DRAFT, IN_PROGRESS, SUBMITTED_FOR_REVIEW, UNDER_REVIEW
      * Returns null if no active workspace exists.
      */
     public ManuscriptVersion getActiveWorkspace(Long chapterId) {
         return manuscriptVersionRepository.findActiveWorkspace(chapterId);
     }
 
+    public ManuscriptVersion getLatestVersion(long chapterId) {
+        return manuscriptVersionRepository.findLatestByChapterId(chapterId);
+    }
+
     /**
-     * Bulk import all chapter pages into manuscript workspace.
-     * Imports final chapter pages directly without re-uploading.
-     * Preserves page ordering from chapter.
+     * Bulk import all chapter pages into manuscript workspace. Imports final
+     * chapter pages directly without re-uploading. Preserves page ordering from
+     * chapter.
      */
     public List<ManuscriptPage> importChapterPages(Long manuscriptVersionId, Long chapterId, AuthenticatedUser user) {
         validateMutable(manuscriptVersionId);
@@ -210,20 +218,26 @@ public class ManuscriptVersionService {
         }
 
         // Update total page count
-        version.setTotalPageCount(importedPages.size());
-        manuscriptVersionRepository.updateStatus(manuscriptVersionId, version.getStatus());
+        int totalPages = importedPages.size();
+
+        version.setTotalPageCount(totalPages);
+
+        manuscriptVersionRepository.updateTotalPageCount(
+                manuscriptVersionId,
+                totalPages
+        );
 
         return importedPages;
     }
 
     /**
-     * Add page snapshot to manuscript.
-     * Creates immutable copy of production asset (BR-7).
+     * Add page snapshot to manuscript. Creates immutable copy of production
+     * asset (BR-7).
      */
     public ManuscriptPage addPageSnapshot(Long manuscriptVersionId, Long chapterImageId,
-                                           Integer displayOrder, AuthenticatedUser user) {
+            Integer displayOrder, AuthenticatedUser user) {
         validateMutable(manuscriptVersionId);
-        
+
         ManuscriptVersion version = manuscriptVersionRepository.findById(manuscriptVersionId);
         if (version == null) {
             throw new BusinessRuleException("Manuscript version not found");
@@ -266,7 +280,7 @@ public class ManuscriptVersionService {
      */
     public void reorderPages(Long manuscriptVersionId, List<Integer> pageOrders, AuthenticatedUser user) {
         validateMutable(manuscriptVersionId);
-        
+
         ManuscriptVersion version = manuscriptVersionRepository.findById(manuscriptVersionId);
         if (version == null) {
             throw new BusinessRuleException("Manuscript version not found");
@@ -278,7 +292,7 @@ public class ManuscriptVersionService {
 
         // Get current pages
         List<ManuscriptPage> pages = manuscriptPageRepository.findByManuscriptVersionIdOrderByDisplayOrder(manuscriptVersionId);
-        
+
         if (pages.size() != pageOrders.size()) {
             throw new BusinessRuleException("Page order count mismatch");
         }
@@ -293,8 +307,7 @@ public class ManuscriptVersionService {
 
     private void updatePageDisplayOrder(Long pageId, Integer newDisplayOrder) {
         String sql = "UPDATE ManuscriptPage SET displayOrder = ? WHERE id = ?";
-        try (java.sql.Connection conn = dataSource.getConnection();
-             java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( java.sql.Connection conn = dataSource.getConnection();  java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, newDisplayOrder);
             ps.setLong(2, pageId);
             ps.executeUpdate();
@@ -320,16 +333,17 @@ public class ManuscriptVersionService {
     }
 
     /**
-     * Submit manuscript for review.
-     * Locks production assets (BR-9).
-     * Validates status transition: DRAFT/IN_PROGRESS → SUBMITTED_FOR_REVIEW → UNDER_REVIEW
-     * 
+     * Submit manuscript for review. Locks production assets (BR-9). Validates
+     * status transition: DRAFT/IN_PROGRESS → SUBMITTED_FOR_REVIEW →
+     * UNDER_REVIEW
+     *
      * ATOMIC TRANSACTION: All operations must succeed or all must rollback.
-     * Uses manual transaction handling to ensure atomicity across repository calls.
+     * Uses manual transaction handling to ensure atomicity across repository
+     * calls.
      */
     public void submitForReview(Long manuscriptVersionId, AuthenticatedUser user) {
         validateLatestVersion(manuscriptVersionId);
-        
+
         ManuscriptVersion version = manuscriptVersionRepository.findById(manuscriptVersionId);
         if (version == null) {
             throw new BusinessRuleException("Manuscript version not found");
@@ -362,13 +376,13 @@ public class ManuscriptVersionService {
             conn = dataSource.getConnection();
             oldAutoCommit = conn.getAutoCommit();
             conn.setAutoCommit(false);
-            
+
             // Lock production (BR-9)
             lockProduction(version.getChapterId(), manuscriptVersionId, user.getId());
 
             // Update status to SUBMITTED_FOR_REVIEW first, then UNDER_REVIEW
             manuscriptVersionRepository.updateStatus(manuscriptVersionId, ManuscriptStatus.SUBMITTED_FOR_REVIEW);
-            
+
             // Immediately transition to UNDER_REVIEW for reviewer assignment
             manuscriptVersionRepository.updateSubmit(manuscriptVersionId, user.getId());
 
@@ -378,7 +392,7 @@ public class ManuscriptVersionService {
 
             // Commit transaction - all operations succeeded
             conn.commit();
-            
+
         } catch (BusinessRuleException ex) {
             // Business rule violations should not rollback - they're validation errors
             throw ex;
@@ -391,7 +405,7 @@ public class ManuscriptVersionService {
             } catch (SQLException rollbackEx) {
                 System.err.println("Error rolling back transaction: " + rollbackEx.getMessage());
             }
-            
+
             // Re-throw with context
             throw new BusinessRuleException("SUBMIT_FOR_REVIEW_FAILED: " + ex.getMessage());
         } finally {
@@ -411,11 +425,11 @@ public class ManuscriptVersionService {
         if (tantouId != null) {
             try {
                 notificationService.notifyUser(
-                    tantouId,
-                    "MANUSCRIPT_SUBMITTED",
-                    "Manuscript v" + version.getVersion() + " submitted for review",
-                    manuscriptVersionId,
-                    "MANUSCRIPT"
+                        tantouId,
+                        "MANUSCRIPT_SUBMITTED",
+                        "Manuscript v" + version.getVersion() + " submitted for review",
+                        manuscriptVersionId,
+                        "MANUSCRIPT"
                 );
             } catch (Exception ex) {
                 // Notification failure should not fail the entire operation
@@ -425,11 +439,10 @@ public class ManuscriptVersionService {
     }
 
     /**
-     * Approve manuscript.
-     * BR-4: APPROVED manuscripts cannot be mutated
-     * BR-6: Publishing requires APPROVED status
-     * Approval Gate: Cannot approve while OPEN annotations exist
-     * Validates status transition: UNDER_REVIEW → APPROVED
+     * Approve manuscript. BR-4: APPROVED manuscripts cannot be mutated BR-6:
+     * Publishing requires APPROVED status Approval Gate: Cannot approve while
+     * OPEN annotations exist Validates status transition: UNDER_REVIEW →
+     * APPROVED
      */
     public void approve(Long manuscriptVersionId, AuthenticatedUser user) {
         validateLatestVersion(manuscriptVersionId);
@@ -451,8 +464,8 @@ public class ManuscriptVersionService {
         long openAnnotationCount = annotationServiceV2.countOpenAnnotations(manuscriptVersionId);
         if (openAnnotationCount > 0) {
             throw new BusinessRuleException(
-                "Cannot approve manuscript with " + openAnnotationCount + " open annotation(s). " +
-                "All annotations must be resolved or dismissed before approval."
+                    "Cannot approve manuscript with " + openAnnotationCount + " open annotation(s). "
+                    + "All annotations must be resolved or dismissed before approval."
             );
         }
 
@@ -484,18 +497,17 @@ public class ManuscriptVersionService {
         Long mangakaId = chapterRepository.getChapterMangaka(version.getChapterId());
         if (mangakaId != null) {
             notificationService.notifyUser(
-                mangakaId,
-                "MANUSCRIPT_APPROVED",
-                "Manuscript approved for chapter #" + version.getChapterId(),
-                manuscriptVersionId,
-                "MANUSCRIPT"
+                    mangakaId,
+                    "MANUSCRIPT_APPROVED",
+                    "Manuscript approved for chapter #" + version.getChapterId(),
+                    manuscriptVersionId,
+                    "MANUSCRIPT"
             );
         }
     }
 
     /**
-     * Publish manuscript.
-     * BR-6: Publishing requires APPROVED status
+     * Publish manuscript. BR-6: Publishing requires APPROVED status
      */
     public void publish(Long manuscriptVersionId, AuthenticatedUser user) {
         ManuscriptVersion version = manuscriptVersionRepository.findById(manuscriptVersionId);
@@ -514,23 +526,22 @@ public class ManuscriptVersionService {
         Long mangakaId = chapterRepository.getChapterMangaka(version.getChapterId());
         if (mangakaId != null) {
             notificationService.notifyUser(
-                mangakaId,
-                "MANUSCRIPT_PUBLISHED",
-                "Manuscript published for chapter #" + version.getChapterId(),
-                manuscriptVersionId,
-                "MANUSCRIPT"
+                    mangakaId,
+                    "MANUSCRIPT_PUBLISHED",
+                    "Manuscript published for chapter #" + version.getChapterId(),
+                    manuscriptVersionId,
+                    "MANUSCRIPT"
             );
         }
     }
 
     /**
-     * Reject manuscript.
-     * BR-3: REJECTED manuscripts cannot be mutated
-     * Validates status transition: UNDER_REVIEW → REJECTED
+     * Reject manuscript. BR-3: REJECTED manuscripts cannot be mutated Validates
+     * status transition: UNDER_REVIEW → REJECTED
      */
     public void reject(Long manuscriptVersionId, String feedback, AuthenticatedUser user) {
         validateLatestVersion(manuscriptVersionId);
-        
+
         ManuscriptVersion version = manuscriptVersionRepository.findById(manuscriptVersionId);
         if (version == null) {
             throw new BusinessRuleException("Manuscript version not found");
@@ -572,18 +583,18 @@ public class ManuscriptVersionService {
         Long mangakaId = chapterRepository.getChapterMangaka(version.getChapterId());
         if (mangakaId != null) {
             notificationService.notifyUser(
-                mangakaId,
-                "MANUSCRIPT_REJECTED",
-                "Manuscript rejected. Feedback: " + feedback,
-                manuscriptVersionId,
-                "MANUSCRIPT"
+                    mangakaId,
+                    "MANUSCRIPT_REJECTED",
+                    "Manuscript rejected. Feedback: " + feedback,
+                    manuscriptVersionId,
+                    "MANUSCRIPT"
             );
         }
     }
 
     /**
-     * Create new version after rejection.
-     * BR-3: Previous REJECTED version remains immutable
+     * Create new version after rejection. BR-3: Previous REJECTED version
+     * remains immutable
      */
     public ManuscriptVersion createNewVersion(Long chapterId, AuthenticatedUser user) {
         // Validate chapterId before any database operations
@@ -624,17 +635,58 @@ public class ManuscriptVersionService {
             ManuscriptPage newPage = new ManuscriptPage();
             newPage.setManuscriptVersionId(versionId);
             newPage.setDisplayOrder(prevPage.getDisplayOrder());
+            newPage.setPageNumber(prevPage.getPageNumber());
             newPage.setSnapshotFileUrl(prevPage.getSnapshotFileUrl());
             newPage.setOriginalFileUrl(prevPage.getOriginalFileUrl());
             newPage.setSnapshotChecksum(prevPage.getSnapshotChecksum());
             newPage.setSnapshotCreatedAt(LocalDateTime.now());
+            newPage.setSourceChapterImageId(prevPage.getSourceChapterImageId());
+            newPage.setSourcePageTaskId(prevPage.getSourcePageTaskId());
             manuscriptPageRepository.create(newPage);
         }
 
-        version.setTotalPageCount(previousPages.size());
-        manuscriptVersionRepository.updateStatus(versionId, version.getStatus());
+        int totalPages = previousPages.size();
+
+        version.setTotalPageCount(totalPages);
+
+        manuscriptVersionRepository.updateTotalPageCount(
+                versionId,
+                totalPages
+        );
 
         return version;
+    }
+
+    public ManuscriptPage replacePage(
+            Long pageId,
+            String fileUrl,
+            String checksum
+    ) {
+
+        ManuscriptPage page
+                = manuscriptPageRepository
+                        .findById(pageId);
+
+        if (page == null) {
+
+            throw new BusinessRuleException(
+                    "Page not found"
+            );
+        }
+
+        validateMutable(
+                page.getManuscriptVersionId()
+        );
+
+        page.setSnapshotFileUrl(fileUrl);
+
+        page.setOriginalFileUrl(fileUrl);
+
+        page.setSnapshotChecksum(checksum);
+
+        manuscriptPageRepository.update(page);
+
+        return page;
     }
 
     /**
@@ -666,9 +718,9 @@ public class ManuscriptVersionService {
     }
 
     /**
-     * Phase 9: Version Comparison - Compare two manuscript versions.
-     * Identifies added pages, removed pages, changed pages, and reordered pages.
-     * Returns a comparison result with detailed differences.
+     * Phase 9: Version Comparison - Compare two manuscript versions. Identifies
+     * added pages, removed pages, changed pages, and reordered pages. Returns a
+     * comparison result with detailed differences.
      */
     public manga.dto.VersionComparisonDTO compareVersions(Long versionId1, Long versionId2) {
         ManuscriptVersion v1 = manuscriptVersionRepository.findById(versionId1);
@@ -726,13 +778,15 @@ public class ManuscriptVersionService {
 
         // Identify changed and reordered pages
         for (ManuscriptPage p1 : pages1) {
-            if (p1.getSourceChapterImageId() == null) continue;
+            if (p1.getSourceChapterImageId() == null) {
+                continue;
+            }
 
             ManuscriptPage p2 = pages2BySource.get(p1.getSourceChapterImageId());
             if (p2 != null) {
                 // Check if page changed (different snapshot)
-                if (!p1.getSnapshotFileUrl().equals(p2.getSnapshotFileUrl()) ||
-                    !p1.getSnapshotChecksum().equals(p2.getSnapshotChecksum())) {
+                if (!p1.getSnapshotFileUrl().equals(p2.getSnapshotFileUrl())
+                        || !p1.getSnapshotChecksum().equals(p2.getSnapshotChecksum())) {
                     comparison.getChangedPages().add(mapToPageComparisonDTO(p2, "CHANGED"));
                 }
 
@@ -770,8 +824,9 @@ public class ManuscriptVersionService {
     }
 
     /**
-     * Phase 10: Review Dashboard - Get review progress summary for manuscript version.
-     * Returns comprehensive review status including version info, page counts, annotation counts, and progress.
+     * Phase 10: Review Dashboard - Get review progress summary for manuscript
+     * version. Returns comprehensive review status including version info, page
+     * counts, annotation counts, and progress.
      */
     public manga.dto.ReviewDashboardDTO getReviewDashboard(Long manuscriptVersionId) {
         ManuscriptVersion version = manuscriptVersionRepository.findById(manuscriptVersionId);
@@ -829,10 +884,9 @@ public class ManuscriptVersionService {
 
     private long getTotalAnnotationCount(Long manuscriptVersionId) {
         String sql = "SELECT COUNT(*) FROM Annotation WHERE manuscriptVersionId = ?";
-        try (java.sql.Connection conn = dataSource.getConnection();
-             java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( java.sql.Connection conn = dataSource.getConnection();  java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, manuscriptVersionId);
-            try (java.sql.ResultSet rs = ps.executeQuery()) {
+            try ( java.sql.ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     return rs.getLong(1);
                 }
@@ -844,8 +898,8 @@ public class ManuscriptVersionService {
     }
 
     /**
-     * Get candidate chapter images for manuscript builder.
-     * Returns approved chapter images that can be used to build manuscript pages.
+     * Get candidate chapter images for manuscript builder. Returns approved
+     * chapter images that can be used to build manuscript pages.
      */
     public List<manga.dto.chaptertask.ChapterImageDTO> getCandidatePages(Long chapterId) {
         // Validate chapter is in EDITORIAL_REVIEW
@@ -856,18 +910,17 @@ public class ManuscriptVersionService {
 
         // Query one latest approved chapter image per page number.
         String sql = "SELECT id, chapterId, pageNumber, fileUrl, uploadedAt "
-                    + "FROM ("
-                    + "  SELECT id, chapterId, pageNumber, fileUrl, uploadedAt, "
-                    + "         ROW_NUMBER() OVER (PARTITION BY pageNumber ORDER BY uploadedAt DESC, id DESC) AS rn "
-                    + "  FROM ChapterImage "
-                    + "  WHERE chapterId = ? AND isActive = 1 AND imageType = 'PAGE' AND pageNumber IS NOT NULL"
-                    + ") x "
-                    + "WHERE rn = 1 ORDER BY pageNumber ASC";
+                + "FROM ("
+                + "  SELECT id, chapterId, pageNumber, fileUrl, uploadedAt, "
+                + "         ROW_NUMBER() OVER (PARTITION BY pageNumber ORDER BY uploadedAt DESC, id DESC) AS rn "
+                + "  FROM ChapterImage "
+                + "  WHERE chapterId = ? AND isActive = 1 AND imageType = 'PAGE' AND pageNumber IS NOT NULL"
+                + ") x "
+                + "WHERE rn = 1 ORDER BY pageNumber ASC";
         List<manga.dto.chaptertask.ChapterImageDTO> results = new java.util.ArrayList<>();
-        try (java.sql.Connection conn = dataSource.getConnection();
-             java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( java.sql.Connection conn = dataSource.getConnection();  java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, chapterId);
-            try (java.sql.ResultSet rs = ps.executeQuery()) {
+            try ( java.sql.ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     manga.dto.chaptertask.ChapterImageDTO dto = new manga.dto.chaptertask.ChapterImageDTO();
                     dto.setId(rs.getLong("id"));
@@ -893,8 +946,9 @@ public class ManuscriptVersionService {
     }
 
     /**
-     * Find all manuscript versions with UNDER_REVIEW status, optionally filtered by series assignments.
-     * Used for Tantou review inbox.
+     * Find all manuscript versions with UNDER_REVIEW status, optionally
+     * filtered by series assignments. Used for Tantou review inbox.
+     *
      * @param tantouUserId the Tantou user ID (null for admin to see all)
      * @param isAdmin whether the user is an admin
      * @return list of under-review manuscript versions
@@ -908,7 +962,7 @@ public class ManuscriptVersionService {
         if (chapterId == null || chapterId == 0) {
             throw new BusinessRuleException("Cannot create production lock with invalid chapterId: " + chapterId);
         }
-        
+
         ManuscriptProductionLock lock = new ManuscriptProductionLock();
         lock.setChapterId(chapterId);
         lock.setManuscriptVersionId(manuscriptVersionId);
@@ -931,4 +985,3 @@ public class ManuscriptVersionService {
         return "placeholder-checksum-" + System.currentTimeMillis();
     }
 }
-

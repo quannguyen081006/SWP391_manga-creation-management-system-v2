@@ -66,9 +66,11 @@
 
     /** Escape HTML đặc biệt để tránh XSS khi render vào innerHTML */
     function escapeHtml(v) {
-        if (v === null || v === undefined) { return ''; }
+        if (v === null || v === undefined) {
+            return '';
+        }
         return String(v).replace(/[&<>"]/g, function (c) {
-            return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c];
+            return ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c];
         });
     }
 
@@ -77,7 +79,9 @@
      * Hỗ trợ: timestamp số, chuỗi ISO (có 'T'), hoặc chuỗi ngày sẵn.
      */
     function formatDate(v) {
-        if (!v) { return ''; }
+        if (!v) {
+            return '';
+        }
         var s = String(v);
         if (/^\d+$/.test(s)) {
             var date = new Date(Number(s));
@@ -87,7 +91,9 @@
                 return date.getFullYear() + '-' + (month.length < 2 ? '0' + month : month) + '-' + (day.length < 2 ? '0' + day : day);
             }
         }
-        if (s.indexOf('T') > -1) { return s.substring(0, 10); }
+        if (s.indexOf('T') > -1) {
+            return s.substring(0, 10);
+        }
         return s;
     }
 
@@ -96,7 +102,9 @@
      * Dùng để hiển thị avatar assistant trên page slot.
      */
     function initials(name) {
-        if (!name) { return '?'; }
+        if (!name) {
+            return '?';
+        }
         var parts = String(name).trim().split(/\s+/).filter(Boolean);
         if (parts.length >= 2) {
             return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
@@ -113,7 +121,9 @@
     /** Tính số ngày còn lại đến deadline. Âm = đã quá hạn. */
     function daysUntilDate(value) {
         var due = dateOnly(value);
-        if (!due) { return null; }
+        if (!due) {
+            return null;
+        }
         var today = new Date();
         today.setHours(0, 0, 0, 0);
         return Math.ceil((due - today) / 86400000);
@@ -130,7 +140,9 @@
     /** Cộng thêm `days` ngày vào một giá trị ngày, trả về YYYY-MM-DD */
     function addDaysIso(value, days) {
         var date = dateOnly(value);
-        if (!date) { return ''; }
+        if (!date) {
+            return '';
+        }
         date.setDate(date.getDate() + days);
         var month = String(date.getMonth() + 1);
         var day = String(date.getDate());
@@ -146,7 +158,9 @@
      * Hỗ trợ cả field role đơn lẫn mảng roles (string hoặc object).
      */
     function hasRole(role) {
-        if (!currentUser) { return false; }
+        if (!currentUser) {
+            return false;
+        }
         if (String(currentUser.role || currentUser.activeRole || currentUser.currentRole || '').toUpperCase() === role) {
             return true;
         }
@@ -180,7 +194,7 @@
      * Throws Error nếu response không OK hoặc body.success === false.
      */
     async function callApi(method, path, data) {
-        var opts = { method: method, headers: { 'Accept': 'application/json' } };
+        var opts = {method: method, headers: {'Accept': 'application/json'}};
         var url = ctx + path;
         if (data) {
             var p = new URLSearchParams(data).toString();
@@ -194,7 +208,10 @@
         var res = await fetch(url, opts);
         var text = await res.text();
         var body = null;
-        try { body = text ? JSON.parse(text) : null; } catch (e) {}
+        try {
+            body = text ? JSON.parse(text) : null;
+        } catch (e) {
+        }
         if (!res.ok || (body && body.success === false)) {
             var msg = (body && (body.message || (body.errors && body.errors[0]))) || text || ('HTTP ' + res.status);
             throw new Error(msg);
@@ -217,10 +234,13 @@
             fd = new FormData();
             fd.append('file', formOrFile);
         }
-        var res = await fetch(ctx + path, { method: 'POST', headers: { 'Accept': 'application/json' }, body: fd });
+        var res = await fetch(ctx + path, {method: 'POST', headers: {'Accept': 'application/json'}, body: fd});
         var text = await res.text();
         var body = null;
-        try { body = text ? JSON.parse(text) : null; } catch (e) {}
+        try {
+            body = text ? JSON.parse(text) : null;
+        } catch (e) {
+        }
         if (!res.ok || (body && body.success === false)) {
             var msg = (body && (body.message || (body.errors && body.errors[0]))) || text || ('HTTP ' + res.status);
             throw new Error(msg);
@@ -241,13 +261,17 @@
 
     /** Format enum status thành dạng Title Case (VD: IN_PROGRESS → "In Progress") */
     function formatStatus(s) {
-        return String(s || '').toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+        return String(s || '').toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, function (c) {
+            return c.toUpperCase();
+        });
     }
 
     /** Hiển thị / ẩn lỗi trong modal upload page (#pageUploadError) */
     function showPageUploadError(message) {
         var el = document.getElementById('pageUploadError');
-        if (!el) { return; }
+        if (!el) {
+            return;
+        }
         el.style.display = message ? 'block' : 'none';
         el.textContent = message || '';
     }
@@ -268,7 +292,9 @@
     /** Lấy stage tiếp theo có thể thực hiện sau completedStage hiện tại của slot */
     function nextAllowedStage(slot) {
         var current = normalizeStage(slot && slot.completedStage);
-        if (!current) { return pageStageOrder[0]; }
+        if (!current) {
+            return pageStageOrder[0];
+        }
         var idx = pageStageOrder.indexOf(current);
         return pageStageOrder[Math.min(idx + 1, pageStageOrder.length - 1)];
     }
@@ -279,7 +305,9 @@
      */
     function prepareStageSelect(slot) {
         var picker = document.getElementById('pageUploadStagePicker');
-        if (!picker) { return; }
+        if (!picker) {
+            return;
+        }
         var current = normalizeStage(slot && slot.completedStage);
         var currentIndex = current ? pageStageOrder.indexOf(current) : -1;
         var boxes = picker.querySelectorAll('input[type="checkbox"]');
@@ -298,7 +326,9 @@
      */
     function refreshStagePickerEnabled() {
         var picker = document.getElementById('pageUploadStagePicker');
-        if (!picker) { return; }
+        if (!picker) {
+            return;
+        }
         var boxes = picker.querySelectorAll('input[type="checkbox"]');
         var baseIndex = Number(picker.getAttribute('data-base-index') || '-1');
         var highest = baseIndex;
@@ -320,7 +350,9 @@
      */
     function selectedUploadStage(slot) {
         var picker = document.getElementById('pageUploadStagePicker');
-        if (!picker) { return ''; }
+        if (!picker) {
+            return '';
+        }
         var boxes = picker.querySelectorAll('input[type="checkbox"]');
         var highest = -1;
         for (var i = 0; i < boxes.length; i++) {
@@ -343,7 +375,9 @@
      */
     function syncStagePickerFromClick(changedBox) {
         var picker = document.getElementById('pageUploadStagePicker');
-        if (!picker || !changedBox) { return; }
+        if (!picker || !changedBox) {
+            return;
+        }
         var boxes = picker.querySelectorAll('input[type="checkbox"]');
         var changedIndex = pageStageOrder.indexOf(normalizeStage(changedBox.value));
         if (changedBox.checked) {
@@ -372,11 +406,11 @@
         var doneIndex = current ? pageStageOrder.indexOf(current) : -1;
         var activeIndex = Math.min(doneIndex + 1, pageStageOrder.length - 1);
         return '<div class="page-stage-track">'
-            + pageStageOrder.map(function (s, i) {
-                var cls = i <= doneIndex ? ' done' : (i === activeIndex ? ' current' : '');
-                return '<span class="page-stage-dot' + cls + '" title="' + escapeHtml(formatStatus(s)) + '">' + s.charAt(0) + '</span>';
-            }).join('')
-            + '</div>';
+                + pageStageOrder.map(function (s, i) {
+                    var cls = i <= doneIndex ? ' done' : (i === activeIndex ? ' current' : '');
+                    return '<span class="page-stage-dot' + cls + '" title="' + escapeHtml(formatStatus(s)) + '">' + s.charAt(0) + '</span>';
+                }).join('')
+                + '</div>';
     }
 
     // ============================================================
@@ -390,7 +424,9 @@
      * - Nút Delete chỉ hiện cho owner.
      */
     function openPageUploadModal(slot) {
-        if (!slot) { return; }
+        if (!slot) {
+            return;
+        }
         pendingUploadPageId = slot.id;
         pendingUploadSlot = slot;
         showPageUploadError('');
@@ -420,26 +456,54 @@
     /** Trả về CSS class tương ứng với trạng thái chapter */
     function chapterStatusClass(status) {
         status = String(status || '').toUpperCase();
-        if (status === 'PLANNING') { return 'status-draft'; }
-        if (status === 'IN_PROGRESS') { return 'status-progress'; }
-        if (status === 'COMPLETE') { return 'status-approved'; }
-        if (status === 'EDITORIAL_REVIEW') { return 'status-review'; }
-        if (status === 'APPROVED') { return 'status-approved'; }
-        if (status === 'REJECTED') { return 'status-rejected'; }
+        if (status === 'PLANNING') {
+            return 'status-draft';
+        }
+        if (status === 'IN_PROGRESS') {
+            return 'status-progress';
+        }
+        if (status === 'COMPLETE') {
+            return 'status-approved';
+        }
+        if (status === 'EDITORIAL_REVIEW') {
+            return 'status-review';
+        }
+        if (status === 'APPROVED') {
+            return 'status-approved';
+        }
+        if (status === 'REJECTED') {
+            return 'status-rejected';
+        }
         return 'status-draft';
     }
 
     /** Trả về CSS class tương ứng với trạng thái task */
     function taskStatusClass(status) {
         status = String(status || '').toUpperCase();
-        if (status === 'OVERDUE') { return 'status-overdue'; }
-        if (status === 'IN_PROGRESS') { return 'status-progress'; }
-        if (status === 'PENDING') { return 'status-pending'; }
-        if (status === 'SUBMITTED') { return 'status-review'; }
-        if (status === 'APPROVED') { return 'status-approved'; }
-        if (status === 'REJECTED') { return 'status-rejected'; }
-        if (status === 'DELETED') { return 'status-rejected'; }
-        if (status === 'REASSIGNED') { return 'status-pending'; }
+        if (status === 'OVERDUE') {
+            return 'status-overdue';
+        }
+        if (status === 'IN_PROGRESS') {
+            return 'status-progress';
+        }
+        if (status === 'PENDING') {
+            return 'status-pending';
+        }
+        if (status === 'SUBMITTED') {
+            return 'status-review';
+        }
+        if (status === 'APPROVED') {
+            return 'status-approved';
+        }
+        if (status === 'REJECTED') {
+            return 'status-rejected';
+        }
+        if (status === 'DELETED') {
+            return 'status-rejected';
+        }
+        if (status === 'REASSIGNED') {
+            return 'status-pending';
+        }
         return 'status-draft';
     }
 
@@ -455,7 +519,9 @@
 
     /** Chapter bị overdue nếu chưa xong và đã qua submissionDeadline */
     function isChapterOverdue(ch) {
-        if (isChapterDone(ch)) { return false; }
+        if (isChapterDone(ch)) {
+            return false;
+        }
         var daysLeft = daysUntilDate(ch.submissionDeadline);
         return daysLeft !== null && daysLeft < 0;
     }
@@ -465,7 +531,9 @@
      * Dùng trong formatDeadlineCell.
      */
     function deadlineSuffixText(daysLeft, isDone, isOverdue) {
-        if (isDone) { return 'Done'; }
+        if (isDone) {
+            return 'Done';
+        }
         if (isOverdue) {
             if (daysLeft !== null && daysLeft < 0) {
                 var n = Math.abs(daysLeft);
@@ -473,9 +541,15 @@
             }
             return 'Overdue';
         }
-        if (daysLeft === null) { return ''; }
-        if (daysLeft === 0) { return 'Due today'; }
-        if (daysLeft === 1) { return '1 day left'; }
+        if (daysLeft === null) {
+            return '';
+        }
+        if (daysLeft === 0) {
+            return 'Due today';
+        }
+        if (daysLeft === 1) {
+            return '1 day left';
+        }
         return daysLeft + ' days left';
     }
 
@@ -488,9 +562,13 @@
      */
     function formatDeadlineCell(dateValue, isDone, isOverdue) {
         var formatted = formatDate(dateValue);
-        if (!formatted) { return '<span class="chapter-detail-inline-66">—</span>'; }
+        if (!formatted) {
+            return '<span class="chapter-detail-inline-66">—</span>';
+        }
         var daysLeft = daysUntilDate(dateValue);
-        if (!isDone && !isOverdue && daysLeft !== null && daysLeft < 0) { isOverdue = true; }
+        if (!isDone && !isOverdue && daysLeft !== null && daysLeft < 0) {
+            isOverdue = true;
+        }
         var suffix = deadlineSuffixText(daysLeft, isDone, isOverdue);
         suffix = suffix ? ' (' + suffix + ')' : '';
         if (isDone) {
@@ -515,8 +593,12 @@
      */
     function imageUrl(fileUrl) {
         var url = String(fileUrl || '');
-        if (url.indexOf('http://') === 0 || url.indexOf('https://') === 0) { return url; }
-        if (url.indexOf(ctx + '/') === 0) { return url; }
+        if (url.indexOf('http://') === 0 || url.indexOf('https://') === 0) {
+            return url;
+        }
+        if (url.indexOf(ctx + '/') === 0) {
+            return url;
+        }
         return ctx + url;
     }
 
@@ -527,7 +609,9 @@
     /** Tìm page slot theo ID trong mảng pageSlots */
     function findPageById(id) {
         for (var i = 0; i < pageSlots.length; i++) {
-            if (Number(pageSlots[i].id) === Number(id)) { return pageSlots[i]; }
+            if (Number(pageSlots[i].id) === Number(id)) {
+                return pageSlots[i];
+            }
         }
         return null;
     }
@@ -541,9 +625,13 @@
         var out = [];
         for (var i = 0; i < ids.length; i++) {
             var p = findPageById(ids[i]);
-            if (p && isAssignablePage(p)) { out.push(p); }
+            if (p && isAssignablePage(p)) {
+                out.push(p);
+            }
         }
-        out.sort(function (a, b) { return a.pageNumber - b.pageNumber; });
+        out.sort(function (a, b) {
+            return a.pageNumber - b.pageNumber;
+        });
         return out;
     }
 
@@ -563,7 +651,9 @@
 
     /** Toggle chọn/bỏ chọn page. Chỉ hoạt động với page có thể gán task. */
     function toggleSelectedPage(pageId, slot) {
-        if (!isAssignablePage(slot)) { return; }
+        if (!isAssignablePage(slot)) {
+            return;
+        }
         if (selectedPageIds[String(pageId)]) {
             delete selectedPageIds[String(pageId)];
         } else {
@@ -575,7 +665,9 @@
     function countUploaded() {
         var n = 0;
         for (var i = 0; i < pageSlots.length; i++) {
-            if (pageSlots[i].imageUrl) { n++; }
+            if (pageSlots[i].imageUrl) {
+                n++;
+            }
         }
         return n;
     }
@@ -594,7 +686,9 @@
      * Công thức: sum(stageScore) * 100 / (totalPages * 5)
      */
     function pageCompletionPercent() {
-        if (!pageSlots.length) { return 0; }
+        if (!pageSlots.length) {
+            return 0;
+        }
         var completedUnits = 0;
         for (var i = 0; i < pageSlots.length; i++) {
             completedUnits += pageStageScore(pageSlots[i]);
@@ -606,14 +700,18 @@
     function countFullyCompletePages() {
         var n = 0;
         for (var i = 0; i < pageSlots.length; i++) {
-            if (isPageFullyComplete(pageSlots[i])) { n++; }
+            if (isPageFullyComplete(pageSlots[i])) {
+                n++;
+            }
         }
         return n;
     }
 
     /** Trả về CSS class cho page slot: 'state-uploaded' hoặc 'state-empty' */
     function slotStateClass(slot) {
-        if (String(slot.status || '').toUpperCase() === 'UPLOADED' || slot.imageUrl) { return 'state-uploaded'; }
+        if (String(slot.status || '').toUpperCase() === 'UPLOADED' || slot.imageUrl) {
+            return 'state-uploaded';
+        }
         return 'state-empty';
     }
 
@@ -631,7 +729,7 @@
         }
         bar.classList.add('visible');
         document.getElementById('selectionLabel').textContent = selected.length + ' trang đã chọn ('
-            + selected[0].pageNumber + (selected.length > 1 ? '–' + selected[selected.length - 1].pageNumber : '') + ')';
+                + selected[0].pageNumber + (selected.length > 1 ? '–' + selected[selected.length - 1].pageNumber : '') + ')';
     }
 
     /**
@@ -701,7 +799,9 @@
     /** Cập nhật phần tóm tắt taskType trong modal gán task */
     function setDefaultAssignTaskType() {
         var summary = document.getElementById('assignTaskTypeSummary');
-        if (!summary) { return; }
+        if (!summary) {
+            return;
+        }
         var selected = getSelectedPages();
         if (!selected.length) {
             summary.textContent = 'Tự tính theo stage tiếp theo của từng trang.';
@@ -725,8 +825,8 @@
         var owner = isOwner();
         if (!pageSlots.length) {
             grid.innerHTML = '<p class="chapter-detail-inline-68">Chưa có ô trang. '
-                + (owner ? 'Nhấn + Thêm trang để bắt đầu.' : 'No page slots yet.') + '</p>'
-                + (owner ? '<div class="page-slot page-slot-add chapter-detail-inline-69" data-add-page="1" title="Thêm trang">+</div>' : '');
+                    + (owner ? 'Nhấn + Thêm trang để bắt đầu.' : 'No page slots yet.') + '</p>'
+                    + (owner ? '<div class="page-slot page-slot-add chapter-detail-inline-69" data-add-page="1" title="Thêm trang">+</div>' : '');
             return;
         }
 
@@ -740,12 +840,12 @@
             var state = slotStateClass(slot);
             var inProgressTaskCls = String(slot.taskStatus || '').toUpperCase() === 'IN_PROGRESS' ? ' task-in-progress' : '';
             var inProgressTaskIcon = inProgressTaskCls
-                ? '<span class="page-slot-status-icon icon-in-progress">●<span class="icon-tooltip">Đang làm</span></span>'
-                : '';
+                    ? '<span class="page-slot-status-icon icon-in-progress">●<span class="icon-tooltip">Đang làm</span></span>'
+                    : '';
             var submittedTaskCls = String(slot.taskStatus || '').toUpperCase() === 'SUBMITTED' ? ' task-submitted' : '';
             var submittedTaskIcon = submittedTaskCls
-                ? '<span class="page-slot-status-icon icon-submitted">●<span class="icon-tooltip">Đã nộp</span></span>'
-                : '';
+                    ? '<span class="page-slot-status-icon icon-submitted">●<span class="icon-tooltip">Đã nộp</span></span>'
+                    : '';
             var completeStageCls = normalizeStage(slot.completedStage) === 'LETTERING' ? ' stage-complete' : '';
             var cls = 'page-slot ' + state + inProgressTaskCls + submittedTaskCls + completeStageCls + (selected ? ' state-selected' : '');
             var num = '<span class="page-slot-num">' + slot.pageNumber + '</span>';
@@ -755,7 +855,7 @@
                 inner = '<span class="page-slot-upload-label">+ Upload</span>';
             } else if (slot.imageUrl) {
                 inner = '<img src="' + escapeHtml(imageUrl(slot.imageUrl)) + '" alt="Page ' + slot.pageNumber + '" />'
-                    + '<a class="page-download-btn" href="' + escapeHtml(imageUrl(slot.imageUrl)) + '" download title="Download page image" data-page-download>↓</a>';
+                        + '<a class="page-download-btn" href="' + escapeHtml(imageUrl(slot.imageUrl)) + '" download title="Download page image" data-page-download>↓</a>';
             }
             // Hiện initials assistant nếu task chưa approved
             if (slot.taskId && slot.assistantName && String(slot.taskStatus || '').toUpperCase() !== 'APPROVED') {
@@ -796,12 +896,12 @@
         var preview = chapterTasks.slice(0, 5);
         el.innerHTML = preview.map(function (t) {
             return '<div class="sidebar-task-mini">'
-                + '<strong>#' + t.id + '</strong> p.' + t.pageRangeStart + '-' + t.pageRangeEnd
-                + ' · ' + escapeHtml(formatStatus(t.taskType))
-                + '<br/><span class="status-chip ' + taskStatusClass(t.status) + ' chapter-detail-inline-71">' + formatStatus(t.status) + '</span>'
-                + '</div>';
+                    + '<strong>#' + t.id + '</strong> p.' + t.pageRangeStart + '-' + t.pageRangeEnd
+                    + ' · ' + escapeHtml(formatStatus(t.taskType))
+                    + '<br/><span class="status-chip ' + taskStatusClass(t.status) + ' chapter-detail-inline-71">' + formatStatus(t.status) + '</span>'
+                    + '</div>';
         }).join('')
-            + (chapterTasks.length > 5 ? '<p class="section-desc chapter-detail-inline-72">+' + (chapterTasks.length - 5) + ' task khác — xem tab Tasks</p>' : '');
+                + (chapterTasks.length > 5 ? '<p class="section-desc chapter-detail-inline-72">+' + (chapterTasks.length - 5) + ' task khác — xem tab Tasks</p>' : '');
     }
 
     /**
@@ -817,10 +917,14 @@
      *   - Lỗi API                            → ẩn nút
      */
     async function updateManuscriptWorkspaceButton() {
-        if (!chapter) { return; }
+        if (!chapter) {
+            return;
+        }
 
         var btnManuscriptWorkspace = document.getElementById('btnManuscriptWorkspace');
-        if (!btnManuscriptWorkspace) { return; }
+        if (!btnManuscriptWorkspace) {
+            return;
+        }
 
         try {
             var response = await callApi('GET', '/api/v1/manuscript-versions/workspace?chapterId=' + chapter.id);
@@ -851,8 +955,31 @@
                     btnManuscriptWorkspace.textContent = '✅ View Approved Manuscript';
                     btnManuscriptWorkspace.href = ctx + '/main/manuscript-workspace/' + workspaceId;
                 } else if (status === 'REJECTED') {
-                    btnManuscriptWorkspace.textContent = '🔄 Create New Version';
-                    btnManuscriptWorkspace.href = ctx + '/main/chapters/' + chapter.id + '/manuscript-workspace/new-version';
+
+                    btnManuscriptWorkspace.textContent =
+                            '🔄 Create New Version';
+
+                    btnManuscriptWorkspace.removeAttribute('href');
+
+                    btnManuscriptWorkspace.onclick = async function (e) {
+
+                        e.preventDefault();
+
+                        const response = await fetch(
+                                ctx
+                                + '/main/chapters/'
+                                + chapter.id
+                                + '/manuscript-workspace/new-version',
+                                {
+                                    method: 'POST'
+                                }
+                        );
+
+                        if (response.redirected) {
+
+                            window.location.href = response.url;
+                        }
+                    };
                 } else {
                     // Default: fallback về view workspace
                     btnManuscriptWorkspace.textContent = '📝 Manuscript Workspace';
@@ -872,7 +999,9 @@
      * Nút btnManuscriptWorkspace được cập nhật async qua updateManuscriptWorkspaceButton().
      */
     function renderMeta() {
-        if (!chapter) { return; }
+        if (!chapter) {
+            return;
+        }
         var progress = Math.max(0, Math.min(100, Number(chapter.completionPct || 0)));
         var done = isChapterDone(chapter);
         var overdue = isChapterOverdue(chapter);
@@ -882,7 +1011,7 @@
         document.getElementById('breadcrumbSeries').href = ctx + '/main/chapters?seriesId=' + chapter.seriesId;
         document.getElementById('breadcrumbChapter').textContent = 'Ch.' + chapter.chapterNumber + ' — ' + chapter.title;
         document.getElementById('breadcrumbStatusPill').innerHTML =
-            '<span class="status-chip chapter-status-chip ' + chapterStatusClass(chapter.status) + '">' + formatStatus(chapter.status) + '</span>';
+                '<span class="status-chip chapter-status-chip ' + chapterStatusClass(chapter.status) + '">' + formatStatus(chapter.status) + '</span>';
 
         document.getElementById('panelChapterTitle').textContent = 'Ch.' + chapter.chapterNumber + ' — ' + chapter.title;
         document.getElementById('panelSeriesName').textContent = seriesTitle + ' · Chapter ' + chapter.chapterNumber;
@@ -890,7 +1019,7 @@
         document.getElementById('metaDeadline').innerHTML = formatDeadlineCell(chapter.submissionDeadline, done, overdue);
         document.getElementById('metaDeadlineSub').textContent = '';
         document.getElementById('metaStatus').innerHTML =
-            '<span class="status-chip chapter-status-chip ' + chapterStatusClass(chapter.status) + '">' + formatStatus(chapter.status) + '</span>';
+                '<span class="status-chip chapter-status-chip ' + chapterStatusClass(chapter.status) + '">' + formatStatus(chapter.status) + '</span>';
 
         document.getElementById('updateChapterId').value = chapter.id;
         document.getElementById('updateTitle').value = chapter.title || '';
@@ -900,7 +1029,7 @@
         var chapterStatus = String(chapter.status || '').toUpperCase();
         // canSubmit: owner, 100%, status IN_PROGRESS/COMPLETE, series chưa CANCELLED
         var canSubmit = owner && progress >= 100 && (chapterStatus === 'IN_PROGRESS' || chapterStatus === 'COMPLETE')
-            && seriesData && String(seriesData.status || '').toUpperCase() !== 'CANCELLED';
+                && seriesData && String(seriesData.status || '').toUpperCase() !== 'CANCELLED';
 
         document.getElementById('btnDelete').style.display = (owner && chapterStatus === 'PLANNING') ? '' : 'none';
         document.getElementById('btnMarkDone').style.display = canSubmit ? '' : 'none';
@@ -923,7 +1052,9 @@
     /** Tìm task theo taskId trong mảng chapterTasks */
     function findTask(taskId) {
         for (var i = 0; i < chapterTasks.length; i++) {
-            if (Number(chapterTasks[i].id) === Number(taskId)) { return chapterTasks[i]; }
+            if (Number(chapterTasks[i].id) === Number(taskId)) {
+                return chapterTasks[i];
+            }
         }
         return null;
     }
@@ -942,9 +1073,15 @@
     /** Task overdue nếu status là OVERDUE, hoặc chưa APPROVED và đã qua dueDate */
     function isTaskOverdue(task) {
         var st = String(task.status || '').toUpperCase();
-        if (st === 'APPROVED') { return false; }
-        if (st === 'OVERDUE') { return true; }
-        if (!task.dueDate) { return false; }
+        if (st === 'APPROVED') {
+            return false;
+        }
+        if (st === 'OVERDUE') {
+            return true;
+        }
+        if (!task.dueDate) {
+            return false;
+        }
         var today = new Date();
         today.setHours(0, 0, 0, 0);
         var due = dateOnly(task.dueDate);
@@ -954,7 +1091,9 @@
     /** Render cell deadline của task với màu sắc phù hợp */
     function formatDueDateCell(task) {
         var formatted = formatDate(task.dueDate);
-        if (!formatted) { return '—'; }
+        if (!formatted) {
+            return '—';
+        }
         var done = String(task.status || '').toUpperCase() === 'APPROVED';
         var overdue = isTaskOverdue(task);
         return formatDeadlineCell(task.dueDate, done, overdue);
@@ -1006,17 +1145,17 @@
         }
         tbody.innerHTML = chapterTasks.map(function (task) {
             return '<tr>'
-                + '<td>' + task.id + '</td>'
-                + '<td>' + task.pageRangeStart + '-' + task.pageRangeEnd + '</td>'
-                + '<td>' + formatStatus(task.taskType) + '</td>'
-                + '<td>' + escapeHtml(task.assistantName || '') + '</td>'
-                + '<td><span class="status-chip ' + taskStatusClass(task.status) + '">' + formatStatus(task.status) + '</span></td>'
-                + '<td>' + formatDueDateCell(task) + '</td>'
-                + '<td class="task-actions-cell"><div class="task-row-actions">' + renderTaskRowActions(task) + '</div></td>'
-                + '</tr>'
-                + '<tr class="task-inline-row chapter-detail-inline-73" id="task-inline-' + task.id + '">'
-                + '<td colspan="7"><div class="task-inline-body" id="task-inline-body-' + task.id + '">Đang tải...</div></td>'
-                + '</tr>';
+                    + '<td>' + task.id + '</td>'
+                    + '<td>' + task.pageRangeStart + '-' + task.pageRangeEnd + '</td>'
+                    + '<td>' + formatStatus(task.taskType) + '</td>'
+                    + '<td>' + escapeHtml(task.assistantName || '') + '</td>'
+                    + '<td><span class="status-chip ' + taskStatusClass(task.status) + '">' + formatStatus(task.status) + '</span></td>'
+                    + '<td>' + formatDueDateCell(task) + '</td>'
+                    + '<td class="task-actions-cell"><div class="task-row-actions">' + renderTaskRowActions(task) + '</div></td>'
+                    + '</tr>'
+                    + '<tr class="task-inline-row chapter-detail-inline-73" id="task-inline-' + task.id + '">'
+                    + '<td colspan="7"><div class="task-inline-body" id="task-inline-body-' + task.id + '">Đang tải...</div></td>'
+                    + '</tr>';
         }).join('');
         renderSidebarTasks();
     }
@@ -1032,16 +1171,22 @@
      */
     async function loadTaskInlinePages(taskId) {
         var task = findTask(taskId);
-        if (!task) { return; }
+        if (!task) {
+            return;
+        }
         var bodyEl = document.getElementById('task-inline-body-' + taskId);
-        if (!bodyEl) { return; }
+        if (!bodyEl) {
+            return;
+        }
         if (!taskInlineLoaded[taskId]) {
             bodyEl.innerHTML = '<span class="chapter-detail-inline-74">Đang tải...</span>';
             try {
                 var res = await callApi('GET', '/api/v1/tasks/' + taskId + '/images');
                 var imgs = res.data || res || [];
                 var imgMap = {};
-                imgs.forEach(function (img) { imgMap[img.pageNumber] = img; });
+                imgs.forEach(function (img) {
+                    imgMap[img.pageNumber] = img;
+                });
                 taskImagesCache[taskId] = imgs;
                 var html = '';
                 for (var p = task.pageRangeStart; p <= task.pageRangeEnd; p++) {
@@ -1079,9 +1224,9 @@
         var origUrl = slot.imageUrl ? imageUrl(slot.imageUrl) : null;
         if (!slot.taskId || (ts !== 'SUBMITTED' && ts !== 'APPROVED')) {
             body.innerHTML = origUrl
-                ? (isOwner() && !slot.taskId ? '<div class="chapter-detail-inline-77"><button class="btn small primary" type="button" id="pageCompareEdit">Upload / replace</button></div>' : '')
+                    ? (isOwner() && !slot.taskId ? '<div class="chapter-detail-inline-77"><button class="btn small primary" type="button" id="pageCompareEdit">Upload / replace</button></div>' : '')
                     + '<img src="' + escapeHtml(origUrl) + '" class="chapter-detail-inline-78" />'
-                : '<div class="chapter-detail-inline-79">Chưa có ảnh</div>';
+                    : '<div class="chapter-detail-inline-79">Chưa có ảnh</div>';
             var editBtn = document.getElementById('pageCompareEdit');
             if (editBtn) {
                 editBtn.addEventListener('click', function () {
@@ -1115,21 +1260,21 @@
         if (ts === 'SUBMITTED') {
             // 2-column compare: ảnh gốc vs ảnh assistant nộp
             body.innerHTML =
-                '<div class="chapter-detail-inline-81">'
-                + '<div><div class="chapter-detail-inline-82">Bản gốc (Mangaka)</div>'
-                + (origUrl ? '<img src="' + escapeHtml(origUrl) + '" class="chapter-detail-inline-83" />' : '<div class="chapter-detail-inline-84">Không có ảnh gốc</div>')
-                + '</div>'
-                + '<div><div class="chapter-detail-inline-85">Bản assistant nộp</div>'
-                + (assistantUrl ? '<img src="' + escapeHtml(assistantUrl) + '" class="chapter-detail-inline-86" />' : '<div class="chapter-detail-inline-87">Chưa có ảnh</div>')
-                + '</div></div>';
+                    '<div class="chapter-detail-inline-81">'
+                    + '<div><div class="chapter-detail-inline-82">Bản gốc (Mangaka)</div>'
+                    + (origUrl ? '<img src="' + escapeHtml(origUrl) + '" class="chapter-detail-inline-83" />' : '<div class="chapter-detail-inline-84">Không có ảnh gốc</div>')
+                    + '</div>'
+                    + '<div><div class="chapter-detail-inline-85">Bản assistant nộp</div>'
+                    + (assistantUrl ? '<img src="' + escapeHtml(assistantUrl) + '" class="chapter-detail-inline-86" />' : '<div class="chapter-detail-inline-87">Chưa có ảnh</div>')
+                    + '</div></div>';
             return;
         }
         // APPROVED: hiện ảnh đã duyệt
         var finalUrl = assistantUrl || origUrl;
         body.innerHTML = finalUrl
-            ? '<div class="chapter-detail-inline-88"><span class="chapter-detail-inline-89">✓ Đã được duyệt</span></div>'
+                ? '<div class="chapter-detail-inline-88"><span class="chapter-detail-inline-89">✓ Đã được duyệt</span></div>'
                 + '<img src="' + escapeHtml(finalUrl) + '" class="chapter-detail-inline-90" />'
-            : '<div class="chapter-detail-inline-91">Không có ảnh</div>';
+                : '<div class="chapter-detail-inline-91">Không có ảnh</div>';
     }
 
     // ============================================================
@@ -1182,17 +1327,23 @@
         if (scrim) {
             scrim.classList.remove('open');
             scrim.setAttribute('aria-hidden', 'true');
-            if (host) { host.appendChild(scrim); }
+            if (host) {
+                host.appendChild(scrim);
+            }
         }
         if (approvePop) {
             approvePop.classList.remove('open');
             approvePop.setAttribute('aria-hidden', 'true');
-            if (host) { host.appendChild(approvePop); }
+            if (host) {
+                host.appendChild(approvePop);
+            }
         }
         if (rejectPop) {
             rejectPop.classList.remove('open');
             rejectPop.setAttribute('aria-hidden', 'true');
-            if (host) { host.appendChild(rejectPop); }
+            if (host) {
+                host.appendChild(rejectPop);
+            }
         }
         activePopoverType = null;
         activePopoverTaskId = null;
@@ -1206,11 +1357,15 @@
     function openPopover(type, taskId, anchorCell) {
         closePopovers();
         var task = findTask(taskId);
-        if (!task) { return; }
+        if (!task) {
+            return;
+        }
         var scrim = document.getElementById('taskPopoverScrim');
         var popId = type === 'approve' ? 'taskApprovePopover' : 'taskRejectPopover';
         var pop = document.getElementById(popId);
-        if (!pop) { return; }
+        if (!pop) {
+            return;
+        }
         if (scrim) {
             document.body.appendChild(scrim);
             scrim.classList.add('open');
@@ -1237,9 +1392,13 @@
         var reasonEl = document.getElementById('rejectPopoverReason');
         var counterEl = document.getElementById('rejectPopoverCounter');
         var confirmBtn = document.getElementById('rejectPopoverConfirm');
-        if (!reasonEl || !confirmBtn) { return; }
+        if (!reasonEl || !confirmBtn) {
+            return;
+        }
         var len = reasonEl.value.length;
-        if (counterEl) { counterEl.textContent = len + ' / 300'; }
+        if (counterEl) {
+            counterEl.textContent = len + ' / 300';
+        }
         confirmBtn.disabled = len < 5;
     }
 
@@ -1260,23 +1419,27 @@
      */
     function openOverdueDecisionModal(taskId) {
         var task = findTask(taskId);
-        if (!task) { return; }
+        if (!task) {
+            return;
+        }
         activeOverdueTaskId = taskId;
         document.getElementById('taskExtendId').value = taskId;
         document.getElementById('taskOverdueDecisionTitle').textContent = 'Overdue task #' + taskId;
         document.getElementById('taskOverdueDecisionSummary').textContent =
-            'Pages ' + task.pageRangeStart + '-' + task.pageRangeEnd + ' · '
-            + formatStatus(task.taskType) + ' · assigned to ' + (task.assistantName || ('#' + task.assistantId));
+                'Pages ' + task.pageRangeStart + '-' + task.pageRangeEnd + ' · '
+                + formatStatus(task.taskType) + ' · assigned to ' + (task.assistantName || ('#' + task.assistantId));
 
         var latest = latestTaskDueDate();
         var dueInput = document.getElementById('taskExtendDueDate');
         dueInput.value = '';
         dueInput.min = todayIso();
         dueInput.removeAttribute('max');
-        if (latest) { dueInput.max = latest; }
+        if (latest) {
+            dueInput.max = latest;
+        }
         document.getElementById('taskExtendHint').textContent = chapter && chapter.submissionDeadline
-            ? ('Chapter deadline: ' + formatDate(chapter.submissionDeadline) + '. Extension must be today through ' + (latest || formatDate(chapter.submissionDeadline)) + '.')
-            : 'Extension date cannot be in the past.';
+                ? ('Chapter deadline: ' + formatDate(chapter.submissionDeadline) + '. Extension must be today through ' + (latest || formatDate(chapter.submissionDeadline)) + '.')
+                : 'Extension date cannot be in the past.';
 
         // Reset tất cả input trong modal
         document.getElementById('taskExtendReason').value = '';
@@ -1287,7 +1450,9 @@
         reassignDueInput.value = '';
         reassignDueInput.min = todayIso();
         reassignDueInput.removeAttribute('max');
-        if (latest) { reassignDueInput.max = latest; }
+        if (latest) {
+            reassignDueInput.max = latest;
+        }
         document.getElementById('taskExtendError').style.display = 'none';
         document.getElementById('taskExtendError').textContent = '';
         document.getElementById('taskOverdueDecisionError').style.display = 'none';
@@ -1329,10 +1494,16 @@
         var select = document.getElementById('assignAssistantId');
         var reassignSelect = document.getElementById('taskReassignAssistantId');
         var overdueReassignSelect = document.getElementById('taskOverdueReassignAssistantId');
-        if (!chapter || !select) { return; }
+        if (!chapter || !select) {
+            return;
+        }
         select.innerHTML = '<option value="">Loading assistants...</option>';
-        if (reassignSelect) { reassignSelect.innerHTML = '<option value="">Loading assistants...</option>'; }
-        if (overdueReassignSelect) { overdueReassignSelect.innerHTML = '<option value="">Loading assistants...</option>'; }
+        if (reassignSelect) {
+            reassignSelect.innerHTML = '<option value="">Loading assistants...</option>';
+        }
+        if (overdueReassignSelect) {
+            overdueReassignSelect.innerHTML = '<option value="">Loading assistants...</option>';
+        }
         try {
             var res = await callApi('GET', '/api/v1/series/' + chapter.seriesId + '/assistants');
             var assistants = res.data || [];
@@ -1340,12 +1511,20 @@
                 return '<option value="' + a.id + '">#' + a.id + ' - ' + escapeHtml(a.fullName || a.username) + '</option>';
             }).join('');
             select.innerHTML = options;
-            if (reassignSelect) { reassignSelect.innerHTML = options; }
-            if (overdueReassignSelect) { overdueReassignSelect.innerHTML = options; }
+            if (reassignSelect) {
+                reassignSelect.innerHTML = options;
+            }
+            if (overdueReassignSelect) {
+                overdueReassignSelect.innerHTML = options;
+            }
         } catch (err) {
             select.innerHTML = '<option value="">Cannot load assistants</option>';
-            if (reassignSelect) { reassignSelect.innerHTML = '<option value="">Cannot load assistants</option>'; }
-            if (overdueReassignSelect) { overdueReassignSelect.innerHTML = '<option value="">Cannot load assistants</option>'; }
+            if (reassignSelect) {
+                reassignSelect.innerHTML = '<option value="">Cannot load assistants</option>';
+            }
+            if (overdueReassignSelect) {
+                overdueReassignSelect.innerHTML = '<option value="">Cannot load assistants</option>';
+            }
             showError(err.message);
         }
     }
@@ -1362,7 +1541,9 @@
     function updateAssignDueConstraints() {
         var dueInput = document.getElementById('assignDueDate');
         var hint = document.getElementById('assignDueHint');
-        if (!dueInput) { return; }
+        if (!dueInput) {
+            return;
+        }
         dueInput.min = todayIso();
         dueInput.removeAttribute('max');
         var latest = latestTaskDueDate();
@@ -1371,8 +1552,8 @@
         }
         if (hint) {
             hint.textContent = chapter && chapter.submissionDeadline
-                ? ('Chapter deadline: ' + formatDate(chapter.submissionDeadline) + '. Task due date: today → ' + (latest || formatDate(chapter.submissionDeadline)) + '.')
-                : '';
+                    ? ('Chapter deadline: ' + formatDate(chapter.submissionDeadline) + '. Task due date: today → ' + (latest || formatDate(chapter.submissionDeadline)) + '.')
+                    : '';
         }
     }
 
@@ -1436,7 +1617,9 @@
     // Tab bar: click chuyển tab
     document.getElementById('tabBar').addEventListener('click', function (e) {
         var btn = e.target.closest('.chapter-tab-btn');
-        if (!btn) { return; }
+        if (!btn) {
+            return;
+        }
         switchTab(btn.getAttribute('data-tab'));
     });
 
@@ -1472,7 +1655,9 @@
     }
 
     function scheduleMetadataSave() {
-        if (!isOwner()) { return; }
+        if (!isOwner()) {
+            return;
+        }
         clearTimeout(metadataSaveTimer);
         metadataSaveTimer = setTimeout(saveChapterMetadata, 700); // debounce 700ms
     }
@@ -1482,11 +1667,15 @@
 
     // Xóa chapter (chỉ khi PLANNING)
     document.getElementById('btnDelete').addEventListener('click', async function () {
-        if (!confirm('Delete this chapter? This cannot be undone.')) { return; }
+        if (!confirm('Delete this chapter? This cannot be undone.')) {
+            return;
+        }
         try {
             await callApi('DELETE', '/api/v1/chapters/' + chapterId);
             window.location.href = ctx + '/main/chapters?seriesId=' + chapter.seriesId;
-        } catch (err) { showError(err.message); }
+        } catch (err) {
+            showError(err.message);
+        }
     });
 
     // Submit chapter sang editorial review (cần 100%)
@@ -1495,15 +1684,19 @@
             await callApi('POST', '/api/v1/chapters/' + chapterId + '/submit-review');
             await loadData();
             showError('');
-        } catch (err) { showError(err.message); }
+        } catch (err) {
+            showError(err.message);
+        }
     });
 
     // Thêm page slot mới
     document.getElementById('btnAddPage').addEventListener('click', async function () {
         try {
-            await callApi('POST', '/api/v1/pages', { chapterId: chapterId });
+            await callApi('POST', '/api/v1/pages', {chapterId: chapterId});
             await loadData();
-        } catch (err) { showError(err.message); }
+        } catch (err) {
+            showError(err.message);
+        }
     });
 
     // Stage picker checkbox: sync khi thay đổi
@@ -1517,7 +1710,9 @@
     document.getElementById('pageModalFileInput').addEventListener('change', function (e) {
         var file = e.target.files && e.target.files[0];
         var preview = document.getElementById('pageUploadPreview');
-        if (!file || !preview) { return; }
+        if (!file || !preview) {
+            return;
+        }
         var reader = new FileReader();
         reader.onload = function (ev) {
             preview.innerHTML = '<img src="' + escapeHtml(ev.target.result) + '" alt="Selected page image" />';
@@ -1529,7 +1724,9 @@
     document.getElementById('singleFileInput').addEventListener('change', async function (e) {
         var file = e.target.files && e.target.files[0];
         e.target.value = '';
-        if (!file || !pendingUploadPageId) { return; }
+        if (!file || !pendingUploadPageId) {
+            return;
+        }
         try {
             var fd = new FormData();
             fd.append('file', file);
@@ -1545,7 +1742,9 @@
 
     // Nút Save trong modal upload page
     document.getElementById('pageUploadSave').addEventListener('click', async function () {
-        if (!pendingUploadPageId || !pendingUploadSlot) { return; }
+        if (!pendingUploadPageId || !pendingUploadSlot) {
+            return;
+        }
         var fileInput = document.getElementById('pageModalFileInput');
         var file = fileInput.files && fileInput.files[0];
         var hasExisting = !!pendingUploadSlot.imageUrl;
@@ -1574,8 +1773,12 @@
 
     // Nút Delete page trong modal upload
     document.getElementById('pageUploadDelete').addEventListener('click', async function () {
-        if (!pendingUploadPageId || !pendingUploadSlot) { return; }
-        if (!confirm('Delete page ' + pendingUploadSlot.pageNumber + '? This cannot be undone.')) { return; }
+        if (!pendingUploadPageId || !pendingUploadSlot) {
+            return;
+        }
+        if (!confirm('Delete page ' + pendingUploadSlot.pageNumber + '? This cannot be undone.')) {
+            return;
+        }
         try {
             await callApi('DELETE', '/api/v1/pages/' + pendingUploadPageId);
             pendingUploadPageId = null;
@@ -1605,14 +1808,18 @@
             return;
         }
         var slotEl = e.target.closest('[data-page-id]');
-        if (!slotEl) { return; }
+        if (!slotEl) {
+            return;
+        }
         if (e.target.closest('[data-page-download]')) {
             return;
         }
         var pageId = slotEl.getAttribute('data-page-id');
         var index = Number(slotEl.getAttribute('data-slot-index'));
         var slot = findPageById(pageId);
-        if (!slot) { return; }
+        if (!slot) {
+            return;
+        }
 
         if (e.shiftKey) {
             toggleSelectedPage(pageId, slot);
@@ -1663,7 +1870,9 @@
 
     // Nút Assign From Selection: mở modal gán task
     document.getElementById('btnAssignFromSelection').addEventListener('click', function () {
-        if (!getSelectedPages().length) { return; }
+        if (!getSelectedPages().length) {
+            return;
+        }
         openAssignModal();
     });
 
@@ -1764,7 +1973,9 @@
         var assistantId = document.getElementById('taskOverdueReassignAssistantId').value;
         var newDueDate = document.getElementById('taskOverdueReassignDueDate').value;
         var reason = document.getElementById('taskOverdueReason').value.trim();
-        if (!activeOverdueTaskId) { return; }
+        if (!activeOverdueTaskId) {
+            return;
+        }
         if (!assistantId) {
             errEl.style.display = 'block';
             errEl.textContent = 'Choose a new assistant.';
@@ -1801,14 +2012,16 @@
         errEl.style.display = 'none';
         errEl.textContent = '';
         var reason = document.getElementById('taskOverdueDeleteReason').value.trim();
-        if (!activeOverdueTaskId) { return; }
+        if (!activeOverdueTaskId) {
+            return;
+        }
         if (reason.length < 5) {
             errEl.style.display = 'block';
             errEl.textContent = 'Reason must be at least 5 characters.';
             return;
         }
         try {
-            await callApi('POST', '/api/v1/tasks/' + activeOverdueTaskId + '/delete', { reason: reason });
+            await callApi('POST', '/api/v1/tasks/' + activeOverdueTaskId + '/delete', {reason: reason});
             closeModals();
             showError('');
             await loadData();
@@ -1872,9 +2085,11 @@
         if (taskDeleteBtn) {
             var deleteTaskId = taskDeleteBtn.getAttribute('data-task-delete');
             var reason = prompt('Lý do xóa task #' + deleteTaskId + ':');
-            if (!reason) { return; }
+            if (!reason) {
+                return;
+            }
             try {
-                await callApi('POST', '/api/v1/tasks/' + deleteTaskId + '/delete', { reason: reason });
+                await callApi('POST', '/api/v1/tasks/' + deleteTaskId + '/delete', {reason: reason});
                 await loadData();
                 showError('');
             } catch (err) {
@@ -1915,36 +2130,52 @@
 
     // Approve popover: gọi API approve, cập nhật task local, reload data
     document.getElementById('approvePopoverConfirm').addEventListener('click', async function () {
-        if (!activePopoverTaskId) { return; }
+        if (!activePopoverTaskId) {
+            return;
+        }
         try {
             var taskId = activePopoverTaskId;
             var comment = document.getElementById('approvePopoverComment').value.trim();
-            var payload = comment ? { comment: comment } : {};
+            var payload = comment ? {comment: comment} : {};
             await callApi('POST', '/api/v1/tasks/' + taskId + '/approve', payload);
             closePopovers();
             var t = findTask(taskId);
-            if (t) { t._decisionLabel = 'approved'; t.status = 'APPROVED'; }
+            if (t) {
+                t._decisionLabel = 'approved';
+                t.status = 'APPROVED';
+            }
             renderChapterTasks();
             await loadData();
             showError('');
-        } catch (err) { showError(err.message); }
+        } catch (err) {
+            showError(err.message);
+        }
     });
 
     // Reject popover: validate lý do ≥ 5 ký tự, gọi API reject
     document.getElementById('rejectPopoverConfirm').addEventListener('click', async function () {
-        if (!activePopoverTaskId) { return; }
+        if (!activePopoverTaskId) {
+            return;
+        }
         var reason = document.getElementById('rejectPopoverReason').value.trim();
-        if (reason.length < 5) { return; }
+        if (reason.length < 5) {
+            return;
+        }
         try {
             var taskId = activePopoverTaskId;
-            await callApi('POST', '/api/v1/tasks/' + taskId + '/reject', { reason: reason });
+            await callApi('POST', '/api/v1/tasks/' + taskId + '/reject', {reason: reason});
             closePopovers();
             var t = findTask(taskId);
-            if (t) { t._decisionLabel = 'rejected'; t.status = 'IN_PROGRESS'; }
+            if (t) {
+                t._decisionLabel = 'rejected';
+                t.status = 'IN_PROGRESS';
+            }
             renderChapterTasks();
             await loadData();
             showError('');
-        } catch (err) { showError(err.message); }
+        } catch (err) {
+            showError(err.message);
+        }
     });
 
     // Realtime validate textarea lý do reject

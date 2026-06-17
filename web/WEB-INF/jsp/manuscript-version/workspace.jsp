@@ -10,7 +10,7 @@
         <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/manuscript-version.css" />
         <script src="${pageContext.request.contextPath}/assets/manuscript-workspace.js"
                 data-is-mangaka="${isMangakaOwner}"
-                data-context-path="${pageContext.request.contextPath}"></script>
+        data-context-path="${pageContext.request.contextPath}"></script>
     </head>
     <body>
         <jsp:include page="/WEB-INF/jsp/common/header.jsp"/>
@@ -86,9 +86,9 @@
                         Progress: ${dashboard.reviewProgress}%
                     </div>
                     <div>
-                        <c:if test="${!isReadonly && version.status == 'DRAFT' && empty pages}">
+                        <c:if test="${!isReadonly && version.status == 'DRAFT' && version.version == 1 && empty pages}">
                             <form class="inline-form" method="post" action="${pageContext.request.contextPath}/main/manuscript-workspace/${version.id}/import-pages">
-                                <button type="submit" class="btn btn-primary">Import Pages</button>
+                                <button type="submit" class="btn btn-primary">Import Initial Pages Chapter</button>
                             </form>
                         </c:if>
                         <c:if test="${!isReadonly && version.status == 'DRAFT' && not empty pages}">
@@ -157,6 +157,27 @@
                                 <div class="page-info-meta">
                                     Display Order: ${page.displayOrder} | Checksum: ${page.snapshotChecksum}
                                 </div>
+                                <c:if test="${!isReadonly && isMangakaOwner && version.status == 'DRAFT'}">
+                                    <form
+                                        method="post"
+                                        enctype="multipart/form-data"
+                                        action="${pageContext.request.contextPath}/api/v1/manuscript-versions/pages/${page.id}/replace">
+
+                                        <input
+                                            type="file"
+                                            name="image"
+                                            accept="image/*"
+                                            required>
+
+                                        <button
+                                            type="submit"
+                                            class="btn btn-secondary">
+
+                                            Replace Page
+                                        </button>
+
+                                    </form>
+                                </c:if>
                             </div>
                         </div>
                     </c:forEach>
@@ -209,7 +230,7 @@
                                             type="button"
                                             class="btn btn-danger annotation-delete-btn"
                                             data-delete-annotation="${annotation.id}"
-                                        >
+                                            >
                                             Delete
                                         </button>
                                     </div>
