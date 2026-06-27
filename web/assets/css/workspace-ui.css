@@ -1,0 +1,771 @@
+/**
+ * Workspace UI - Toolbar & Sidebar Styling
+ * Modern enterprise design for manuscript workspace
+ * Inspired by GitHub PR Review, Google Drive, Notion, Jira, Figma
+ * 
+ * IMPORTANT: This file ONLY styles toolbar and sidebars.
+ * Page viewer, annotation markers, and JavaScript are NOT modified.
+ * 
+ * This CSS works with existing HTML structure - no Bootstrap classes needed in JSP.
+ */
+
+/* ============================================
+   DESIGN TOKENS
+   ============================================ */
+:root {
+    /* 8px spacing system */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    
+    /* Colors - Neutral palette */
+    --bg-toolbar: #ffffff;
+    --bg-sidebar: #ffffff;
+    --bg-card: #ffffff;
+    --bg-card-hover: #f8fafc;
+    --border-color: #e2e8f0;
+    --border-color-hover: #cbd5e1;
+    
+    /* Text colors */
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --text-muted: #94a3b8;
+    
+    /* Status colors */
+    --status-draft: #6366f1;
+    --status-draft-bg: #eef2ff;
+    --status-under-review: #f59e0b;
+    --status-under-review-bg: #fef3c7;
+    --status-approved: #10b981;
+    --status-approved-bg: #d1fae5;
+    --status-rejected: #ef4444;
+    --status-rejected-bg: #fee2e2;
+    --status-published: #10b981;
+    --status-published-bg: #d1fae5;
+    
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    
+    /* Transitions */
+    --transition-fast: 150ms ease;
+    --transition-base: 200ms ease;
+    
+    /* Border radius */
+    --radius-md: 12px;
+    --radius-lg: 16px;
+}
+
+/* ============================================
+   WORKSPACE CONTAINER LAYOUT
+   ============================================ */
+.workspace-container {
+    display: flex;
+    gap: var(--space-6);
+    padding: var(--space-6);
+    background: #f8fafc;
+    min-height: calc(100vh - 80px);
+    align-items: flex-start;
+}
+
+/* ============================================
+   MAIN CONTENT AREA
+   ============================================ */
+.workspace-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ============================================
+   TOP WORKSPACE TOOLBAR
+   ============================================ */
+.workspace-toolbar {
+    background: var(--bg-toolbar);
+    border: 1px solid var(--border-color);
+    border-bottom: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--space-4) var(--space-6);
+    margin-bottom: var(--space-6);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-6);
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(8px);
+    background: rgba(255, 255, 255, 0.95);
+}
+
+/* Toolbar sections - make them flex containers */
+.workspace-toolbar > div {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+}
+
+/* Chapter title */
+.workspace-toolbar strong {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.025em;
+}
+
+/* Version metadata */
+.workspace-version-meta {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* Status badges in toolbar */
+.workspace-version-meta .status-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.status-draft {
+    background: var(--status-draft-bg);
+    color: var(--status-draft);
+}
+
+.status-under_review {
+    background: var(--status-under-review-bg);
+    color: var(--status-under-review);
+}
+
+.status-approved {
+    background: var(--status-approved-bg);
+    color: var(--status-approved);
+}
+
+.status-rejected {
+    background: var(--status-rejected-bg);
+    color: var(--status-rejected);
+}
+
+.status-published {
+    background: var(--status-published-bg);
+    color: var(--status-published);
+}
+
+/* Lock badges */
+.workspace-lock {
+    font-size: 0.75rem;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 600;
+    background: #f1f5f9;
+    color: var(--text-secondary);
+}
+
+.workspace-lock.is-production {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+/* Workspace summary */
+.workspace-summary {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    padding: var(--space-2) var(--space-4);
+    background: #f8fafc;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+}
+
+.workspace-summary span.text-danger {
+    color: #ef4444 !important;
+    font-weight: 600;
+}
+
+.workspace-summary span.text-success {
+    color: #10b981 !important;
+    font-weight: 600;
+}
+
+/* Action buttons group - style all btn classes */
+.btn {
+    font-weight: 500;
+    font-size: 0.875rem;
+    padding: 8px 16px;
+    border-radius: 8px;
+    transition: all var(--transition-base);
+    border: 1px solid transparent;
+    cursor: pointer;
+    display: inline-block;
+    text-align: center;
+    text-decoration: none;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+/* Primary button */
+.btn-primary {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: white;
+}
+
+/* Success button */
+.btn-success {
+    background: #10b981;
+    border-color: #10b981;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #059669;
+    border-color: #059669;
+    color: white;
+}
+
+/* Danger button */
+.btn-danger {
+    background: #ef4444;
+    border-color: #ef4444;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #dc2626;
+    border-color: #dc2626;
+    color: white;
+}
+
+/* Secondary button */
+.btn-secondary {
+    background: #ffffff;
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+.btn-secondary:hover {
+    background: #f8fafc;
+    border-color: var(--border-color-hover);
+    color: var(--text-primary);
+}
+
+/* Disabled state */
+.btn:disabled,
+.btn[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Inline form */
+.inline-form {
+    display: inline;
+}
+
+.inline-form button {
+    margin: 0;
+}
+
+/* ============================================
+   LEFT SIDEBAR - Manuscript Info & Version History
+   ============================================ */
+.workspace-sidebar {
+    width: 280px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+/* Sticky sidebar */
+.workspace-sidebar {
+    position: sticky;
+    top: 80px;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+    align-self: flex-start;
+}
+
+/* Sidebar sections - Modern cards */
+.sidebar-section {
+    background: var(--bg-sidebar);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--space-5);
+    box-shadow: var(--shadow-sm);
+    transition: all var(--transition-base);
+}
+
+.sidebar-section:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--border-color-hover);
+}
+
+/* Sidebar title */
+.sidebar-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-3);
+    border-bottom: 2px solid var(--border-color);
+}
+
+/* Dashboard stats - Compact modern layout */
+.dashboard-stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border-color);
+    transition: background var(--transition-fast);
+}
+
+.dashboard-stat:last-child {
+    border-bottom: none;
+}
+
+.dashboard-stat:hover {
+    background: var(--bg-card-hover);
+    margin: 0 calc(-1 * var(--space-5));
+    padding-left: var(--space-5);
+    padding-right: var(--space-5);
+    border-radius: 4px;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.stat-value {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.stat-value-compact {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* Status badge in sidebar */
+.sidebar-section .status-badge {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Version History - GitHub-style links */
+.version-item {
+    display: block;
+    padding: var(--space-3);
+    margin-bottom: var(--space-2);
+    border-radius: 8px;
+    text-decoration: none;
+    color: var(--text-primary);
+    border: 1px solid transparent;
+    transition: all var(--transition-base);
+    background: #f8fafc;
+}
+
+.version-item:hover {
+    background: #f1f5f9;
+    border-color: var(--border-color);
+    transform: translateX(4px);
+}
+
+.version-item.current {
+    background: var(--status-draft-bg);
+    border-color: var(--status-draft);
+    color: var(--status-draft);
+}
+
+.version-item div {
+    font-size: 0.875rem;
+}
+
+.version-item strong {
+    font-weight: 600;
+}
+
+.version-date {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+/* ============================================
+   RIGHT SIDEBAR - Annotations
+   ============================================ */
+.workspace-right-sidebar {
+    width: 320px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+/* Sticky right sidebar */
+.workspace-right-sidebar {
+    position: sticky;
+    top: 80px;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+    align-self: flex-start;
+}
+
+/* Feedback panel */
+.feedback-panel {
+    background: #f8fafc;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: var(--space-4);
+    margin-top: var(--space-3);
+}
+
+.feedback-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+}
+
+.feedback-content {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+/* Empty state */
+.feedback-empty {
+    text-align: center;
+    padding: var(--space-8) var(--space-4);
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 0.875rem;
+}
+
+/* Annotation list */
+.annotation-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+/* Annotation cards - GitHub PR Review style */
+.annotation-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    transition: all var(--transition-base);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.annotation-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: #3b82f6;
+    transition: background var(--transition-base);
+}
+
+.annotation-item:hover {
+    border-color: var(--border-color-hover);
+    box-shadow: var(--shadow-md);
+    transform: translateX(-2px);
+}
+
+.annotation-item.resolved::before {
+    background: #10b981;
+}
+
+.annotation-item.resolved {
+    background: #f0fdf4;
+    opacity: 0.85;
+}
+
+.annotation-item.dismissed::before {
+    background: var(--text-muted);
+}
+
+.annotation-item.dismissed {
+    background: #f8fafc;
+    opacity: 0.6;
+}
+
+/* Annotation content */
+.annotation-item > div:first-child {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+}
+
+.annotation-item > div:nth-child(2) {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: var(--space-3);
+}
+
+.annotation-item > div:nth-child(3) {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+/* Annotation actions */
+.annotation-item-actions {
+    margin-top: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border-color);
+}
+
+.annotation-item-actions .btn {
+    font-size: 0.75rem;
+    padding: 6px 12px;
+    border-radius: 6px;
+}
+
+/* ============================================
+   ERROR MESSAGE
+   ============================================ */
+.error-message {
+    background: #fee2e2;
+    border: 1px solid #fecaca;
+    border-left: 4px solid #ef4444;
+    border-radius: 8px;
+    color: #991b1b;
+    font-size: 0.875rem;
+    padding: var(--space-4);
+    margin-bottom: var(--space-4);
+}
+
+/* ============================================
+   EMPTY STATE
+   ============================================ */
+.empty-state {
+    background: var(--bg-card);
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--space-8);
+    text-align: center;
+    transition: all var(--transition-base);
+}
+
+.empty-state:hover {
+    border-color: var(--border-color-hover);
+}
+
+.empty-state h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+}
+
+.empty-state p {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+/* ============================================
+   MODAL STYLING
+   ============================================ */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1050;
+    backdrop-filter: blur(4px);
+}
+
+.modal-backdrop.is-hidden {
+    display: none;
+}
+
+.modal-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    box-shadow: var(--shadow-lg);
+    width: 480px;
+    max-width: 90vw;
+}
+
+.modal-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-4);
+}
+
+.modal-field {
+    margin-bottom: var(--space-4);
+}
+
+.modal-field label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+}
+
+.modal-field textarea {
+    width: 100%;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: var(--space-3);
+    font-family: inherit;
+    transition: all var(--transition-base);
+}
+
+.modal-field textarea:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    outline: none;
+}
+
+.modal-actions {
+    display: flex;
+    gap: var(--space-3);
+    justify-content: flex-end;
+}
+
+/* ============================================
+   ANNOTATION POPUP
+   ============================================ */
+.annotation-popup {
+    position: fixed;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    box-shadow: var(--shadow-lg);
+    z-index: 1060;
+    min-width: 250px;
+    max-width: 350px;
+}
+
+/* ============================================
+   RESPONSIVE DESIGN
+   ============================================ */
+@media (max-width: 1200px) {
+    .workspace-container {
+        flex-direction: column;
+    }
+    
+    .workspace-sidebar,
+    .workspace-right-sidebar {
+        width: 100%;
+        position: static;
+        max-height: none;
+    }
+    
+    .workspace-toolbar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .workspace-toolbar > div {
+        width: 100%;
+    }
+}
+
+@media (max-width: 768px) {
+    .workspace-container {
+        padding: var(--space-4);
+        gap: var(--space-4);
+    }
+    
+    .workspace-toolbar {
+        padding: var(--space-4);
+    }
+    
+    .workspace-toolbar strong {
+        font-size: 1rem;
+    }
+}
+
+/* ============================================
+   CUSTOM SCROLLBAR
+   ============================================ */
+.workspace-sidebar::-webkit-scrollbar,
+.workspace-right-sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.workspace-sidebar::-webkit-scrollbar-track,
+.workspace-right-sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.workspace-sidebar::-webkit-scrollbar-thumb,
+.workspace-right-sidebar::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.workspace-sidebar::-webkit-scrollbar-thumb:hover,
+.workspace-right-sidebar::-webkit-scrollbar-thumb:hover {
+    background: var(--border-color-hover);
+}
+
+/* ============================================
+   PRINT STYLES
+   ============================================ */
+@media print {
+    .workspace-sidebar,
+    .workspace-right-sidebar,
+    .workspace-toolbar {
+        display: none;
+    }
+}

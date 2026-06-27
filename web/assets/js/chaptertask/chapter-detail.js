@@ -939,30 +939,37 @@
                     btnManuscriptWorkspace.href = ctx + '/main/manuscript-workspace/' + workspaceId;
                 } else if (status === 'REJECTED') {
 
-                    btnManuscriptWorkspace.textContent =
-                            '🔄 Create New Version';
+                    // Authorization: Only the chapter owner (MANGAKA) can create new version
+                    if (isOwner()) {
+                        btnManuscriptWorkspace.textContent =
+                                '🔄 Create New Version';
 
-                    btnManuscriptWorkspace.removeAttribute('href');
+                        btnManuscriptWorkspace.removeAttribute('href');
 
-                    btnManuscriptWorkspace.onclick = async function (e) {
+                        btnManuscriptWorkspace.onclick = async function (e) {
 
-                        e.preventDefault();
+                            e.preventDefault();
 
-                        const response = await fetch(
-                                ctx
-                                + '/main/chapters/'
-                                + chapter.id
-                                + '/manuscript-workspace/new-version',
-                                {
-                                    method: 'POST'
-                                }
-                        );
+                            const response = await fetch(
+                                    ctx
+                                    + '/main/chapters/'
+                                    + chapter.id
+                                    + '/manuscript-workspace/new-version',
+                                    {
+                                        method: 'POST'
+                                    }
+                            );
 
-                        if (response.redirected) {
+                            if (response.redirected) {
 
-                            window.location.href = response.url;
-                        }
-                    };
+                                window.location.href = response.url;
+                            }
+                        };
+                    } else {
+                        // Non-owners cannot create new version - show view instead
+                        btnManuscriptWorkspace.textContent = '👀 View Rejected Manuscript';
+                        btnManuscriptWorkspace.href = ctx + '/main/manuscript-workspace/' + workspaceId;
+                    }
                 } else {
                     // Default: fallback về view workspace
                     btnManuscriptWorkspace.textContent = '📝 Manuscript Workspace';

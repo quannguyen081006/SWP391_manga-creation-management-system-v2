@@ -602,6 +602,17 @@ public class ManuscriptVersionService {
             throw new BusinessRuleException("Invalid chapterId: " + chapterId + ". Must be greater than 0.");
         }
 
+        // Authorization: Only MANGAKA role can create new version
+        if (!user.hasRole("MANGAKA")) {
+            throw new BusinessRuleException("Only MANGAKA role can create a new manuscript version");
+        }
+
+        // Authorization: Only the chapter owner (author) can create new version
+        long mangakaId = chapterRepository.findOwnerMangakaByChapter(chapterId);
+        if (user.getId() != mangakaId) {
+            throw new BusinessRuleException("Only the chapter owner can create a new manuscript version");
+        }
+
         // Validate latest version is REJECTED
         List<ManuscriptVersion> versions = manuscriptVersionRepository.findByChapterIdOrderByVersionDesc(chapterId);
         if (versions.isEmpty()) {
