@@ -231,7 +231,7 @@
 .btn-primary:hover {
     background: #2563eb;
     border-color: #2563eb;
-    color: white;
+    color: blue;
 }
 
 /* Success button */
@@ -244,7 +244,7 @@
 .btn-success:hover {
     background: #059669;
     border-color: #059669;
-    color: white;
+    color: blue;
 }
 
 /* Danger button */
@@ -257,7 +257,7 @@
 .btn-danger:hover {
     background: #dc2626;
     border-color: #dc2626;
-    color: white;
+    color: red;
 }
 
 /* Secondary button */
@@ -270,7 +270,7 @@
 .btn-secondary:hover {
     background: #f8fafc;
     border-color: var(--border-color-hover);
-    color: var(--text-primary);
+    color: green;
 }
 
 /* Disabled state */
