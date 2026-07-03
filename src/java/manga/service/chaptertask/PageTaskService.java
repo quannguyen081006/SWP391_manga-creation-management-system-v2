@@ -2,6 +2,7 @@ package manga.service.chaptertask;
 
 import manga.common.util.SessionUserUtil;
 import manga.model.AuthenticatedUser;
+import manga.model.chaptertask.TaskReviewHistoryEntry;
 import manga.model.chaptertask.TaskSummary;
 import manga.repository.chaptertask.PageTaskRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -121,6 +122,12 @@ public class PageTaskService {
         TaskSummary task = requireTask(taskId);
         requireCanView(task, user);
         return task;
+    }
+
+    /** Lấy toàn bộ lịch sử submit/review của task, tái dùng check quyền xem của getDetail(). */
+    public List<TaskReviewHistoryEntry> getSubmissionHistory(long taskId, AuthenticatedUser user) {
+        getDetail(taskId, user);
+        return pageTaskRepository.listReviewHistory(taskId);
     }
 
     /**

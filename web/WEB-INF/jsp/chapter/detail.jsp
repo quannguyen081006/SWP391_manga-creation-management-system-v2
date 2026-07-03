@@ -23,7 +23,7 @@
     <meta charset="UTF-8">
     <title>Chapter Detail</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css?v=20260525" />
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/chaptertask/chapter-detail.css?v=20260605buttons" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/chaptertask/chapter-detail.css?v=20260703history" />
 </head>
 <body>
 <%-- [2] HEADER: shared navigation bar dùng chung toàn app, xem common/header.jsp --%>
@@ -251,6 +251,14 @@ Mở khi: click "Compare" trên page slot đã có lịch sử upload--%>
     <div id="pageCompareBody"></div>
   </div>
 </div>
+<%-- [7b] MODAL pageHistoryModal: lịch sử upload ảnh + stage của một page, cho phép Mangaka chủ rollback --%>
+<div id="pageHistoryModal" class="chapter-detail-inline-51">
+  <div class="chapter-detail-inline-52">
+    <button id="pageHistoryClose" class="chapter-detail-inline-53">&times;</button>
+    <div id="pageHistoryTitle" class="chapter-detail-inline-54"></div>
+    <div id="pageHistoryBody"></div>
+  </div>
+</div>
 <%-- 
     [8] MODAL pageUploadModal: upload/xem/xóa ảnh một page slot
     Stage picker: tick 5 stage (Sketching→Inking→Coloring→Screentone→Lettering)
@@ -394,7 +402,7 @@ Mở khi: click "Compare" trên page slot đã có lịch sử upload--%>
     Cần thiết để fetch() gọi đúng API URL khi app deploy trên subdirectory
     Đặt trước chapter-detail.js để JS đọc được ngay khi load
 --%>
-<script src="${pageContext.request.contextPath}/assets/js/chaptertask/chapter-detail.js?v=20260608split"
+<script src="${pageContext.request.contextPath}/assets/js/chaptertask/chapter-detail.js?v=20260703history"
         data-context-path="${pageContext.request.contextPath}"></script>
 
 <jsp:include page="../common/footer.jsp" />

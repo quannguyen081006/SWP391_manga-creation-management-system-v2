@@ -1,10 +1,13 @@
 package manga.repository.chaptertask;
 
+import manga.common.util.ImagePhashUtil;
 import manga.model.chaptertask.ChapterImageItem;
+import manga.repository.SystemSettingRepository;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -39,8 +42,15 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class ChapterImageRepository {
 
+    private static final int DEFAULT_PHASH_HAMMING_THRESHOLD = 10;
+
     @Autowired
     private DataSource dataSource;
+
+    @Autowired
+    private SystemSettingRepository systemSettingRepository;
+
+    private volatile Boolean imageHashColumnReady = Boolean.FALSE;
 
     /**
      * Upload ảnh chapter mới.
@@ -48,15 +58,19 @@ public class ChapterImageRepository {
      * - Sau khi insert PAGE qua task → touch lastProgressAt của PageTask
      */
     public long upload(long chapterId, Long pageTaskId, long uploadedBy, String imageType,
-            Integer pageNumber, String fileUrl, String originalFileName, long fileSizeBytes) {
+            Integer pageNumber, String fileUrl, String originalFileName, long fileSizeBytes, String imagePhash) {
         String insertSql =
-            "INSERT INTO ChapterImage (chapterId, pageTaskId, uploadedBy, imageType, pageNumber, fileUrl, originalFileName, fileSizeBytes, uploadedAt, isActive) "
-            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, GETDATE(), 1)";
+            "INSERT INTO ChapterImage (chapterId, pageTaskId, uploadedBy, imageType, pageNumber, fileUrl, originalFileName, fileSizeBytes, uploadedAt, isActive, imagePhash) "
+            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, GETDATE(), 1, ?)";
 
         try (Connection conn = dataSource.getConnection()) {
+            ensureImageHashColumnReady(conn);
             String normalizedType = normalizeImageType(imageType);
             validateUpload(conn, chapterId, pageTaskId, uploadedBy, normalizedType, pageNumber, fileUrl);
             if ("PAGE".equals(normalizedType)) {
+                if (imagePhash != null) {
+                    checkDuplicateImage(conn, chapterId, imagePhash);
+                }
                 deactivateActivePageImages(conn, chapterId, pageNumber.intValue());
             }
 
@@ -78,6 +92,7 @@ public class ChapterImageRepository {
                 ps.setString(6, fileUrl.trim());
                 ps.setString(7, trimToNull(originalFileName));
                 ps.setLong(8, fileSizeBytes);
+                ps.setString(9, imagePhash);
                 ps.executeUpdate();
                 try (ResultSet rs = ps.getGeneratedKeys()) {
                     if (!rs.next()) {
@@ -99,6 +114,69 @@ public class ChapterImageRepository {
             return newId;
         } catch (SQLException ex) {
             throw new RuntimeException("Cannot upload chapter image", ex);
+        }
+    }
+
+    /** Tự thêm cột imagePhash nếu chưa có - tránh phải chạy migration tay trên máy đồng đội. */
+    private void ensureImageHashColumnReady(Connection conn) throws SQLException {
+        if (Boolean.TRUE.equals(imageHashColumnReady)) {
+            return;
+        }
+        synchronized (this) {
+            if (Boolean.TRUE.equals(imageHashColumnReady)) {
+                return;
+            }
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT CASE WHEN COL_LENGTH('dbo.ChapterImage','imagePhash') IS NULL THEN 0 ELSE 1 END");
+                 ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                if (rs.getInt(1) == 0) {
+                    try (Statement alter = conn.createStatement()) {
+                        alter.execute("ALTER TABLE [dbo].[ChapterImage] ADD [imagePhash] [char](16) NULL");
+                    }
+                }
+            }
+            imageHashColumnReady = Boolean.TRUE;
+        }
+    }
+
+    /**
+     * Chặn nộp trùng ảnh: so sánh pHash ảnh mới với toàn bộ ảnh (kể cả đã bị reject/thay)
+     * từng upload trong CẢ chapter - mọi task, mọi page. Đảm bảo không tái sử dụng lại
+     * một ảnh đã dùng ở bất kỳ đâu trong chapter.
+     */
+    private void checkDuplicateImage(Connection conn, long chapterId, String newHash) throws SQLException {
+        int threshold = systemSettingRepository.getInt(
+                SystemSettingRepository.PAGE_TASK_PHASH_THRESHOLD, DEFAULT_PHASH_HAMMING_THRESHOLD);
+        String sql = "SELECT imagePhash FROM ChapterImage WHERE chapterId = ? AND imagePhash IS NOT NULL";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, chapterId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String existing = rs.getString(1);
+                    if (ImagePhashUtil.hammingDistance(newHash, existing) <= threshold) {
+                        throw new IllegalArgumentException(
+                                "Ảnh này đã từng được dùng trước đó trong chapter này (kể cả bản bị từ chối/thay thế). "
+                                + "Vui lòng chỉnh sửa nội dung trước khi upload lại.");
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Public entry cho luồng Mangaka upload (PageApiController) - kiểm tra trùng ảnh
+     * trên phạm vi cả chapter, mở connection riêng.
+     */
+    public void checkDuplicateImageInChapter(long chapterId, String newHash) {
+        if (newHash == null) {
+            return;
+        }
+        try (Connection conn = dataSource.getConnection()) {
+            ensureImageHashColumnReady(conn);
+            checkDuplicateImage(conn, chapterId, newHash);
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot check duplicate image", ex);
         }
     }
 
@@ -152,11 +230,17 @@ public class ChapterImageRepository {
         return list(sql, pageTaskId, pageTaskId, "Cannot list task images");
     }
 
+    /** Overload không kèm hash (dùng cho backfill từ Page.imageUrl có sẵn - không có file để hash). */
+    public void syncFinalPageUpload(long chapterId, int pageNumber, long uploadedBy, String fileUrl) {
+        syncFinalPageUpload(chapterId, pageNumber, uploadedBy, fileUrl, null);
+    }
+
     /**
      * Mangaka sync 1 ảnh page hoàn chỉnh vào ChapterImage (không qua task).
      * Chỉ Mangaka chủ seri mới được gọi. Deactivate ảnh cũ cùng pageNumber trước.
+     * imagePhash: lưu để phục vụ chống trùng toàn chapter (null nếu không tính được).
      */
-    public void syncFinalPageUpload(long chapterId, int pageNumber, long uploadedBy, String fileUrl) {
+    public void syncFinalPageUpload(long chapterId, int pageNumber, long uploadedBy, String fileUrl, String imagePhash) {
         if (fileUrl == null || fileUrl.trim().isEmpty()) {
             return;
         }
@@ -165,9 +249,10 @@ public class ChapterImageRepository {
                 + "FROM Chapter c JOIN Series s ON s.id = c.seriesId "
                 + "WHERE c.id = ?";
         String insertSql =
-                "INSERT INTO ChapterImage (chapterId, pageTaskId, uploadedBy, imageType, pageNumber, fileUrl, originalFileName, fileSizeBytes, uploadedAt, isActive, note) "
-                + "VALUES (?, NULL, ?, 'PAGE', ?, ?, ?, NULL, GETDATE(), 1, 'MANGAKA_PAGE_UPLOAD')";
+                "INSERT INTO ChapterImage (chapterId, pageTaskId, uploadedBy, imageType, pageNumber, fileUrl, originalFileName, fileSizeBytes, uploadedAt, isActive, note, imagePhash) "
+                + "VALUES (?, NULL, ?, 'PAGE', ?, ?, ?, NULL, GETDATE(), 1, 'MANGAKA_PAGE_UPLOAD', ?)";
         try (Connection conn = dataSource.getConnection()) {
+            ensureImageHashColumnReady(conn);
             long ownerId;
             try (PreparedStatement ps = conn.prepareStatement(ownerSql)) {
                 ps.setLong(1, chapterId);
@@ -188,6 +273,7 @@ public class ChapterImageRepository {
                 ps.setInt(3, pageNumber);
                 ps.setString(4, fileUrl.trim());
                 ps.setString(5, "Chapter page " + pageNumber);
+                ps.setString(6, imagePhash);
                 ps.executeUpdate();
             }
         } catch (SQLException ex) {
@@ -303,6 +389,42 @@ public class ChapterImageRepository {
         } catch (SQLException ex) {
             throw new RuntimeException("Cannot load chapter image", ex);
         }
+    }
+
+    /**
+     * Lấy các ChapterImage theo danh sách id, giới hạn trong 1 pageTaskId (an toàn - tránh lộ ảnh task khác).
+     * Không lọc isActive vì dùng để hiển thị lịch sử, bao gồm cả ảnh cũ đã bị thay/reject.
+     */
+    public List<ChapterImageItem> findByIds(long pageTaskId, List<Long> ids) {
+        List<ChapterImageItem> rows = new ArrayList<ChapterImageItem>();
+        if (ids == null || ids.isEmpty()) {
+            return rows;
+        }
+        StringBuilder placeholders = new StringBuilder();
+        for (int i = 0; i < ids.size(); i++) {
+            if (i > 0) {
+                placeholders.append(',');
+            }
+            placeholders.append('?');
+        }
+        String sql =
+            "SELECT id, chapterId, pageTaskId, uploadedBy, imageType, pageNumber, fileUrl, originalFileName, fileSizeBytes, uploadedAt, isActive, note "
+            + "FROM ChapterImage WHERE pageTaskId = ? AND id IN (" + placeholders + ")";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, pageTaskId);
+            for (int i = 0; i < ids.size(); i++) {
+                ps.setLong(i + 2, ids.get(i).longValue());
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    rows.add(map(rs));
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot load chapter images by ids", ex);
+        }
+        return rows;
     }
 
     /** Lấy mangakaId chủ seri của chapter (dùng để kiểm tra quyền upload COVER/REFERENCE). */

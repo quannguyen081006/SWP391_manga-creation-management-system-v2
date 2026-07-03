@@ -1,5 +1,6 @@
 package manga.repository.chaptertask;
 
+import manga.model.chaptertask.PageRevisionEntry;
 import manga.model.chaptertask.PageSlotSummary;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -73,6 +74,7 @@ public class PageRepository {
     /** Cache lazy: null = chưa kiểm tra, true/false = kết quả. Dùng volatile để thread-safe. */
     private volatile Boolean pageTableReady;
     private volatile Boolean pageStageColumnReady;
+    private volatile Boolean pageRevisionTableReady;
 
     @Autowired
     private DataSource dataSource;
@@ -152,6 +154,147 @@ public class PageRepository {
                 throw new RuntimeException("Cannot prepare page stage column", ex);
             }
         }
+    }
+
+    /**
+     * Đảm bảo bảng PageRevision (lịch sử thay đổi ảnh/stage của page) tồn tại.
+     * Tự CREATE TABLE nếu chưa có - tránh phải chạy migration tay trên máy đồng đội.
+     */
+    private void ensurePageRevisionTableReady() {
+        if (!isPageTableReady()) {
+            return;
+        }
+        if (Boolean.TRUE.equals(pageRevisionTableReady)) {
+            return;
+        }
+        synchronized (this) {
+            if (Boolean.TRUE.equals(pageRevisionTableReady)) {
+                return;
+            }
+            String createSql =
+                    "IF OBJECT_ID('dbo.PageRevision','U') IS NULL "
+                    + "CREATE TABLE [dbo].[PageRevision] ("
+                    + "[id] [bigint] IDENTITY(1,1) NOT NULL, "
+                    + "[pageId] [bigint] NOT NULL, "
+                    + "[imageUrl] [varchar](512) NULL, "
+                    + "[completedStage] [varchar](30) NULL, "
+                    + "[changedBy] [bigint] NULL, "
+                    + "[changedAt] [datetime] NOT NULL, "
+                    + "[source] [varchar](20) NOT NULL, "
+                    + "CONSTRAINT [PK_PageRevision] PRIMARY KEY CLUSTERED ([id] ASC))";
+            String indexSql =
+                    "IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_PageRevision_pageId' "
+                    + "AND object_id = OBJECT_ID('dbo.PageRevision')) "
+                    + "CREATE INDEX [IX_PageRevision_pageId] ON [dbo].[PageRevision]([pageId] ASC, [id] DESC)";
+            try (Connection conn = dataSource.getConnection();
+                 PreparedStatement create = conn.prepareStatement(createSql);
+                 PreparedStatement index = conn.prepareStatement(indexSql)) {
+                create.executeUpdate();
+                index.executeUpdate();
+                pageRevisionTableReady = Boolean.TRUE;
+            } catch (SQLException ex) {
+                throw new RuntimeException("Cannot prepare page revision table", ex);
+            }
+        }
+    }
+
+    /** Ghi 1 mốc lịch sử thay đổi ảnh/stage của page. Gọi sau mỗi lần update page thành công. */
+    private void recordRevision(long pageId, String imageUrl, String stage, long changedBy, String source) {
+        ensurePageRevisionTableReady();
+        String sql = "INSERT INTO [dbo].[PageRevision] (pageId, imageUrl, completedStage, changedBy, changedAt, source) "
+                + "VALUES (?, ?, ?, ?, GETDATE(), ?)";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, pageId);
+            ps.setString(2, imageUrl);
+            ps.setString(3, stage);
+            ps.setLong(4, changedBy);
+            ps.setString(5, source);
+            ps.executeUpdate();
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot record page revision", ex);
+        }
+    }
+
+    /**
+     * Lấy toàn bộ lịch sử thay đổi ảnh/stage của 1 page, mới nhất trước.
+     */
+    public List<PageRevisionEntry> listRevisions(long pageId) {
+        ensurePageRevisionTableReady();
+        String sql =
+                "SELECT r.id, r.imageUrl, r.completedStage, r.changedAt, r.source, u.fullName AS changedByName "
+                + "FROM [dbo].[PageRevision] r "
+                + "LEFT JOIN [User] u ON u.id = r.changedBy "
+                + "WHERE r.pageId = ? "
+                + "ORDER BY r.id DESC";
+        List<PageRevisionEntry> entries = new ArrayList<PageRevisionEntry>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, pageId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    PageRevisionEntry entry = new PageRevisionEntry();
+                    entry.setId(rs.getLong("id"));
+                    entry.setImageUrl(rs.getString("imageUrl"));
+                    entry.setCompletedStage(rs.getString("completedStage"));
+                    entry.setChangedAt(rs.getTimestamp("changedAt"));
+                    entry.setSource(rs.getString("source"));
+                    entry.setChangedByName(rs.getString("changedByName"));
+                    entries.add(entry);
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot load page revisions", ex);
+        }
+        return entries;
+    }
+
+    /**
+     * Rollback page về đúng ảnh + stage của 1 mốc lịch sử cũ.
+     * Ghi trực tiếp (KHÔNG qua resolveNextStage) vì rollback cố ý lùi stage.
+     * Sau đó append 1 mốc mới source=ROLLBACK để giữ timeline liên tục.
+     */
+    public void rollbackToRevision(long pageId, long revisionId, long changedBy) {
+        requirePageTableReady();
+        ensurePageStageColumnReady();
+        ensurePageRevisionTableReady();
+
+        String readSql = "SELECT imageUrl, completedStage FROM [dbo].[PageRevision] WHERE id = ? AND pageId = ?";
+        String imageUrl;
+        String stage;
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(readSql)) {
+            ps.setLong(1, revisionId);
+            ps.setLong(2, pageId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalArgumentException("Revision not found for this page");
+                }
+                imageUrl = rs.getString("imageUrl");
+                stage = rs.getString("completedStage");
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot load page revision", ex);
+        }
+
+        String status = (imageUrl == null || imageUrl.trim().isEmpty()) ? "EMPTY" : "IN_PROGRESS";
+        String updateSql = "UPDATE " + TABLE_PAGE
+                + " SET imageUrl = ?, completedStage = ?, uploadedBy = ?, uploadedAt = GETDATE(), status = ? WHERE id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(updateSql)) {
+            ps.setString(1, imageUrl);
+            ps.setString(2, stage);
+            ps.setLong(3, changedBy);
+            ps.setString(4, status);
+            ps.setLong(5, pageId);
+            if (ps.executeUpdate() == 0) {
+                throw new IllegalArgumentException("Page not found");
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot rollback page", ex);
+        }
+
+        recordRevision(pageId, imageUrl, stage, changedBy, "ROLLBACK");
     }
 
     // =====================================================================
@@ -429,6 +572,9 @@ public class PageRepository {
         } catch (SQLException ex) {
             throw new RuntimeException("Cannot update page image", ex);
         }
+        // stage có thể null (giữ nguyên stage cũ) -> đọc lại stage thực tế để ghi lịch sử cho đúng
+        String effectiveStage = stage != null ? stage : findCurrentCompletedStage(pageId);
+        recordRevision(pageId, imageUrl, effectiveStage, uploadedBy, "MANGAKA_UPLOAD");
     }
 
     /**
@@ -477,6 +623,8 @@ public class PageRepository {
         } catch (SQLException ex) {
             throw new RuntimeException("Cannot update page image", ex);
         }
+        String effectiveStage = stage != null ? stage : findCurrentCompletedStage(pageId);
+        recordRevision(pageId, imageUrl, effectiveStage, uploadedBy, "TASK_APPROVED");
     }
 
     /**

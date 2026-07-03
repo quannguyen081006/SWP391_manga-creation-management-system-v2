@@ -4,6 +4,7 @@ package manga.controller.api.chaptertask;
 import manga.common.ApiResponse;
 import manga.common.util.SessionUserUtil;
 import manga.model.AuthenticatedUser;
+import manga.model.chaptertask.TaskReviewHistoryEntry;
 import manga.model.chaptertask.TaskSummary;
 import manga.service.chaptertask.PageTaskService;
 import java.util.List;
@@ -123,6 +124,18 @@ public class PageTaskApiController {
     public ApiResponse<TaskSummary> detail(@PathVariable("id") long id, HttpSession session) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
         return ApiResponse.ok(pageTaskService.getDetail(id, user), "Task detail");
+    }
+
+    // ============================================================
+    // 5b. LICH SU SUBMIT/REVIEW CUA TASK
+    // GET /api/v1/tasks/{id}/submission-history
+    // - Tra ve toan bo cac round nop bai (khong chi lan gan nhat)
+    // - Quyen xem giong detail() (tai su dung getDetail() de kiem tra)
+    // ============================================================
+    @RequestMapping(value = "/tasks/{id}/submission-history", method = RequestMethod.GET)
+    public ApiResponse<List<TaskReviewHistoryEntry>> submissionHistory(@PathVariable("id") long id, HttpSession session) {
+        AuthenticatedUser user = SessionUserUtil.requireUser(session);
+        return ApiResponse.ok(pageTaskService.getSubmissionHistory(id, user), "Submission history");
     }
 
     // ============================================================

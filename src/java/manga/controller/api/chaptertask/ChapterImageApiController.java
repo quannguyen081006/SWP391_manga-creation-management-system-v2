@@ -2,6 +2,7 @@ package manga.controller.api.chaptertask;
 
 // Chapter/task API group: handles uploaded chapter page images and keeps image workflow endpoints together.
 import manga.common.ApiResponse;
+import manga.common.util.ImagePhashUtil;
 import manga.common.util.SessionUserUtil;
 import manga.model.AuthenticatedUser;
 import manga.model.chaptertask.ChapterImageItem;
@@ -11,6 +12,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.Locale;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
@@ -95,16 +97,44 @@ public class ChapterImageApiController {
             originalFileName = originalNameFromUrl(fileUrl);
         }
 
-        long id = chapterImageRepository.upload(
-                chapterId,
-                pageTaskId,
-                user.getId(),
-                imageType,
-                pageNumber,
-                fileUrl,
-                originalFileName,
-                fileSizeBytes.longValue());
+        // Tinh pHash cho file vua luu (chi khi upload truc tiep, khong ap dung khi chi truyen URL co san)
+        String imagePhash = null;
+        File savedFile = null;
+        if (upload != null) {
+            requireImageExtension(originalFileName);
+            savedFile = new File(request.getServletContext().getRealPath(upload.path));
+            imagePhash = ImagePhashUtil.hashOf(savedFile);
+        }
+
+        long id;
+        try {
+            id = chapterImageRepository.upload(
+                    chapterId,
+                    pageTaskId,
+                    user.getId(),
+                    imageType,
+                    pageNumber,
+                    fileUrl,
+                    originalFileName,
+                    fileSizeBytes.longValue(),
+                    imagePhash);
+        } catch (IllegalArgumentException ex) {
+            // Upload bi tu choi (vd: trung anh) sau khi file da luu xuong dia -> don rac
+            if (savedFile != null) {
+                savedFile.delete();
+            }
+            throw ex;
+        }
         return ApiResponse.ok(chapterImageRepository.findById(id), "Chapter image uploaded");
+    }
+
+    // HELPER: Chi cho phep JPG/PNG/WEBP truoc khi tinh hash, tranh loi 500 khi upload nham file khong phai anh
+    private void requireImageExtension(String originalFileName) {
+        String name = originalFileName == null ? "" : originalFileName.toLowerCase(Locale.ENGLISH);
+        if (!name.endsWith(".jpg") && !name.endsWith(".jpeg")
+                && !name.endsWith(".png") && !name.endsWith(".webp")) {
+            throw new IllegalArgumentException("Chỉ chấp nhận file ảnh JPG, PNG hoặc WEBP");
+        }
     }
 
     // ============================================================

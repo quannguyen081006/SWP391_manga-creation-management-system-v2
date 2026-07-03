@@ -2,6 +2,7 @@ package manga.repository.chaptertask;
 
 import manga.model.AuthenticatedUser;
 import manga.model.chaptertask.ChapterImageItem;
+import manga.model.chaptertask.TaskReviewHistoryEntry;
 import manga.model.chaptertask.TaskSummary;
 import java.sql.Connection;
 import java.sql.Date;
@@ -78,7 +79,7 @@ public class PageTaskRepository {
     private static final String SQL_CLOSED_TASK_STATUSES = "'APPROVED','DELETED','REASSIGNED','CANCELLED'";
 
     /** Các trạng thái bị bỏ qua khi chạy job đánh dấu OVERDUE */
-    private static final String SQL_OVERDUE_SKIP_STATUSES = "'APPROVED','OVERDUE','CANCELLED','DELETED','REASSIGNED'";
+    private static final String SQL_OVERDUE_SKIP_STATUSES = "'APPROVED','OVERDUE','CANCELLED','DELETED','REASSIGNED','SUBMITTED'";
 
     /**
      * Cờ DELAYED (chỉ cảnh báo, không thay đổi status):
@@ -104,6 +105,9 @@ public class PageTaskRepository {
 
     /** Cache: DB đã sẵn sàng cho lifecycle schema (actionReason, previousAssistantId, ...) chưa? */
     private volatile Boolean taskLifecycleSchemaReady;
+
+    /** Cache: bảng TaskReviewHistory (lịch sử submit/review) đã tồn tại chưa? */
+    private volatile Boolean taskReviewHistoryTableReady;
 
     @Autowired
     private DataSource dataSource;
@@ -175,6 +179,49 @@ public class PageTaskRepository {
                 taskLifecycleSchemaReady = Boolean.TRUE;
             } catch (SQLException ex) {
                 throw new RuntimeException("Cannot prepare task lifecycle schema", ex);
+            }
+        }
+    }
+
+    /**
+     * Đảm bảo bảng TaskReviewHistory (lịch sử từng round submit/review) tồn tại.
+     * Cần bảng riêng vì PageTask.rejectionReason/approvalComment bị ghi đè mỗi vòng,
+     * không đủ để dựng lại lịch sử đầy đủ.
+     */
+    private void ensureTaskReviewHistoryTableReady() {
+        if (Boolean.TRUE.equals(taskReviewHistoryTableReady)) {
+            return;
+        }
+        synchronized (this) {
+            if (Boolean.TRUE.equals(taskReviewHistoryTableReady)) {
+                return;
+            }
+            String createSql =
+                    "IF OBJECT_ID('dbo.TaskReviewHistory','U') IS NULL "
+                    + "CREATE TABLE [dbo].[TaskReviewHistory] ("
+                    + "[id] [bigint] IDENTITY(1,1) NOT NULL, "
+                    + "[taskId] [bigint] NOT NULL, "
+                    + "[roundNumber] [int] NOT NULL, "
+                    + "[submittedAt] [datetime] NOT NULL, "
+                    + "[submittedBy] [bigint] NOT NULL, "
+                    + "[decision] [varchar](20) NULL, "
+                    + "[reviewedAt] [datetime] NULL, "
+                    + "[reviewedBy] [bigint] NULL, "
+                    + "[reviewComment] [nvarchar](300) NULL, "
+                    + "[imageIdsSnapshot] [nvarchar](500) NULL, "
+                    + "CONSTRAINT [PK_TaskReviewHistory] PRIMARY KEY CLUSTERED ([id] ASC))";
+            String indexSql =
+                    "IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_TaskReviewHistory_taskId' "
+                    + "AND object_id = OBJECT_ID('dbo.TaskReviewHistory')) "
+                    + "CREATE INDEX [IX_TaskReviewHistory_taskId] ON [dbo].[TaskReviewHistory]([taskId] ASC, [roundNumber] DESC)";
+            try (Connection conn = dataSource.getConnection();
+                 PreparedStatement create = conn.prepareStatement(createSql);
+                 PreparedStatement index = conn.prepareStatement(indexSql)) {
+                create.executeUpdate();
+                index.executeUpdate();
+                taskReviewHistoryTableReady = Boolean.TRUE;
+            } catch (SQLException ex) {
+                throw new RuntimeException("Cannot prepare task review history schema", ex);
             }
         }
     }
@@ -1045,12 +1092,13 @@ public class PageTaskRepository {
      */
     public void updateStatusByAssistant(long taskId, long assistantId, String status) {
         ensureTaskLifecycleSchemaReady();
+        ensureTaskReviewHistoryTableReady();
         String normalized = status == null ? "" : status.trim().toUpperCase();
         if (!"SUBMITTED".equals(normalized)) {
             throw new IllegalArgumentException("Assistant can only submit task for review");
         }
 
-        String readSql = "SELECT chapterId, assistantId, pageRangeStart, pageRangeEnd, status FROM PageTask WHERE id = ?";
+        String readSql = "SELECT chapterId, assistantId, pageRangeStart, pageRangeEnd, status, rejectionCount FROM PageTask WHERE id = ?";
         String updateSql = "UPDATE PageTask SET status = ?, updatedAt = GETDATE(), lastProgressAt = GETDATE() WHERE id = ?";
 
         try (Connection conn = dataSource.getConnection();
@@ -1061,6 +1109,7 @@ public class PageTaskRepository {
             int pageRangeStart;
             int pageRangeEnd;
             String currentStatus;
+            int rejectionCount;
             try (ResultSet rs = read.executeQuery()) {
                 if (!rs.next()) {
                     throw new IllegalArgumentException("Task not found");
@@ -1070,6 +1119,7 @@ public class PageTaskRepository {
                 pageRangeStart = rs.getInt("pageRangeStart");
                 pageRangeEnd = rs.getInt("pageRangeEnd");
                 currentStatus = rs.getString("status");
+                rejectionCount = rs.getInt("rejectionCount");
             }
 
             if (ownerAssistantId != assistantId) {
@@ -1091,6 +1141,8 @@ public class PageTaskRepository {
                 ps.setLong(2, taskId);
                 ps.executeUpdate();
             }
+
+            insertReviewHistoryRound(conn, taskId, assistantId, rejectionCount + 1);
 
             refreshChapterProgress(chapterId);
             long mangakaId = findChapterOwnerMangaka(chapterId);
@@ -1132,10 +1184,61 @@ public class PageTaskRepository {
     }
 
     /**
+     * Ghi nhận 1 round submit mới vào TaskReviewHistory, snapshot lại id các ảnh PAGE đang active.
+     * Gọi ngay sau khi status chuyển thành SUBMITTED, trong cùng connection/transaction.
+     */
+    private void insertReviewHistoryRound(Connection conn, long taskId, long submittedBy, int roundNumber) throws SQLException {
+        String snapshot;
+        String imageIdsSql = "SELECT id FROM ChapterImage WHERE pageTaskId = ? AND imageType = 'PAGE' AND isActive = 1 ORDER BY pageNumber";
+        try (PreparedStatement ps = conn.prepareStatement(imageIdsSql)) {
+            ps.setLong(1, taskId);
+            StringBuilder ids = new StringBuilder();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    if (ids.length() > 0) {
+                        ids.append(',');
+                    }
+                    ids.append(rs.getLong(1));
+                }
+            }
+            snapshot = ids.length() == 0 ? null : ids.toString();
+        }
+
+        String insertSql =
+                "INSERT INTO TaskReviewHistory (taskId, roundNumber, submittedAt, submittedBy, decision, imageIdsSnapshot) "
+                + "VALUES (?, ?, GETDATE(), ?, NULL, ?)";
+        try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
+            ps.setLong(1, taskId);
+            ps.setInt(2, roundNumber);
+            ps.setLong(3, submittedBy);
+            ps.setString(4, snapshot);
+            ps.executeUpdate();
+        }
+    }
+
+    /**
+     * Cập nhật quyết định (APPROVED/REJECTED) cho round đang chờ review (decision IS NULL) mới nhất của task.
+     */
+    private void closeReviewHistoryRound(Connection conn, long taskId, String decision, long reviewedBy, String reviewComment) throws SQLException {
+        String sql =
+                "UPDATE TaskReviewHistory "
+                + "SET decision = ?, reviewedAt = GETDATE(), reviewedBy = ?, reviewComment = ? "
+                + "WHERE id = (SELECT TOP 1 id FROM TaskReviewHistory WHERE taskId = ? AND decision IS NULL ORDER BY roundNumber DESC)";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, decision);
+            ps.setLong(2, reviewedBy);
+            ps.setString(3, reviewComment == null ? null : reviewComment.trim());
+            ps.setLong(4, taskId);
+            ps.executeUpdate();
+        }
+    }
+
+    /**
      * Mangaka duyệt task SUBMITTED (BR-39).
      * Sau khi duyệt: ảnh task được promote lên Chapter, cập nhật tiến độ, gửi thông báo.
      */
     public void approveByMangaka(long taskId, long mangakaId, String comment) {
+        ensureTaskReviewHistoryTableReady();
         String readSql = "SELECT chapterId, assistantId, status FROM PageTask WHERE id = ?";
         String updateExtendedSql = "UPDATE PageTask SET status = 'APPROVED', approvalComment = ?, updatedAt = GETDATE() WHERE id = ?";
         String updateLegacySql = "UPDATE PageTask SET status = 'APPROVED', updatedAt = GETDATE() WHERE id = ?";
@@ -1180,6 +1283,8 @@ public class PageTaskRepository {
                 }
             }
 
+            closeReviewHistoryRound(conn, taskId, "APPROVED", mangakaId, comment);
+
             replaceTaskStages(conn, taskId, summarizePageStages(pageStages));
             promoteTaskImagesToChapter(taskId, chapterId, mangakaId, pageStages);
             refreshChapterProgress(chapterId);
@@ -1216,6 +1321,7 @@ public class PageTaskRepository {
      * Task chuyển lại IN_PROGRESS; dueDate được gia hạn thêm 1 ngày nếu còn đủ buffer trước deadline.
      */
     public int rejectByMangaka(long taskId, long mangakaId, String reason) {
+        ensureTaskReviewHistoryTableReady();
         String readSql =
                 "SELECT t.chapterId, t.assistantId, t.status, t.rejectionCount, t.dueDate, s.publicationDate AS seriesDeadline "
                 + "FROM PageTask t "
@@ -1275,6 +1381,8 @@ public class PageTaskRepository {
                 }
             }
 
+            closeReviewHistoryRound(conn, taskId, "REJECTED", mangakaId, reason);
+
             refreshChapterProgress(chapterId);
 
             String feedback = reason == null ? "" : reason.trim();
@@ -1306,6 +1414,59 @@ public class PageTaskRepository {
             return currentDueDate;
         }
         return Date.valueOf(proposed);
+    }
+
+    /**
+     * Lấy toàn bộ lịch sử submit/review của 1 task, mới nhất trước.
+     * Mỗi round kèm theo thumbnail các ảnh đã nộp tại thời điểm đó (kể cả ảnh đã bị thay/reject sau này).
+     */
+    public List<TaskReviewHistoryEntry> listReviewHistory(long taskId) {
+        ensureTaskReviewHistoryTableReady();
+        String sql =
+                "SELECT h.roundNumber, h.submittedAt, su.fullName AS submittedByName, "
+                + "h.decision, h.reviewedAt, ru.fullName AS reviewedByName, h.reviewComment, h.imageIdsSnapshot "
+                + "FROM TaskReviewHistory h "
+                + "LEFT JOIN [User] su ON su.id = h.submittedBy "
+                + "LEFT JOIN [User] ru ON ru.id = h.reviewedBy "
+                + "WHERE h.taskId = ? "
+                + "ORDER BY h.roundNumber DESC";
+        List<TaskReviewHistoryEntry> entries = new ArrayList<TaskReviewHistoryEntry>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, taskId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    TaskReviewHistoryEntry entry = new TaskReviewHistoryEntry();
+                    entry.setRoundNumber(rs.getInt("roundNumber"));
+                    entry.setSubmittedAt(rs.getTimestamp("submittedAt"));
+                    entry.setSubmittedByName(rs.getString("submittedByName"));
+                    entry.setDecision(rs.getString("decision"));
+                    entry.setReviewedAt(rs.getTimestamp("reviewedAt"));
+                    entry.setReviewedByName(rs.getString("reviewedByName"));
+                    entry.setReviewComment(rs.getString("reviewComment"));
+                    entry.setImages(chapterImageRepository.findByIds(taskId, parseIdList(rs.getString("imageIdsSnapshot"))));
+                    entries.add(entry);
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot load task review history", ex);
+        }
+        return entries;
+    }
+
+    /** Parse chuỗi "12,13,14" thành List<Long>, trả list rỗng nếu null/empty. */
+    private List<Long> parseIdList(String csv) {
+        List<Long> ids = new ArrayList<Long>();
+        if (csv == null || csv.trim().isEmpty()) {
+            return ids;
+        }
+        for (String part : csv.split(",")) {
+            String trimmed = part.trim();
+            if (!trimmed.isEmpty()) {
+                ids.add(Long.valueOf(trimmed));
+            }
+        }
+        return ids;
     }
 
     // ============================================================

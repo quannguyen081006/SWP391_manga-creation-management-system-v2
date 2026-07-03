@@ -2,8 +2,10 @@ package manga.controller.api.chaptertask;
 
 // Chapter/task API group: page slot changes refresh chapter progress through PageTaskRepository.
 import manga.common.ApiResponse;
+import manga.common.util.ImagePhashUtil;
 import manga.common.util.SessionUserUtil;
 import manga.model.AuthenticatedUser;
+import manga.model.chaptertask.PageRevisionEntry;
 import manga.model.chaptertask.PageSlotSummary;
 import manga.repository.chaptertask.ChapterRepository;
 import manga.repository.chaptertask.ChapterImageRepository;
@@ -14,6 +16,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.Locale;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
@@ -116,18 +119,76 @@ public class PageApiController {
             throw new IllegalArgumentException("Only chapter owner can upload page images");
         }
         String savedPath = saveMultipart(request);
+        // Tinh pHash + chan trung anh tren pham vi ca chapter (giong luong assistant).
+        // Neu trung -> xoa file vua luu roi bao loi.
+        File savedFile = new File(request.getServletContext().getRealPath(savedPath));
+        String imagePhash;
+        try {
+            requireImageExtension(savedPath);
+            imagePhash = ImagePhashUtil.hashOf(savedFile);
+            chapterImageRepository.checkDuplicateImageInChapter(page.getChapterId(), imagePhash);
+        } catch (IllegalArgumentException ex) {
+            savedFile.delete();
+            throw ex;
+        }
         pageRepository.markUploaded(pageId, savedPath, user.getId(), completedStage);
         PageSlotSummary updatedPage = pageRepository.findById(pageId);
-        // Neu stage la LETTERING (stage cuoi): dong bo anh vao bang chapter_image
+        // Neu stage la LETTERING (stage cuoi): dong bo anh vao bang chapter_image (kem hash de dedup)
         if (updatedPage != null && "LETTERING".equalsIgnoreCase(updatedPage.getCompletedStage())) {
             chapterImageRepository.syncFinalPageUpload(
                     updatedPage.getChapterId(),
                     updatedPage.getPageNumber(),
                     user.getId(),
-                    savedPath);
+                    savedPath,
+                    imagePhash);
         }
         pageTaskRepository.refreshChapterProgress(page.getChapterId());
         return ApiResponse.ok(updatedPage, "Page image uploaded");
+    }
+
+    // HELPER: Chi cho phep JPG/PNG/WEBP truoc khi tinh hash, tranh loi 500 khi upload nham file khong phai anh
+    private void requireImageExtension(String fileName) {
+        String name = fileName == null ? "" : fileName.toLowerCase(Locale.ENGLISH);
+        if (!name.endsWith(".jpg") && !name.endsWith(".jpeg")
+                && !name.endsWith(".png") && !name.endsWith(".webp")) {
+            throw new IllegalArgumentException("Chỉ chấp nhận file ảnh JPG, PNG hoặc WEBP");
+        }
+    }
+
+    // ============================================================
+    // 3b. LICH SU THAY DOI ANH/STAGE CUA PAGE
+    // GET /api/v1/pages/{pageId}/history
+    // - Chi can login (giong listByChapter) - moi nguoi co quyen vao chapter deu xem duoc
+    // ============================================================
+    @RequestMapping(value = "/pages/{pageId}/history", method = RequestMethod.GET)
+    public ApiResponse<List<PageRevisionEntry>> history(@PathVariable("pageId") long pageId, HttpSession session) {
+        SessionUserUtil.requireUser(session);
+        return ApiResponse.ok(pageRepository.listRevisions(pageId), "Page history");
+    }
+
+    // ============================================================
+    // 3c. ROLLBACK PAGE VE 1 MOC LICH SU
+    // POST /api/v1/pages/{pageId}/rollback  (param revisionId)
+    // - Chi MANGAKA chu chapter moi duoc rollback (double check: role + ownership)
+    // - Khoi phuc ca anh + stage; sau do refreshChapterProgress()
+    // ============================================================
+    @RequestMapping(value = "/pages/{pageId}/rollback", method = RequestMethod.POST)
+    public ApiResponse<PageSlotSummary> rollback(
+            @PathVariable("pageId") long pageId,
+            HttpSession session,
+            @RequestParam("revisionId") long revisionId) {
+        AuthenticatedUser user = SessionUserUtil.requireUser(session);
+        PageSlotSummary page = pageRepository.findById(pageId);
+        if (page == null) {
+            throw new IllegalArgumentException("Page not found");
+        }
+        long ownerId = chapterRepository.findOwnerMangakaByChapter(page.getChapterId());
+        if (!user.hasRole("MANGAKA") || ownerId != user.getId()) {
+            throw new IllegalArgumentException("Only chapter owner can rollback page");
+        }
+        pageRepository.rollbackToRevision(pageId, revisionId, user.getId());
+        pageTaskRepository.refreshChapterProgress(page.getChapterId());
+        return ApiResponse.ok(pageRepository.findById(pageId), "Page rolled back");
     }
 
     // ============================================================

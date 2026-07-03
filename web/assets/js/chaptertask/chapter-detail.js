@@ -1209,7 +1209,15 @@
         var title = document.getElementById('pageCompareTitle');
         var body = document.getElementById('pageCompareBody');
         modal.style.display = 'flex';
-        title.textContent = 'Page ' + slot.pageNumber;
+        title.innerHTML = 'Page ' + slot.pageNumber
+                + ' <button class="btn small" type="button" id="pageCompareHistory">History</button>';
+        var histBtn = document.getElementById('pageCompareHistory');
+        if (histBtn) {
+            histBtn.addEventListener('click', function () {
+                modal.style.display = 'none';
+                openPageHistory(slot);
+            });
+        }
         var ts = String(slot.taskStatus || '').toUpperCase();
         var origUrl = slot.imageUrl ? imageUrl(slot.imageUrl) : null;
         if (!slot.taskId || (ts !== 'SUBMITTED' && ts !== 'APPROVED')) {
@@ -1265,6 +1273,75 @@
                 ? '<div class="chapter-detail-inline-88"><span class="chapter-detail-inline-89">✓ Approved</span></div>'
                 + '<img src="' + escapeHtml(finalUrl) + '" class="chapter-detail-inline-90" />'
                 : '<div class="chapter-detail-inline-91">No image</div>';
+    }
+
+    /**
+     * Mở modal lịch sử ảnh + stage của 1 page.
+     * Timeline mới-nhất-trước; mỗi mốc (trừ mốc hiện tại) có nút Rollback nếu là Mangaka chủ chapter.
+     */
+    async function openPageHistory(slot) {
+        var modal = document.getElementById('pageHistoryModal');
+        var title = document.getElementById('pageHistoryTitle');
+        var body = document.getElementById('pageHistoryBody');
+        modal.style.display = 'flex';
+        title.textContent = 'Page ' + slot.pageNumber + ' — History';
+        body.innerHTML = '<div class="chapter-detail-inline-80">Loading history...</div>';
+
+        var revisions;
+        try {
+            var res = await callApi('GET', '/api/v1/pages/' + slot.id + '/history');
+            revisions = (res && res.data) || [];
+        } catch (e) {
+            body.innerHTML = '<div class="alert error">' + escapeHtml(e.message) + '</div>';
+            return;
+        }
+
+        if (!revisions.length) {
+            body.innerHTML = '<p class="page-history-empty">No history yet. Changes made from now on will appear here.</p>';
+            return;
+        }
+
+        var owner = isOwner();
+        var html = revisions.map(function (rev, index) {
+            var stageLabel = rev.completedStage
+                    ? '<span class="page-history-stage">' + escapeHtml(formatStatus(rev.completedStage)) + '</span>'
+                    : '';
+            var thumb = rev.imageUrl
+                    ? '<a href="' + escapeHtml(imageUrl(rev.imageUrl)) + '" target="_blank" rel="noopener">'
+                        + '<img src="' + escapeHtml(imageUrl(rev.imageUrl)) + '" class="page-history-thumb" alt="revision" /></a>'
+                    : '<div class="page-history-thumb page-history-thumb-empty">No image</div>';
+            // Mốc đầu list (index 0) là trạng thái hiện tại -> không cần rollback
+            var rollbackBtn = (owner && index > 0)
+                    ? '<button class="btn small" type="button" data-rollback-revision="' + rev.id + '" data-page-id="' + slot.id + '">Rollback to this</button>'
+                    : (index === 0 ? '<span class="page-history-current">Current</span>' : '');
+            return '<div class="page-history-entry">'
+                    + thumb
+                    + '<div class="page-history-meta">'
+                    + stageLabel
+                    + '<span class="page-history-source">' + escapeHtml(formatStatus(rev.source)) + '</span>'
+                    + '<span class="page-history-when">'
+                    + (rev.changedByName ? escapeHtml(rev.changedByName) + ' · ' : '')
+                    + escapeHtml(rev.changedAt || '') + '</span>'
+                    + rollbackBtn
+                    + '</div>'
+                    + '</div>';
+        }).join('');
+        body.innerHTML = '<div class="page-history-list">' + html + '</div>';
+    }
+
+    /** Xử lý click nút Rollback trong modal lịch sử. */
+    async function handleRollback(pageId, revisionId) {
+        if (!window.confirm('Rollback this page to the selected version? Current image and stage will be replaced.')) {
+            return;
+        }
+        try {
+            await callApi('POST', '/api/v1/pages/' + pageId + '/rollback', {revisionId: revisionId});
+        } catch (e) {
+            alert(e.message);
+            return;
+        }
+        document.getElementById('pageHistoryModal').style.display = 'none';
+        await loadPages();
     }
 
     // ============================================================
@@ -2173,6 +2250,20 @@
     document.getElementById('pageCompareModal').addEventListener('click', function (e) {
         if (e.target === this) {
             this.style.display = 'none';
+        }
+    });
+
+    // Đóng page history modal
+    document.getElementById('pageHistoryClose').addEventListener('click', function () {
+        document.getElementById('pageHistoryModal').style.display = 'none';
+    });
+    document.getElementById('pageHistoryModal').addEventListener('click', function (e) {
+        if (e.target === this) {
+            this.style.display = 'none';
+        }
+        var rollbackEl = e.target.closest('[data-rollback-revision]');
+        if (rollbackEl) {
+            handleRollback(rollbackEl.getAttribute('data-page-id'), rollbackEl.getAttribute('data-rollback-revision'));
         }
     });
 

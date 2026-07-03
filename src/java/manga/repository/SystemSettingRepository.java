@@ -22,6 +22,7 @@ public class SystemSettingRepository {
     public static final String SALARY_PENALTY_PER_REJECTED_TASK = "salary.penaltyPerRejectedTask";
     public static final String SALARY_KPI_ON_TIME_WEIGHT = "salary.kpiOnTimeWeight";
     public static final String SALARY_KPI_QUALITY_WEIGHT = "salary.kpiQualityWeight";
+    public static final String PAGE_TASK_PHASH_THRESHOLD = "pageTask.phashHammingThreshold";
 
     @Autowired
     private DataSource dataSource;

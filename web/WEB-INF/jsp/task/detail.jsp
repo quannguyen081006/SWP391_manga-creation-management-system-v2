@@ -103,6 +103,12 @@
     </div>
 </c:if>
 
+<%-- [6b] SUBMISSION HISTORY: timeline toàn bộ các round submit/review, JS render vào đây --%>
+<div class="section-card">
+    <h3 class="section-title compact-title">Submission History</h3>
+    <div id="submissionHistoryList"></div>
+</div>
+
 <%--
     [7] MANGAKA REVIEW: form approve/reject, chỉ hiện khi canMangakaReview = true
     (controller set true khi: role MANGAKA + là chủ series + task đang SUBMITTED)
@@ -179,6 +185,10 @@
         data-status="${task.status}"
         data-can-update="${canAssistantUpdate}"
         data-can-submit="${canAssistantSubmit}"
+        data-context-path="${pageContext.request.contextPath}"></script>
+
+<script src="${pageContext.request.contextPath}/assets/js/chaptertask/submission-history.js?v=20260703"
+        data-task-id="${task.id}"
         data-context-path="${pageContext.request.contextPath}"></script>
 
 <jsp:include page="../common/footer.jsp" />
