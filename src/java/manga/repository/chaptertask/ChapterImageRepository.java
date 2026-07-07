@@ -16,28 +16,28 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
 /**
- * Repository quản lý ảnh của chapter (ChapterImage).
+ * Repository that manages chapter images (ChapterImage).
  *
- * Mục lục:
- *  1. upload()                    - Upload ảnh mới (PAGE/COVER/REFERENCE)
- *  2. deactivateActivePageImages() - Soft-delete các PAGE cũ cùng pageNumber trước khi upload mới
- *  3. listByChapter()             - Lấy danh sách ảnh active của chapter
- *  4. listByTask()                - Lấy ảnh của task + fallback page gốc chưa có ảnh task
- *  5. syncFinalPageUpload()       - Mangaka sync ảnh page hoàn chỉnh từ ngoài vào ChapterImage
- *  6. backfillFinalPageUploads()  - Backfill toàn bộ page LETTERING của chapter chưa có ChapterImage
- *  7. deactivate()                - Soft-delete 1 ảnh (chỉ uploader hoặc Mangaka chủ seri)
- *  8. findById()                  - Tìm ảnh theo ID
- *  9. findChapterOwnerMangaka()   - Lấy mangakaId chủ seri của chapter
- * 10. findChapterTantouEditor()   - Lấy tantouEditorId phụ trách chapter
- * 11. findTaskChapterId()         - Lấy chapterId của một PageTask
- * 12. findTaskAssistantId()       - Lấy assistantId được giao của một PageTask
- * 13. hasAssignedTaskInChapter()  - Kiểm tra assistant có task trong chapter không
+ * Table of contents:
+ *  1. upload()                    - Upload a new image (PAGE/COVER/REFERENCE)
+ *  2. deactivateActivePageImages() - Soft-delete old PAGE images with the same pageNumber before a new upload
+ *  3. listByChapter()             - Get the list of active images for a chapter
+ *  4. listByTask()                - Get task images + fallback to the original page when no task image exists yet
+ *  5. syncFinalPageUpload()       - Mangaka syncs a finished page image from outside into ChapterImage
+ *  6. backfillFinalPageUploads()  - Backfill all LETTERING pages of the chapter that lack a ChapterImage
+ *  7. deactivate()                - Soft-delete one image (only the uploader or the series-owning Mangaka)
+ *  8. findById()                  - Find an image by ID
+ *  9. findChapterOwnerMangaka()   - Get the mangakaId who owns the chapter's series
+ * 10. findChapterTantouEditor()   - Get the tantouEditorId assigned to the chapter
+ * 11. findTaskChapterId()         - Get the chapterId of a PageTask
+ * 12. findTaskAssistantId()       - Get the assigned assistantId of a PageTask
+ * 13. hasAssignedTaskInChapter()  - Check whether the assistant has a task in the chapter
  *
- * Quy tắc upload:
- *  - PAGE: chỉ ASSISTANT, phải có pageTaskId + pageNumber, task phải thuộc chapter, assistant phải là người được giao
- *  - COVER/REFERENCE: chỉ MANGAKA chủ seri, không có pageTaskId/pageNumber
- *  - Mỗi lần upload PAGE mới → soft-delete PAGE cũ cùng pageNumber (chỉ 1 ảnh active mỗi trang)
- *  - Upload PAGE qua task → cập nhật lastProgressAt của PageTask
+ * Upload rules:
+ *  - PAGE: ASSISTANT only, must have pageTaskId + pageNumber, the task must belong to the chapter, and the assistant must be the assignee
+ *  - COVER/REFERENCE: only the series-owning MANGAKA, no pageTaskId/pageNumber
+ *  - Each new PAGE upload -> soft-deletes the old PAGE with the same pageNumber (only 1 active image per page)
+ *  - Uploading a PAGE via a task -> updates the PageTask's lastProgressAt
  */
 @Repository
 public class ChapterImageRepository {
@@ -53,9 +53,9 @@ public class ChapterImageRepository {
     private volatile Boolean imageHashColumnReady = Boolean.FALSE;
 
     /**
-     * Upload ảnh chapter mới.
-     * - PAGE: deactivate ảnh cũ cùng pageNumber trước, rồi insert mới
-     * - Sau khi insert PAGE qua task → touch lastProgressAt của PageTask
+     * Upload a new chapter image.
+     * - PAGE: deactivate the old image with the same pageNumber first, then insert the new one
+     * - After inserting a PAGE via a task -> touch the PageTask's lastProgressAt
      */
     public long upload(long chapterId, Long pageTaskId, long uploadedBy, String imageType,
             Integer pageNumber, String fileUrl, String originalFileName, long fileSizeBytes, String imagePhash) {
@@ -103,7 +103,7 @@ public class ChapterImageRepository {
             }
 
             if (pageTaskId != null) {
-                // Cập nhật tiến độ task khi assistant upload ảnh
+                // Update task progress when the assistant uploads an image
                 String touchSql = "UPDATE PageTask SET lastProgressAt = GETDATE(), updatedAt = GETDATE() WHERE id = ?";
                 try (PreparedStatement touch = conn.prepareStatement(touchSql)) {
                     touch.setLong(1, pageTaskId.longValue());
@@ -117,7 +117,7 @@ public class ChapterImageRepository {
         }
     }
 
-    /** Tự thêm cột imagePhash nếu chưa có - tránh phải chạy migration tay trên máy đồng đội. */
+    /** Automatically adds the imagePhash column if missing - avoids having to run a manual migration on teammates' machines. */
     private void ensureImageHashColumnReady(Connection conn) throws SQLException {
         if (Boolean.TRUE.equals(imageHashColumnReady)) {
             return;
@@ -136,28 +136,61 @@ public class ChapterImageRepository {
                     }
                 }
             }
+            dropDeadColumnsIfPresent(conn);
             imageHashColumnReady = Boolean.TRUE;
         }
     }
 
     /**
-     * Chặn nộp trùng ảnh: so sánh pHash ảnh mới với toàn bộ ảnh (kể cả đã bị reject/thay)
-     * từng upload trong CẢ chapter - mọi task, mọi page. Đảm bảo không tái sử dụng lại
-     * một ảnh đã dùng ở bất kỳ đâu trong chapter.
+     * Drops two dead columns left over from an earlier schema design, on databases created before
+     * this cleanup: [pageId] (nullable bigint, never populated or read - superseded by chapterId+pageNumber
+     * as the join key) and [imageUrl] (a PERSISTED computed column that just duplicates [fileUrl] byte-for-byte,
+     * wasting storage). Neither is referenced anywhere in the application.
+     */
+    private void dropDeadColumnsIfPresent(Connection conn) throws SQLException {
+        try (Statement st = conn.createStatement()) {
+            st.executeUpdate(
+                    "IF COL_LENGTH('dbo.ChapterImage', 'imageUrl') IS NOT NULL "
+                    + "ALTER TABLE [dbo].[ChapterImage] DROP COLUMN [imageUrl]");
+            st.executeUpdate(
+                    "IF COL_LENGTH('dbo.ChapterImage', 'pageId') IS NOT NULL "
+                    + "ALTER TABLE [dbo].[ChapterImage] DROP COLUMN [pageId]");
+        }
+    }
+
+    /**
+     * Blocks duplicate image submission: compares the new image's pHash against every image
+     * (including ones that were rejected/replaced) ever uploaded across the ENTIRE chapter -
+     * every task, every page. Ensures an image already used anywhere in the chapter cannot be reused.
+     *
+     * Combines 2 hash sources:
+     *  - ChapterImage: images submitted by assistants via a task + images the Mangaka synced at the LETTERING stage
+     *  - PageRevision: EVERY time the Mangaka uploads an image for a page (including intermediate stages such as
+     *    SKETCHING/INKING/COLORING/SCREENTONE) - if this source were skipped, an image the Mangaka uploaded at an
+     *    intermediate stage would be "invisible" and an Assistant could resubmit the exact same image for another page.
      */
     private void checkDuplicateImage(Connection conn, long chapterId, String newHash) throws SQLException {
         int threshold = systemSettingRepository.getInt(
                 SystemSettingRepository.PAGE_TASK_PHASH_THRESHOLD, DEFAULT_PHASH_HAMMING_THRESHOLD);
+        boolean includeRevisionHistory = isPageRevisionTableReady(conn);
         String sql = "SELECT imagePhash FROM ChapterImage WHERE chapterId = ? AND imagePhash IS NOT NULL";
+        if (includeRevisionHistory) {
+            sql += " UNION SELECT pr.imagePhash FROM [dbo].[PageRevision] pr "
+                    + "JOIN [dbo].[Page] p ON p.id = pr.pageId "
+                    + "WHERE p.chapterId = ? AND pr.imagePhash IS NOT NULL";
+        }
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, chapterId);
+            if (includeRevisionHistory) {
+                ps.setLong(2, chapterId);
+            }
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     String existing = rs.getString(1);
                     if (ImagePhashUtil.hammingDistance(newHash, existing) <= threshold) {
                         throw new IllegalArgumentException(
-                                "Ảnh này đã từng được dùng trước đó trong chapter này (kể cả bản bị từ chối/thay thế). "
-                                + "Vui lòng chỉnh sửa nội dung trước khi upload lại.");
+                                "This image has already been used before in this chapter (including rejected/replaced versions). "
+                                + "Please modify the content before uploading again.");
                     }
                 }
             }
@@ -165,8 +198,47 @@ public class ChapterImageRepository {
     }
 
     /**
-     * Public entry cho luồng Mangaka upload (PageApiController) - kiểm tra trùng ảnh
-     * trên phạm vi cả chapter, mở connection riêng.
+     * Lazy cache: checks whether the PageRevision table AND its imagePhash column are ready
+     * (the table is created at runtime by PageRepository). Only caches when = true (once present, it stays present).
+     * If = false, always re-checks, because the table/column may be created by PageRepository at any
+     * time after the first check (e.g. after the Mangaka's first upload) - caching false forever
+     * would defeat the duplicate-prevention logic.
+     * Automatically ALTERs to add the imagePhash column if the table already existed but lacked the column
+     * (e.g. the table was created by an older code version) - avoids an "Invalid column name" error in the UNION query.
+     */
+    private volatile boolean pageRevisionTableReady = false;
+
+    private boolean isPageRevisionTableReady(Connection conn) throws SQLException {
+        if (pageRevisionTableReady) {
+            return true;
+        }
+        boolean tableExists;
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT CASE WHEN OBJECT_ID('dbo.PageRevision', 'U') IS NOT NULL THEN 1 ELSE 0 END");
+             ResultSet rs = ps.executeQuery()) {
+            tableExists = rs.next() && rs.getInt(1) == 1;
+        }
+        if (!tableExists) {
+            return false;
+        }
+        boolean columnExists;
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT CASE WHEN COL_LENGTH('dbo.PageRevision', 'imagePhash') IS NULL THEN 0 ELSE 1 END");
+             ResultSet rs = ps.executeQuery()) {
+            columnExists = rs.next() && rs.getInt(1) == 1;
+        }
+        if (!columnExists) {
+            try (Statement alter = conn.createStatement()) {
+                alter.execute("ALTER TABLE [dbo].[PageRevision] ADD [imagePhash] [char](16) NULL");
+            }
+        }
+        pageRevisionTableReady = true;
+        return true;
+    }
+
+    /**
+     * Public entry point for the Mangaka upload flow (PageApiController) - checks for duplicate images
+     * across the whole chapter, opening its own connection.
      */
     public void checkDuplicateImageInChapter(long chapterId, String newHash) {
         if (newHash == null) {
@@ -181,8 +253,8 @@ public class ChapterImageRepository {
     }
 
     /**
-     * Soft-delete tất cả PAGE active cùng pageNumber trong chapter.
-     * Gọi trước khi insert PAGE mới để đảm bảo chỉ 1 ảnh active mỗi trang.
+     * Soft-deletes all active PAGE images with the same pageNumber in the chapter.
+     * Called before inserting a new PAGE to ensure only 1 active image per page.
      */
     private void deactivateActivePageImages(Connection conn, long chapterId, int pageNumber) throws SQLException {
         String sql =
@@ -196,7 +268,7 @@ public class ChapterImageRepository {
     }
 
     /**
-     * Lấy tất cả ảnh active của chapter, sắp xếp: có pageNumber trước, rồi theo pageNumber ASC.
+     * Gets all active images of the chapter, ordered: rows with pageNumber first, then by pageNumber ASC.
      */
     public List<ChapterImageItem> listByChapter(long chapterId) {
         String sql =
@@ -207,11 +279,11 @@ public class ChapterImageRepository {
     }
 
     /**
-     * Lấy ảnh của một PageTask.
-     * UNION 2 nguồn:
-     *  - Ảnh đã upload vào task (ChapterImage.pageTaskId = task)
-     *  - Fallback: page gốc từ bảng Page trong range của task, chưa có ảnh task tương ứng
-     * Dùng để hiển thị workspace đầy đủ kể cả khi assistant chưa upload.
+     * Gets images for a PageTask.
+     * UNION of 2 sources:
+     *  - Images already uploaded to the task (ChapterImage.pageTaskId = task)
+     *  - Fallback: the original page from the Page table within the task's range, without a corresponding task image yet
+     * Used to render the full workspace even when the assistant hasn't uploaded yet.
      */
     public List<ChapterImageItem> listByTask(long pageTaskId) {
         String sql =
@@ -230,15 +302,15 @@ public class ChapterImageRepository {
         return list(sql, pageTaskId, pageTaskId, "Cannot list task images");
     }
 
-    /** Overload không kèm hash (dùng cho backfill từ Page.imageUrl có sẵn - không có file để hash). */
+    /** Overload without a hash (used for backfilling from an existing Page.imageUrl - no file available to hash). */
     public void syncFinalPageUpload(long chapterId, int pageNumber, long uploadedBy, String fileUrl) {
         syncFinalPageUpload(chapterId, pageNumber, uploadedBy, fileUrl, null);
     }
 
     /**
-     * Mangaka sync 1 ảnh page hoàn chỉnh vào ChapterImage (không qua task).
-     * Chỉ Mangaka chủ seri mới được gọi. Deactivate ảnh cũ cùng pageNumber trước.
-     * imagePhash: lưu để phục vụ chống trùng toàn chapter (null nếu không tính được).
+     * Mangaka syncs one finished page image into ChapterImage (not through a task).
+     * Only the series-owning Mangaka may call this. Deactivates the old image with the same pageNumber first.
+     * imagePhash: stored to support chapter-wide duplicate prevention (null if it could not be computed).
      */
     public void syncFinalPageUpload(long chapterId, int pageNumber, long uploadedBy, String fileUrl, String imagePhash) {
         if (fileUrl == null || fileUrl.trim().isEmpty()) {
@@ -282,8 +354,8 @@ public class ChapterImageRepository {
     }
 
     /**
-     * Backfill toàn bộ page LETTERING của chapter chưa có ChapterImage active.
-     * Gọi khi chapter chuyển sang EDITORIAL_REVIEW để đảm bảo tất cả page đã hoàn thành được ghi nhận.
+     * Backfills all LETTERING pages of the chapter that don't yet have an active ChapterImage.
+     * Called when the chapter transitions to EDITORIAL_REVIEW to ensure every completed page is recorded.
      */
     public void backfillFinalPageUploads(long chapterId, long uploadedBy) {
         String sql =
@@ -313,7 +385,7 @@ public class ChapterImageRepository {
         }
     }
 
-    /** Helper query với 2 tham số long. */
+    /** Helper query with 2 long parameters. */
     private List<ChapterImageItem> list(String sql, long firstId, long secondId, String error) {
         List<ChapterImageItem> rows = new ArrayList<ChapterImageItem>();
         try (Connection conn = dataSource.getConnection();
@@ -332,7 +404,7 @@ public class ChapterImageRepository {
     }
 
     /**
-     * Soft-delete 1 ảnh. Chỉ uploader hoặc Mangaka chủ seri mới được xóa.
+     * Soft-deletes one image. Only the uploader or the series-owning Mangaka may delete it.
      */
     public void deactivate(long imageId, long requestorId) {
         String readSql =
@@ -372,7 +444,7 @@ public class ChapterImageRepository {
         }
     }
 
-    /** Tìm ChapterImage theo ID, trả null nếu không tồn tại. */
+    /** Finds a ChapterImage by ID, returns null if it does not exist. */
     public ChapterImageItem findById(long imageId) {
         String sql =
             "SELECT id, chapterId, pageTaskId, uploadedBy, imageType, pageNumber, fileUrl, originalFileName, fileSizeBytes, uploadedAt, isActive, note "
@@ -392,8 +464,8 @@ public class ChapterImageRepository {
     }
 
     /**
-     * Lấy các ChapterImage theo danh sách id, giới hạn trong 1 pageTaskId (an toàn - tránh lộ ảnh task khác).
-     * Không lọc isActive vì dùng để hiển thị lịch sử, bao gồm cả ảnh cũ đã bị thay/reject.
+     * Gets ChapterImages by a list of ids, scoped to a single pageTaskId (safety - avoids leaking another task's images).
+     * Does not filter by isActive since it's used to display history, including old replaced/rejected images.
      */
     public List<ChapterImageItem> findByIds(long pageTaskId, List<Long> ids) {
         List<ChapterImageItem> rows = new ArrayList<ChapterImageItem>();
@@ -427,31 +499,31 @@ public class ChapterImageRepository {
         return rows;
     }
 
-    /** Lấy mangakaId chủ seri của chapter (dùng để kiểm tra quyền upload COVER/REFERENCE). */
+    /** Gets the mangakaId who owns the chapter's series (used to check COVER/REFERENCE upload permission). */
     public long findChapterOwnerMangaka(long chapterId) {
         String sql = "SELECT s.mangakaId FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?";
         return queryLong(sql, chapterId, "Chapter not found");
     }
 
-    /** Lấy tantouEditorId phụ trách chapter. */
+    /** Gets the tantouEditorId assigned to the chapter. */
     public long findChapterTantouEditor(long chapterId) {
         String sql = "SELECT s.tantouEditorId FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?";
         return queryLong(sql, chapterId, "Chapter not found");
     }
 
-    /** Lấy chapterId của một PageTask. */
+    /** Gets the chapterId of a PageTask. */
     public long findTaskChapterId(long pageTaskId) {
         String sql = "SELECT chapterId FROM PageTask WHERE id = ?";
         return queryLong(sql, pageTaskId, "Task not found");
     }
 
-    /** Lấy assistantId được giao của một PageTask. */
+    /** Gets the assigned assistantId of a PageTask. */
     public long findTaskAssistantId(long pageTaskId) {
         String sql = "SELECT assistantId FROM PageTask WHERE id = ?";
         return queryLong(sql, pageTaskId, "Task not found");
     }
 
-    /** Kiểm tra assistant có ít nhất 1 task trong chapter không. */
+    /** Checks whether the assistant has at least 1 task in the chapter. */
     public boolean hasAssignedTaskInChapter(long chapterId, long assistantId) {
         String sql = "SELECT COUNT(1) FROM PageTask WHERE chapterId = ? AND assistantId = ?";
         try (Connection conn = dataSource.getConnection();
@@ -468,9 +540,9 @@ public class ChapterImageRepository {
     }
 
     /**
-     * Validate quyền upload trước khi insert.
-     * PAGE  → ASSISTANT, cần pageTaskId + pageNumber, task phải thuộc chapter và được giao đúng người.
-     * COVER/REFERENCE → MANGAKA chủ seri, không có pageTaskId/pageNumber.
+     * Validates upload permission before inserting.
+     * PAGE  -> ASSISTANT, needs pageTaskId + pageNumber, the task must belong to the chapter and be assigned to that person.
+     * COVER/REFERENCE -> series-owning MANGAKA, no pageTaskId/pageNumber.
      */
     private void validateUpload(Connection conn, long chapterId, Long pageTaskId, long uploadedBy,
             String imageType, Integer pageNumber, String fileUrl) throws SQLException {
@@ -515,7 +587,7 @@ public class ChapterImageRepository {
         }
     }
 
-    /** Normalize và validate imageType: PAGE / COVER / REFERENCE. */
+    /** Normalizes and validates imageType: PAGE / COVER / REFERENCE. */
     private String normalizeImageType(String imageType) {
         if (imageType == null || imageType.trim().isEmpty()) {
             throw new IllegalArgumentException("imageType is required");
@@ -527,7 +599,7 @@ public class ChapterImageRepository {
         return normalized;
     }
 
-    /** Helper query với 1 tham số long. */
+    /** Helper query with 1 long parameter. */
     private List<ChapterImageItem> list(String sql, long id, String error) {
         List<ChapterImageItem> rows = new ArrayList<ChapterImageItem>();
         try (Connection conn = dataSource.getConnection();
@@ -544,7 +616,7 @@ public class ChapterImageRepository {
         return rows;
     }
 
-    /** Map ResultSet → ChapterImageItem. pageTaskId và pageNumber nullable. */
+    /** Maps ResultSet -> ChapterImageItem. pageTaskId and pageNumber are nullable. */
     private ChapterImageItem map(ResultSet rs) throws SQLException {
         ChapterImageItem item = new ChapterImageItem();
         item.setId(rs.getLong("id"));
@@ -564,7 +636,7 @@ public class ChapterImageRepository {
         return item;
     }
 
-    /** Ném exception nếu chapter không tồn tại. */
+    /** Throws an exception if the chapter does not exist. */
     private void ensureChapterExists(Connection conn, long chapterId) throws SQLException {
         String sql = "SELECT COUNT(1) FROM Chapter WHERE id = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -578,7 +650,7 @@ public class ChapterImageRepository {
         }
     }
 
-    /** Kiểm tra user có role cụ thể không (query DB trực tiếp, dùng trong validate upload). */
+    /** Checks whether a user has a specific role (queries the DB directly, used during upload validation). */
     private boolean hasRole(Connection conn, long userId, String roleName) throws SQLException {
         String sql = "SELECT COUNT(1) FROM UserRole ur JOIN [Role] r ON r.id = ur.roleId WHERE ur.userId = ? AND r.name = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -591,7 +663,7 @@ public class ChapterImageRepository {
         }
     }
 
-    /** Đọc chapterId và assistantId của một PageTask để validate quyền upload. */
+    /** Reads the chapterId and assistantId of a PageTask to validate upload permission. */
     private TaskAccess readTaskAccess(Connection conn, long pageTaskId) throws SQLException {
         String sql = "SELECT chapterId, assistantId FROM PageTask WHERE id = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -608,7 +680,7 @@ public class ChapterImageRepository {
         }
     }
 
-    /** Overload dùng Connection có sẵn (tránh mở connection mới trong cùng transaction). */
+    /** Overload using an existing Connection (avoids opening a new connection within the same transaction). */
     private long findChapterOwnerMangaka(Connection conn, long chapterId) throws SQLException {
         String sql = "SELECT s.mangakaId FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -622,7 +694,7 @@ public class ChapterImageRepository {
         }
     }
 
-    /** Helper: query trả về 1 giá trị long, ném exception nếu không tìm thấy. */
+    /** Helper: a query that returns a single long value, throws an exception if not found. */
     private long queryLong(String sql, long id, String error) {
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -645,7 +717,7 @@ public class ChapterImageRepository {
         return value.trim();
     }
 
-    /** DTO nội bộ để đọc chapterId + assistantId của PageTask trong 1 lần query. */
+    /** Internal DTO for reading the chapterId + assistantId of a PageTask in a single query. */
     private static class TaskAccess {
         private long chapterId;
         private long assistantId;

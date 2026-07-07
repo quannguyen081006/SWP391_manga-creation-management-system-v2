@@ -29,18 +29,18 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * REST API controller quan ly page slot cua chapter — nhom /api/v1.
- * Moi thay doi page slot (them/xoa/upload) deu goi refreshChapterProgress()
- * de cap nhat % hoan thanh chapter.
+ * REST API controller that manages chapter page slots — /api/v1 group.
+ * Every page slot change (add/delete/upload) calls refreshChapterProgress()
+ * to update the chapter's completion percentage.
  *
- * MUC LUC:
- *  1. listByChapter() - GET    /api/v1/chapters/{chapterId}/pages   - Lay danh sach page slot theo chapter
- *  2. create()        - POST   /api/v1/pages                        - Tao page slot moi
- *  3. uploadImage()   - POST   /api/v1/pages/{pageId}/upload        - Upload anh cho page slot
- *  4. delete()        - DELETE /api/v1/pages/{pageId}               - Xoa page slot
+ * TABLE OF CONTENTS:
+ *  1. listByChapter() - GET    /api/v1/chapters/{chapterId}/pages   - List page slots by chapter
+ *  2. create()        - POST   /api/v1/pages                        - Create a new page slot
+ *  3. uploadImage()   - POST   /api/v1/pages/{pageId}/upload        - Upload an image for a page slot
+ *  4. delete()        - DELETE /api/v1/pages/{pageId}               - Delete a page slot
  *
  * HELPER:
- *  - saveMultipart()  - Luu file anh tu multipart request xuong /img/chapter/
+ *  - saveMultipart()  - Save an image file from a multipart request to /img/chapter/
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -59,9 +59,9 @@ public class PageApiController {
     private PageTaskRepository pageTaskRepository;
 
     // ============================================================
-    // 1. LIST PAGE SLOTS THEO CHAPTER
+    // 1. LIST PAGE SLOTS BY CHAPTER
     // GET /api/v1/chapters/{chapterId}/pages
-    // - Chi can check login, khong filter theo role
+    // - Only requires a login check, no role filtering
     // ============================================================
     @RequestMapping(value = "/chapters/{chapterId}/pages", method = RequestMethod.GET)
     public ApiResponse<List<PageSlotSummary>> listByChapter(@PathVariable("chapterId") long chapterId, HttpSession session) {
@@ -70,11 +70,11 @@ public class PageApiController {
     }
 
     // ============================================================
-    // 2. TAO PAGE SLOT MOI
+    // 2. CREATE A NEW PAGE SLOT
     // POST /api/v1/pages
-    // - Chi MANGAKA chu cua chapter moi duoc them (double check: role + ownership)
-    // - pageNumber optional: neu khong truyen hoac <= 0 thi tu dong lay so tiep theo
-    // - Sau khi tao: goi refreshChapterProgress() cap nhat % chapter
+    // - Only the MANGAKA who owns the chapter can add one (double check: role + ownership)
+    // - pageNumber is optional: if not provided or <= 0, the next number is auto-assigned
+    // - After creation: calls refreshChapterProgress() to update the chapter's %
     // ============================================================
     @RequestMapping(value = "/pages", method = RequestMethod.POST)
     public ApiResponse<PageSlotSummary> create(
@@ -94,14 +94,14 @@ public class PageApiController {
     }
 
     // ============================================================
-    // 3. UPLOAD ANH CHO PAGE SLOT
+    // 3. UPLOAD IMAGE FOR A PAGE SLOT
     // POST /api/v1/pages/{pageId}/upload
-    // - Chi MANGAKA chu cua chapter moi duoc upload (double check: role + ownership)
-    // - completedStage: optional, danh dau giai doan hoan thanh (vd: LETTERING)
-    // - Neu completedStage = "LETTERING": tu dong sync anh vao ChapterImageRepository
-    //   (day la giai doan cuoi cung truoc khi nop manuscript)
-    // - Sau khi upload: goi refreshChapterProgress() cap nhat % chapter
-    // - File luu tai: /img/chapter/{page_timestamp.ext}
+    // - Only the MANGAKA who owns the chapter can upload (double check: role + ownership)
+    // - completedStage: optional, marks the completed stage (e.g. LETTERING)
+    // - If completedStage = "LETTERING": automatically syncs the image into ChapterImageRepository
+    //   (this is the final stage before submitting the manuscript)
+    // - After upload: calls refreshChapterProgress() to update the chapter's %
+    // - File is saved at: /img/chapter/{page_timestamp.ext}
     // ============================================================
     @RequestMapping(value = "/pages/{pageId}/upload", method = RequestMethod.POST)
     public ApiResponse<PageSlotSummary> uploadImage(
@@ -119,8 +119,8 @@ public class PageApiController {
             throw new IllegalArgumentException("Only chapter owner can upload page images");
         }
         String savedPath = saveMultipart(request);
-        // Tinh pHash + chan trung anh tren pham vi ca chapter (giong luong assistant).
-        // Neu trung -> xoa file vua luu roi bao loi.
+        // Compute pHash + block duplicate images across the entire chapter (same as the assistant flow).
+        // If a duplicate is found -> delete the just-saved file and report an error.
         File savedFile = new File(request.getServletContext().getRealPath(savedPath));
         String imagePhash;
         try {
@@ -131,9 +131,9 @@ public class PageApiController {
             savedFile.delete();
             throw ex;
         }
-        pageRepository.markUploaded(pageId, savedPath, user.getId(), completedStage);
+        pageRepository.markUploaded(pageId, savedPath, user.getId(), completedStage, imagePhash);
         PageSlotSummary updatedPage = pageRepository.findById(pageId);
-        // Neu stage la LETTERING (stage cuoi): dong bo anh vao bang chapter_image (kem hash de dedup)
+        // If the stage is LETTERING (final stage): sync the image into the chapter_image table (with hash for dedup)
         if (updatedPage != null && "LETTERING".equalsIgnoreCase(updatedPage.getCompletedStage())) {
             chapterImageRepository.syncFinalPageUpload(
                     updatedPage.getChapterId(),
@@ -146,19 +146,19 @@ public class PageApiController {
         return ApiResponse.ok(updatedPage, "Page image uploaded");
     }
 
-    // HELPER: Chi cho phep JPG/PNG/WEBP truoc khi tinh hash, tranh loi 500 khi upload nham file khong phai anh
+    // HELPER: Only allow JPG/PNG/WEBP before computing the hash, to avoid a 500 error when a non-image file is uploaded by mistake
     private void requireImageExtension(String fileName) {
         String name = fileName == null ? "" : fileName.toLowerCase(Locale.ENGLISH);
         if (!name.endsWith(".jpg") && !name.endsWith(".jpeg")
                 && !name.endsWith(".png") && !name.endsWith(".webp")) {
-            throw new IllegalArgumentException("Chỉ chấp nhận file ảnh JPG, PNG hoặc WEBP");
+            throw new IllegalArgumentException("Only JPG, PNG, or WEBP image files are accepted");
         }
     }
 
     // ============================================================
-    // 3b. LICH SU THAY DOI ANH/STAGE CUA PAGE
+    // 3b. PAGE IMAGE/STAGE CHANGE HISTORY
     // GET /api/v1/pages/{pageId}/history
-    // - Chi can login (giong listByChapter) - moi nguoi co quyen vao chapter deu xem duoc
+    // - Only requires login (same as listByChapter) - anyone with access to the chapter can view it
     // ============================================================
     @RequestMapping(value = "/pages/{pageId}/history", method = RequestMethod.GET)
     public ApiResponse<List<PageRevisionEntry>> history(@PathVariable("pageId") long pageId, HttpSession session) {
@@ -167,10 +167,10 @@ public class PageApiController {
     }
 
     // ============================================================
-    // 3c. ROLLBACK PAGE VE 1 MOC LICH SU
+    // 3c. ROLLBACK A PAGE TO A HISTORY POINT
     // POST /api/v1/pages/{pageId}/rollback  (param revisionId)
-    // - Chi MANGAKA chu chapter moi duoc rollback (double check: role + ownership)
-    // - Khoi phuc ca anh + stage; sau do refreshChapterProgress()
+    // - Only the MANGAKA who owns the chapter can roll back (double check: role + ownership)
+    // - Restores both the image + stage; then calls refreshChapterProgress()
     // ============================================================
     @RequestMapping(value = "/pages/{pageId}/rollback", method = RequestMethod.POST)
     public ApiResponse<PageSlotSummary> rollback(
@@ -192,11 +192,11 @@ public class PageApiController {
     }
 
     // ============================================================
-    // 4. XOA PAGE SLOT
+    // 4. DELETE A PAGE SLOT
     // DELETE /api/v1/pages/{pageId}
-    // - Chi MANGAKA chu cua chapter moi duoc xoa (double check: role + ownership)
-    // - Sau khi xoa: goi refreshChapterProgress() cap nhat % chapter
-    // NOTE: Xoa cung (hard delete), khong co soft delete o day
+    // - Only the MANGAKA who owns the chapter can delete it (double check: role + ownership)
+    // - After deletion: calls refreshChapterProgress() to update the chapter's %
+    // NOTE: This is a hard delete, there is no soft delete here
     // ============================================================
     @RequestMapping(value = "/pages/{pageId}", method = RequestMethod.DELETE)
     public ApiResponse<Object> delete(
@@ -218,11 +218,11 @@ public class PageApiController {
     }
 
     // ============================================================
-    // HELPER: LUU FILE ANH TU MULTIPART REQUEST
-    // - Chi lay Part ten "file", bat buoc phai co
-    // - Ten file luu: page_{timestamp}{ext}, luu vao /img/chapter/
-    // - Extension lay tu ten file goc, fallback ".png"
-    // - Nem RuntimeException neu khong luu duoc
+    // HELPER: SAVE AN IMAGE FILE FROM A MULTIPART REQUEST
+    // - Only reads the Part named "file", which is required
+    // - Saved file name: page_{timestamp}{ext}, saved into /img/chapter/
+    // - Extension taken from the original file name, falls back to ".png"
+    // - Throws RuntimeException if it cannot be saved
     // ============================================================
     private String saveMultipart(HttpServletRequest request) {
         try {

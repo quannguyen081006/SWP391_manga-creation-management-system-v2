@@ -25,19 +25,6 @@ public class SalaryWebController {
         return "salary/period";
     }
 
-    @RequestMapping(value = "/periods/generate", method = RequestMethod.POST)
-    public String generate(HttpSession session, Model model) {
-        AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        try {
-            long periodId = salaryService.autoCreateAndCalculate(user);
-            return "redirect:/main/salary/periods/" + periodId;
-        } catch (RuntimeException ex) {
-            model.addAttribute("periods", salaryService.listMyPeriods(user));
-            model.addAttribute("error", ex.getMessage());
-            return "salary/period";
-        }
-    }
-
     @RequestMapping(value = "/my", method = RequestMethod.GET)
     public String mySalary(HttpSession session, Model model) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
@@ -55,32 +42,6 @@ public class SalaryWebController {
         }
         loadDetail(id, user, model);
         return "salary/detail";
-    }
-
-    @RequestMapping(value = "/periods/{id}/calculate", method = RequestMethod.POST)
-    public String calculate(@PathVariable("id") long id, HttpSession session, Model model) {
-        AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        try {
-            salaryService.calculate(id, user);
-            return "redirect:/main/salary/periods/" + id;
-        } catch (RuntimeException ex) {
-            loadDetail(id, user, model);
-            model.addAttribute("error", ex.getMessage());
-            return "salary/detail";
-        }
-    }
-
-    @RequestMapping(value = "/periods/{id}/settle", method = RequestMethod.POST)
-    public String settle(@PathVariable("id") long id, HttpSession session, Model model) {
-        AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        try {
-            salaryService.settle(id, user);
-            return "redirect:/main/salary/periods/" + id;
-        } catch (RuntimeException ex) {
-            loadDetail(id, user, model);
-            model.addAttribute("error", ex.getMessage());
-            return "salary/detail";
-        }
     }
 
     private void loadDetail(long periodId, AuthenticatedUser user, Model model) {

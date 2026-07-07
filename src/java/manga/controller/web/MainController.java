@@ -61,10 +61,10 @@ public class MainController {
     private PageTaskService pageTaskService;
 
     // ============================================================
-    // [2] ĐIỀU HƯỚNG CHUNG
+    // [2] COMMON NAVIGATION
     // ============================================================
 
-    /** GET /main → redirect về dashboard. */
+    /** GET /main → redirect to dashboard. */
     @RequestMapping(value = "", method = RequestMethod.GET)
     public String root() {
         return "redirect:/main/dashboard";
@@ -95,11 +95,11 @@ public class MainController {
     }
 
     // ============================================================
-    // [3] DANH SÁCH SERIES
+    // [3] SERIES LIST
     // ============================================================
 
     /**
-     * GET /main/series – Hiển thị danh sách series mà user có thể thấy.
+     * GET /main/series – Displays the list of series the user can see.
      */
     @RequestMapping(value = "/series", method = RequestMethod.GET)
     public String series(HttpSession session, Model model) {
@@ -109,34 +109,34 @@ public class MainController {
     }
 
     // ============================================================
-    // [4] DANH SÁCH CHAPTER
+    // [4] CHAPTER LIST
     // ============================================================
 
     @RequestMapping(value = "/chapters", method = RequestMethod.GET)
     public String chapters(HttpSession session, Model model) {
-        // Không load dữ liệu server-side ở đây.
-        // Frontend tự gọi REST API để lấy danh sách chapter theo seriesId.
+        // No server-side data loading here.
+        // The frontend calls the REST API directly to fetch the chapter list by seriesId.
         return "chapter/list";
     }
 
     // ============================================================
-    // [5] DANH SÁCH TASK
+    // [5] TASK LIST
     // ============================================================
 
     /**
-     * GET /main/tasks – Hiển thị danh sách task vẽ trang (PageTask).
+     * GET /main/tasks – Displays the list of page drawing tasks (PageTask).
      */
     @RequestMapping(value = "/tasks", method = RequestMethod.GET)
     public String tasks(HttpSession session, Model model) {
-        // Lấy user từ session (có thể null nếu chưa đăng nhập – không có guard ở đây,
-        // AuthInterceptor chặn trước khi vào controller nên tạm ổn).
+        // Get the user from the session (may be null if not logged in – no guard here,
+        // AuthInterceptor blocks before reaching the controller so this is fine for now).
         AuthenticatedUser user = (AuthenticatedUser) session.getAttribute("AUTH_USER");
 
-        // Bước 1: Lấy toàn bộ task (gồm thông tin chapter/series/assistant).
-        // Bước 2: Lọc theo role – ASSISTANT chỉ thấy task của mình.
+        // Step 1: Get all tasks (including chapter/series/assistant info).
+        // Step 2: Filter by role – ASSISTANT only sees their own tasks.
         List<TaskSummary> tasks = pageTaskService.listForWebTaskPage(user, productionRepository.listTasks());
 
-        // --- Tính counter thống kê để hiển thị trên header/badge ---
+        // --- Compute stat counters to display on the header/badge ---
         int active = 0;
         int submitted = 0;
         int completed = 0;
@@ -146,23 +146,23 @@ public class MainController {
         for (TaskSummary task : tasks) {
             String st = task.getStatus() == null ? "" : task.getStatus().toUpperCase();
 
-            // "Active" = đang trong quá trình làm (chưa nộp, chưa xong)
+            // "Active" = currently in progress (not yet submitted, not yet done)
             if ("PENDING".equals(st) || "IN_PROGRESS".equals(st)) {
                 active++;
             }
 
-            // Task đã nộp, đang chờ Mangaka review
+            // Task submitted, awaiting Mangaka review
             if ("SUBMITTED".equals(st)) {
                 submitted++;
             }
 
-            // Task đã được Mangaka approve (hoàn thành)
+            // Task approved by Mangaka (completed)
             if ("APPROVED".equals(st)) {
                 completed++;
             }
 
-            // Overdue: status đã là OVERDUE HOẶC dueDate đã qua mà chưa APPROVED.
-            // Lưu ý: task SUBMITTED quá hạn cũng bị tính vào đây.
+            // Overdue: status is already OVERDUE OR dueDate has passed without being APPROVED.
+            // Note: an overdue SUBMITTED task is also counted here.
             if ("OVERDUE".equals(st)
                     || (task.getDueDate() != null
                         && task.getDueDate().toLocalDate().isBefore(now)
@@ -171,7 +171,7 @@ public class MainController {
             }
         }
 
-        // Đẩy dữ liệu vào model để Thymeleaf render
+        // Push data into the model for Thymeleaf to render
         model.addAttribute("tasks", tasks);
         model.addAttribute("activeTasks", active);
         model.addAttribute("submittedTasks", submitted);
@@ -181,7 +181,7 @@ public class MainController {
     }
 
     // ============================================================
-    // [6] DANH SÁCH MANUSCRIPT (liên quan chapter & SLA deadline)
+    // [6] MANUSCRIPT LIST (related to chapter & SLA deadline)
     // ============================================================
 
     @RequestMapping(value = "/manuscripts", method = RequestMethod.GET)
@@ -193,7 +193,7 @@ public class MainController {
 
         List<ManuscriptSummary> manuscripts = productionRepository.listManuscripts(user, seriesId);
 
-        // --- Tính counter SLA ---
+        // --- Compute SLA counters ---
         int pendingReview = 0;
         int urgent = 0;
         int breached = 0;
@@ -201,19 +201,19 @@ public class MainController {
         for (ManuscriptSummary manuscript : manuscripts) {
             String st = manuscript.getStatus() == null ? "" : manuscript.getStatus().toUpperCase();
 
-            // Đang chờ review (chưa có quyết định approve/reject)
+            // Awaiting review (no approve/reject decision yet)
             if ("SUBMITTED".equals(st) || "UNDER_REVIEW".equals(st)) {
                 pendingReview++;
             }
 
-            // Kiểm tra SLA dựa trên reviewDeadline (lấy từ bảng Manuscript)
+            // Check SLA based on reviewDeadline (from the Manuscript table)
             if (manuscript.getReviewDeadline() != null) {
                 long hoursLeft = (manuscript.getReviewDeadline().getTime() - System.currentTimeMillis())
                         / (1000L * 60L * 60L);
                 if (hoursLeft < 0) {
-                    breached++;          // Đã vượt deadline
+                    breached++;          // Deadline already passed
                 } else if (hoursLeft <= 12) {
-                    urgent++;            // Còn dưới 12h – cần review gấp
+                    urgent++;            // Less than 12h left – needs urgent review
                 }
             }
         }
@@ -223,9 +223,9 @@ public class MainController {
         model.addAttribute("urgentManuscripts", urgent);
         model.addAttribute("slaBreached", breached);
         model.addAttribute("currentUser", user);
-        // Dùng để ẩn/hiện nút "Tạo manuscript" trên view
+        // Used to show/hide the "Create manuscript" button on the view
         model.addAttribute("isMangaka", user != null && user.hasRole("MANGAKA"));
-        // Dùng cho dropdown lọc theo series
+        // Used for the series filter dropdown
         model.addAttribute("seriesList", productionRepository.listSeries(user));
         model.addAttribute("selectedSeriesId", seriesId);
         return "manuscript/list";

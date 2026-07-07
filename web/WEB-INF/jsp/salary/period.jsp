@@ -14,16 +14,6 @@
 
 <c:if test="${not empty error}"><div class="alert error"><c:out value="${error}" /></div></c:if>
 
-<c:if test="${sessionScope.AUTH_USER.hasRole('MANGAKA')}">
-    <div class="section-card">
-        <h3 class="section-title">Generate salary period</h3>
-        <p class="section-desc">Creates this month’s OPEN salary period from approved tasks that have not been salaried yet.</p>
-        <form class="salary-generate-form" method="post" action="${ctx}/main/salary/periods/generate">
-            <button class="btn primary" type="submit">Generate current salary period</button>
-        </form>
-    </div>
-</c:if>
-
 <div class="section-card">
     <h3 class="section-title">My assistant salary periods</h3>
     <c:forEach items="${periods}" var="p">
@@ -43,7 +33,7 @@
     <c:if test="${empty periods}">
         <div class="empty-state">
             <div class="title">No salary periods yet</div>
-            <div class="subtitle">Generate a period after one or more tasks have been approved.</div>
+            <div class="subtitle">A salary period opens automatically once your assistants have approved tasks.</div>
         </div>
     </c:if>
 </div>

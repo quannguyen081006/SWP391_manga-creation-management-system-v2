@@ -204,65 +204,6 @@ public class AssistantSalaryRecordRepository {
         }
     }
 
-    public int countLateTasks(long periodId, long assistantId) {
-        String sql = "SELECT COUNT(1) FROM PageTask t "
-                + "JOIN Chapter c ON c.id = t.chapterId "
-                + "JOIN Series s ON s.id = c.seriesId "
-                + "JOIN SalaryPeriod sp ON sp.id = ? AND sp.mangakaId = s.mangakaId "
-                + "WHERE t.assistantId = ? AND UPPER(t.status) = 'APPROVED' "
-                + "AND ((sp.status = 'OPEN' AND t.isSalaried = 0) "
-                + "OR (sp.status = 'SETTLED' AND t.isSalaried = 1 "
-                + "AND t.updatedAt <= sp.settledAt "
-                + "AND NOT EXISTS (SELECT 1 FROM SalaryPeriod earlier "
-                + "JOIN AssistantSalaryRecord er ON er.periodId = earlier.id "
-                + "AND er.assistantId = t.assistantId "
-                + "WHERE earlier.mangakaId = sp.mangakaId "
-                + "AND earlier.status = 'SETTLED' "
-                + "AND earlier.settledAt < sp.settledAt "
-                + "AND earlier.settledAt >= t.updatedAt))) "
-                + "AND t.updatedAt > DATEADD(DAY, 1, CAST(t.dueDate AS DATETIME))";
-        try (Connection conn = dataSource.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, periodId);
-            ps.setLong(2, assistantId);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getInt(1) : 0;
-            }
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot count late salary tasks", ex);
-        }
-    }
-
-    public int countHeavyRejectedTasks(long periodId, long assistantId, int threshold) {
-        String sql = "SELECT COUNT(1) FROM PageTask t "
-                + "JOIN Chapter c ON c.id = t.chapterId "
-                + "JOIN Series s ON s.id = c.seriesId "
-                + "JOIN SalaryPeriod sp ON sp.id = ? AND sp.mangakaId = s.mangakaId "
-                + "WHERE t.assistantId = ? AND UPPER(t.status) = 'APPROVED' "
-                + "AND ((sp.status = 'OPEN' AND t.isSalaried = 0) "
-                + "OR (sp.status = 'SETTLED' AND t.isSalaried = 1 "
-                + "AND t.updatedAt <= sp.settledAt "
-                + "AND NOT EXISTS (SELECT 1 FROM SalaryPeriod earlier "
-                + "JOIN AssistantSalaryRecord er ON er.periodId = earlier.id "
-                + "AND er.assistantId = t.assistantId "
-                + "WHERE earlier.mangakaId = sp.mangakaId "
-                + "AND earlier.status = 'SETTLED' "
-                + "AND earlier.settledAt < sp.settledAt "
-                + "AND earlier.settledAt >= t.updatedAt))) "
-                + "AND t.rejectionCount >= ?";
-        try (Connection conn = dataSource.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, periodId);
-            ps.setLong(2, assistantId);
-            ps.setInt(3, threshold);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getInt(1) : 0;
-            }
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot count heavily rejected salary tasks", ex);
-        }
-    }
-
     public List<Long> findAssistantIdsByPeriod(long periodId) {
         String sql = "SELECT assistantId FROM AssistantSalaryRecord "
                 + "WHERE periodId = ? AND totalTasksApproved > 0";

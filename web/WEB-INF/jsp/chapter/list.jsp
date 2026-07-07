@@ -1,22 +1,22 @@
 <%--
-  MỤC ĐÍCH: Màn hình tổng quan tiến độ TẤT CẢ chapter của Mangaka, gom từ nhiều series.
-  CẤU TRÚC CHÍNH:
+  PURPOSE: Overview screen showing progress of ALL of a Mangaka's chapters, gathered across series.
+  MAIN STRUCTURE:
     [1] HEAD         — CSS import (styles.css + chapter-list.css)
-    [2] ALERT BOX    — Hiển thị lỗi inline (chapterResult), mặc định ẩn
-    [3] LAYOUT GRID  — Chia 2 cột: bảng tracker (trái) + sidebar tạo chapter (phải)
-    [4] BẢNG TRACKER — 3 nhóm chapter, JS tự phân loại và điền dữ liệu vào:
-        [4a] groupOverdue    — Chapter quá deadline, luôn hiện, màu đỏ cảnh báo
-        [4b] groupInProgress — Chapter đang làm (PLANNING / IN_PROGRESS), luôn hiện
-        [4c] groupCompleted  — Chapter đã xong, mặc định ẩn, bấm "Show" mới mở ra
-        Mỗi bảng có các cột: No. | Series | Title | Status | Deadline | Progress | At Risk | Actions
-        Có thể sort theo: No, Title, Status, Deadline (JS xử lý sort phía client)
-        tbody (rowsOverdue / rowsInProgress / rowsCompleted) để trống — chapter-list.js điền vào sau khi fetch API
-    [5] SIDEBAR PHẢI — Chỉ hiện với Mangaka (canCreateChapter kiểm tra từ session)
-        [5a] Form tạo chapter mới: Title + Số trang (mặc định 24, có nút ±1 ±5) + Deadline
-             createSeriesDeadlineHint: JS tự điền gợi ý deadline tối đa dựa theo series deadline
-        [5b] Series overview: JS điền tổng số chapter Completed / In Progress / Overdue + % tiến độ
-    [6] CONFIG SCRIPT — Truyền contextPath + canCreateChapter xuống chapter-list.js
-                        canCreateChapter = true chỉ khi session có role MANGAKA
+    [2] ALERT BOX    — Shows inline errors (chapterResult), hidden by default
+    [3] LAYOUT GRID  — 2 columns: tracker table (left) + chapter creation sidebar (right)
+    [4] TRACKER TABLE — 3 chapter groups, JS automatically classifies and fills in the data:
+        [4a] groupOverdue    — Chapters past deadline, always shown, red warning color
+        [4b] groupInProgress — Chapters in progress (PLANNING / IN_PROGRESS), always shown
+        [4c] groupCompleted  — Completed chapters, hidden by default, click "Show" to expand
+        Each table has columns: No. | Series | Title | Status | Deadline | Progress | At Risk | Actions
+        Sortable by: No, Title, Status, Deadline (JS handles sorting client-side)
+        tbody (rowsOverdue / rowsInProgress / rowsCompleted) start empty — chapter-list.js fills them after fetching the API
+    [5] RIGHT SIDEBAR — Only shown to Mangaka (canCreateChapter checked from session)
+        [5a] New chapter form: Title + Page count (default 24, with ±1 ±5 buttons) + Deadline
+             createSeriesDeadlineHint: JS fills in the suggested max deadline based on the series deadline
+        [5b] Series overview: JS fills in total Completed / In Progress / Overdue chapter counts + % progress
+    [6] CONFIG SCRIPT — Passes contextPath + canCreateChapter down to chapter-list.js
+                        canCreateChapter = true only when the session has the MANGAKA role
 --%>
 <%@page contentType="text/html" pageEncoding="UTF-8"%>
 <!DOCTYPE html>
@@ -32,10 +32,10 @@
 <jsp:include page="../common/header.jsp" />
 <%-- Chapter/task note: tracker-specific CSS is in /assets/css/chaptertask/chapter-list.css; chapter grouping logic stays in this JSP. --%>
 
-<%-- [2] ALERT BOX: hiển thị lỗi API inline, JS show/hide tuỳ tình huống --%>
+<%-- [2] ALERT BOX: shows API errors inline, JS shows/hides it as needed --%>
 <div id="chapterResult" class="alert error chapter-alert-hidden"></div>
 
-<%-- [3] LAYOUT GRID: 2 cột — bảng tracker (trái rộng) + sidebar tạo chapter (phải hẹp) --%>
+<%-- [3] LAYOUT GRID: 2 columns — tracker table (wide, left) + chapter creation sidebar (narrow, right) --%>
 <div id="chapterLayoutGrid" class="chapter-layout-grid">
 
     <div class="section-card">
@@ -45,10 +45,10 @@
                 <p class="section-desc chapter-section-desc">Current chapter progress across your series</p>
             </div>
         </div>
-        <%-- chapterStatusPills: JS điền filter pills (All / từng series) để lọc nhanh --%>
+        <%-- chapterStatusPills: JS fills in filter pills (All / per series) for quick filtering --%>
         <div id="chapterStatusPills" class="chapter-status-pills"></div>
 
-        <%-- [4a] NHÓM OVERDUE: chapter quá deadline — luôn hiện, JS đếm và điền countOverdue --%>
+        <%-- [4a] OVERDUE GROUP: chapters past deadline — always shown, JS counts and fills in countOverdue --%>
         <div id="groupOverdue" class="chapter-group">
             <div class="chapter-group-head">
                 <span class="chapter-group-dot chapter-group-dot-overdue"></span>
@@ -74,15 +74,15 @@
                     <th class="th-sortable col-deadline"><span class="th-sort-inner">Deadline<button class="btn small chapter-sort-btn" type="button" data-sort="deadline" title="Sort by deadline" aria-label="Sort by deadline">↕</button></span></th>
                     <th class="col-progress">Progress</th>
                     <th class="col-atrisk">At Risk</th>
-                    <%-- chapterActionHeader: JS có thể ẩn cột Actions với role không phải Mangaka --%>
+                    <%-- chapterActionHeader: JS can hide the Actions column for non-Mangaka roles --%>
                     <th class="col-actions" id="chapterActionHeader">Actions</th>
                 </tr></thead>
-                <%-- rowsOverdue: tbody trống, chapter-list.js fetch API rồi render row vào đây --%>
+                <%-- rowsOverdue: empty tbody, chapter-list.js fetches the API then renders rows here --%>
                 <tbody id="rowsOverdue"><tr><td colspan="8" class="chapter-empty-cell">Loading...</td></tr></tbody>
             </table>
         </div>
 
-        <%-- [4b] NHÓM IN PROGRESS: chapter đang làm — luôn hiện --%>
+        <%-- [4b] IN PROGRESS GROUP: chapters currently in progress — always shown --%>
         <div id="groupInProgress" class="chapter-group">
             <div class="chapter-group-head">
                 <span class="chapter-group-dot chapter-group-dot-progress"></span>
@@ -114,10 +114,10 @@
             </table>
         </div>
 
-        <%--
-            [4c] NHÓM COMPLETED: chapter đã xong
-            Mặc định ẩn (completedBody bị collapse), bấm toggleCompleted mới Show/Hide
-            JS điền countCompleted vào badge đếm
+<%--
+            [4c] COMPLETED GROUP: completed chapters
+            Hidden by default (completedBody is collapsed), click toggleCompleted to Show/Hide
+            JS fills countCompleted into the count badge
         --%>
         <div id="groupCompleted">
             <div class="chapter-group-head">
@@ -155,26 +155,26 @@
     </div>
 
     <%--
-        [5] SIDEBAR PHẢI: tạo chapter mới + series overview
-        Chỉ hiện với Mangaka — canCreateChapter kiểm tra từ session server-side,
-        truyền xuống JS qua CHAPTER_LIST_CONFIG để JS ẩn/hiện sidebar
+        [5] RIGHT SIDEBAR: create new chapter + series overview
+        Only shown to Mangaka — canCreateChapter is checked server-side from the session,
+        passed down to JS via CHAPTER_LIST_CONFIG so JS can show/hide the sidebar
     --%>
     <div id="createSidebar" class="chapter-create-sidebar">
 
-        <%-- [5a] FORM TẠO CHAPTER --%>
+        <%-- [5a] CREATE CHAPTER FORM --%>
         <div class="panel chapter-create-panel">
-            <%-- createSidebarTitle: JS điền "New chapter · {tên series}" --%>
+            <%-- createSidebarTitle: JS fills in "New chapter · {series name}" --%>
             <strong id="createSidebarTitle">New chapter</strong>
-            <%-- createSidebarSub: JS điền series đang được chọn --%>
+            <%-- createSidebarSub: JS fills in the currently selected series --%>
             <p class="section-desc chapter-create-sub" id="createSidebarSub"></p>
-            <%-- createSeriesDeadlineHint: JS điền gợi ý deadline tối đa (series deadline - 14 ngày, BR-CHP-02) --%>
+            <%-- createSeriesDeadlineHint: JS fills in the suggested max deadline (series deadline - 14 days, BR-CHP-02) --%>
             <p class="section-desc chapter-create-hint" id="createSeriesDeadlineHint"></p>
             <div id="createErrorBox" class="alert error chapter-create-error"></div>
             <form id="chapterCreateForm" class="form-grid">
                 <label class="field-label" for="chapterCreateTitle">Title</label>
                 <input id="chapterCreateTitle" name="title" type="text" placeholder="Chapter title" required />
                 <label class="field-label" for="chapterCreateTotalPages">Expected page count</label>
-                <%-- Stepper ±1 ±5 để điều chỉnh nhanh, mặc định 24 trang, JS bắt sự kiện data-total-pages-delta --%>
+                <%-- Stepper ±1 ±5 for quick adjustment, default 24 pages, JS handles the data-total-pages-delta event --%>
                 <div class="chapter-page-total-controls">
                     <button class="btn small" type="button" data-total-pages-delta="-5">−5</button>
                     <button class="btn small" type="button" data-total-pages-delta="-1">−1</button>
@@ -188,7 +188,7 @@
             </form>
         </div>
 
-        <%-- [5b] SERIES OVERVIEW: JS điền số chapter Completed/In Progress/Overdue + % tiến độ tổng --%>
+<%-- [5b] SERIES OVERVIEW: JS fills in the Completed/In Progress/Overdue chapter counts + overall % progress --%>
         <div class="panel">
             <strong>Series overview</strong>
             <div id="seriesOverviewStats" class="chapter-overview-stats"></div>
@@ -198,10 +198,10 @@
 </div>
 
 <%--
-    [6] CONFIG SCRIPT: truyền 2 giá trị xuống chapter-list.js
-    - contextPath: để JS fetch đúng API URL khi deploy trên subdirectory
-    - canCreateChapter: true nếu session có role MANGAKA, false với role khác
-                        → JS dùng để ẩn sidebar tạo chapter với non-Mangaka
+    [6] CONFIG SCRIPT: passes 2 values down to chapter-list.js
+    - contextPath: so JS fetches the correct API URL when deployed under a subdirectory
+    - canCreateChapter: true if the session has the MANGAKA role, false for other roles
+                        → JS uses this to hide the chapter creation sidebar for non-Mangaka
 --%>
 <script src="${pageContext.request.contextPath}/assets/js/chaptertask/chapter-list.js?v=20260608split"
         data-context-path="${pageContext.request.contextPath}"

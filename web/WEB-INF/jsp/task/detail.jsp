@@ -1,24 +1,24 @@
 <%--
-  MỤC ĐÍCH: Màn hình xem chi tiết 1 task cụ thể:
-            - Assistant: xem task được giao, upload ảnh từng page, submit khi xong
-  CÁC FLAG TỪ CONTROLLER (dùng để ẩn/hiện từng section):
-    - task            : object TaskSummary đầy đủ thông tin
-    - error           : chuỗi lỗi nếu có (vd: không có quyền truy cập)
-    - canAssistantUpdate : true nếu assistant có thể upload ảnh (task đang IN_PROGRESS/REJECTED)
-    - canAssistantSubmit : true nếu assistant có thể bấm Submit (đã upload đủ trang)
-    - canMangakaReview   : true nếu Mangaka có thể approve/reject (task đang SUBMITTED)
-  CẤU TRÚC:
+  PURPOSE: Screen showing the details of a single task:
+            - Assistant: view the assigned task, upload images per page, submit when done
+  FLAGS FROM THE CONTROLLER (used to show/hide each section):
+    - task            : TaskSummary object with full details
+    - error           : error string if any (e.g. no access permission)
+    - canAssistantUpdate : true if the assistant can upload images (task is IN_PROGRESS/REJECTED)
+    - canAssistantSubmit : true if the assistant can click Submit (all pages uploaded)
+    - canMangakaReview   : true if the Mangaka can approve/reject (task is SUBMITTED)
+  STRUCTURE:
     [1] HEAD           — CSS import
-    [2] ERROR ALERT    — Hiện lỗi từ server nếu có (vd: forbidden)
-    [3] DETAIL GRID    — Thông tin cơ bản: Type, Pages, Assigned To, Due Date, Status
-    [4] CLOSED NOTICE  — Hiện khi task bị DELETED hoặc REASSIGNED, khoá mọi thao tác
-    [5] MANGAKA NOTE   — Ghi chú từ Mangaka khi gán task (task.notes)
-    [6] MANGAKA FEEDBACK — Hiện comment approve hoặc lý do reject từ lần review trước
-    [7] MANGAKA REVIEW — Form approve/reject, chỉ hiện khi canMangakaReview = true
-    [8] APPROVED BANNER — Banner xanh khi task đã APPROVED, thông báo ảnh đã vào chapter
-    [9] PAGE SUBMISSION — Grid upload ảnh từng page + progress bar (JS render vào đây)
-    [10] STICKY SUBMIT BAR — JS render nút Submit nổi bên dưới khi canAssistantSubmit
-    [11] CONFIG SCRIPT — Truyền task metadata xuống page-submission.js
+    [2] ERROR ALERT    — Shows a server error if any (e.g. forbidden)
+    [3] DETAIL GRID    — Basic info: Type, Pages, Assigned To, Due Date, Status
+    [4] CLOSED NOTICE  — Shown when the task is DELETED or REASSIGNED, locks all actions
+    [5] MANGAKA NOTE   — Note from the Mangaka when assigning the task (task.notes)
+    [6] MANGAKA FEEDBACK — Shows the approval comment or rejection reason from the last review
+    [7] MANGAKA REVIEW — Approve/reject form, only shown when canMangakaReview = true
+    [8] APPROVED BANNER — Green banner when the task is APPROVED, notifying that images were merged into the chapter
+    [9] PAGE SUBMISSION — Grid for uploading each page's image + progress bar (rendered here by JS)
+    [10] STICKY SUBMIT BAR — JS renders a floating Submit button below when canAssistantSubmit
+    [11] CONFIG SCRIPT — Passes task metadata down to page-submission.js
 --%>
 <%@page contentType="text/html" pageEncoding="UTF-8"%>
 <%@taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
@@ -34,13 +34,13 @@
 <body>
 <jsp:include page="../common/header.jsp" />
 
-<%-- [2] ERROR ALERT: controller đặt "error" vào model khi task không tồn tại hoặc không có quyền --%>
+<%-- [2] ERROR ALERT: the controller puts "error" into the model when the task doesn't exist or access is denied --%>
 <c:if test="${not empty error}"><div class="alert error">${error}</div></c:if>
 
 <%--
-    [3] DETAIL GRID: thông tin cơ bản của task, render server-side
-    Status chip đổi màu theo trạng thái: APPROVED=xanh, OVERDUE=đỏ, còn lại=vàng
-    Delayed chip hiện thêm nếu task.delayed = true (nộp trễ so với dueDate gốc)
+    [3] DETAIL GRID: basic task info, rendered server-side
+    Status chip color changes by status: APPROVED=green, OVERDUE=red, others=yellow
+    Delayed chip additionally shows if task.delayed = true (submitted later than the original dueDate)
 --%>
 <div class="section-card detail-grid">
     <div><span class="detail-label">Types</span><strong><c:out value="${task.taskTypesDisplay}" /></strong></div>
@@ -54,9 +54,9 @@
 </div>
 
 <%--
-    [4] CLOSED NOTICE: hiện khi task đã bị đóng (DELETED hoặc REASSIGNED)
-    Task ở trạng thái này không thể upload hay submit thêm gì nữa
-    task.actionReason chứa lý do Mangaka nhập khi delete/reassign
+    [4] CLOSED NOTICE: shown when the task has been closed (DELETED or REASSIGNED)
+    A task in this state can no longer be uploaded to or submitted
+    task.actionReason holds the reason the Mangaka entered when deleting/reassigning
 --%>
 <c:if test="${task.status == 'DELETED' || task.status == 'REASSIGNED'}">
     <div class="section-card">
@@ -71,7 +71,7 @@
     </div>
 </c:if>
 
-<%-- [5] MANGAKA NOTE: ghi chú Mangaka điền khi tạo task (task.notes), chỉ hiện nếu có --%>
+<%-- [5] MANGAKA NOTE: note the Mangaka entered when creating the task (task.notes), only shown if present --%>
 <c:if test="${not empty task.notes}">
     <div class="section-card">
         <h3 class="section-title compact-title">Mangaka Note</h3>
@@ -80,10 +80,10 @@
 </c:if>
 
 <%--
-    [6] MANGAKA FEEDBACK: kết quả review của Mangaka từ lần duyệt trước
-    - approvalComment: comment khi approve (màu xanh)
-    - rejectionReason: lý do reject, assistant cần đọc để sửa (màu đỏ)
-    Hai cái có thể cùng hiện nếu task bị reject rồi approve sau đó
+    [6] MANGAKA FEEDBACK: the Mangaka's review result from the previous review
+    - approvalComment: comment made on approval (green)
+    - rejectionReason: rejection reason, the assistant needs to read this to make fixes (red)
+    Both can show at once if the task was rejected and then later approved
 --%>
 <c:if test="${not empty task.approvalComment || not empty task.rejectionReason}">
     <div class="section-card">
@@ -103,17 +103,17 @@
     </div>
 </c:if>
 
-<%-- [6b] SUBMISSION HISTORY: timeline toàn bộ các round submit/review, JS render vào đây --%>
+<%-- [6b] SUBMISSION HISTORY: timeline of all submit/review rounds, rendered here by JS --%>
 <div class="section-card">
     <h3 class="section-title compact-title">Submission History</h3>
     <div id="submissionHistoryList"></div>
 </div>
 
 <%--
-    [7] MANGAKA REVIEW: form approve/reject, chỉ hiện khi canMangakaReview = true
-    (controller set true khi: role MANGAKA + là chủ series + task đang SUBMITTED)
-    Dùng form POST thông thường, không phải fetch API
-    Reject có confirm dialog để tránh bấm nhầm
+    [7] MANGAKA REVIEW: approve/reject form, only shown when canMangakaReview = true
+    (the controller sets this true when: role MANGAKA + is the series owner + task is SUBMITTED)
+    Uses a regular POST form, not a fetch API call
+    Reject has a confirm dialog to prevent accidental clicks
 --%>
 <c:if test="${canMangakaReview}">
     <div class="section-card">
@@ -130,9 +130,9 @@
 </c:if>
 
 <%--
-    [8] APPROVED BANNER: banner xanh xác nhận task đã được duyệt
-    Khi Mangaka approve, tất cả ảnh của task này tự động được cập nhật vào chapter
-    Thông báo để assistant biết công việc đã hoàn thành và được ghi nhận
+    [8] APPROVED BANNER: green banner confirming the task has been approved
+    When the Mangaka approves, all images from this task are automatically merged into the chapter
+    Lets the assistant know the work is complete and has been recorded
 --%>
 <c:if test="${task.status == 'APPROVED'}">
     <div class="alert success page-approved-banner">
@@ -142,11 +142,11 @@
 </c:if>
 
 <%--
-    [9] PAGE SUBMISSION: khu vực upload ảnh từng page
-    pageProgressBar: JS render thanh tiến độ (X/Y trang đã upload)
-    pageGrid: JS render grid các page slot, mỗi slot có thể upload ảnh
-    pageFileInput: input file ẩn, JS trigger click khi người dùng chọn slot
-                   Chỉ render nếu canAssistantUpdate = true
+    [9] PAGE SUBMISSION: area for uploading each page's image
+    pageProgressBar: JS renders the progress bar (X/Y pages uploaded)
+    pageGrid: JS renders the grid of page slots, each slot can have an image uploaded
+    pageFileInput: hidden file input, JS triggers a click when the user selects a slot
+                   Only rendered if canAssistantUpdate = true
 --%>
 <div class="section-card">
     <div class="section-head">
@@ -161,7 +161,7 @@
     <div id="pageGrid" class="page-submission-grid"></div>
 </div>
 
-<%-- [10] STICKY SUBMIT BAR + TOAST: JS render nút "Submit task" nổi khi canAssistantSubmit = true --%>
+<%-- [10] STICKY SUBMIT BAR + TOAST: JS renders a floating "Submit task" button when canAssistantSubmit = true --%>
 <div id="stickySubmitBar"></div>
 <div id="toastContainer"></div>
 <c:if test="${canAssistantUpdate}">
@@ -171,10 +171,10 @@
 <a class="btn" href="${pageContext.request.contextPath}/main/tasks">Back to Tasks</a>
 
 <%--
-    [11] CONFIG SCRIPT: truyền task metadata xuống page-submission.js
-    canUpdate: assistant có thể upload ảnh không
-    canSubmit: assistant có thể bấm Submit không
-    page-submission.js dùng các flag này để ẩn/hiện nút, khóa slot khi không có quyền
+    [11] CONFIG SCRIPT: passes task metadata down to page-submission.js
+    canUpdate: whether the assistant can upload images
+    canSubmit: whether the assistant can click Submit
+    page-submission.js uses these flags to show/hide buttons and lock slots when not permitted
 --%>
 <script src="${pageContext.request.contextPath}/assets/js/chaptertask/page-submission.js?v=20260605fix1"
         data-task-id="${task.id}"

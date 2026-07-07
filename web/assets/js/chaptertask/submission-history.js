@@ -1,7 +1,7 @@
 /**
  * submission-history.js
- * Hiển thị timeline toàn bộ các round submit/review của 1 PageTask (Task Detail view).
- * Config: đọc từ data-* attribute trên <script> (taskId, contextPath).
+ * Displays the full timeline of submit/review rounds for a PageTask (Task Detail view).
+ * Config: read from data-* attributes on the <script> tag (taskId, contextPath).
  */
 (function () {
     'use strict';

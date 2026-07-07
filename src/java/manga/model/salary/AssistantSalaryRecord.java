@@ -17,8 +17,6 @@ public class AssistantSalaryRecord {
     private BigDecimal deduction;
     private BigDecimal netSalary;
     private BigDecimal suggestedBonus;
-    private BigDecimal suggestedDeduction;
-    private int heavyRejectedTaskCount;
     private List<Map<String, Object>> tasks;
 
     public long getPeriodId() {
@@ -115,22 +113,6 @@ public class AssistantSalaryRecord {
 
     public void setSuggestedBonus(BigDecimal suggestedBonus) {
         this.suggestedBonus = suggestedBonus;
-    }
-
-    public BigDecimal getSuggestedDeduction() {
-        return suggestedDeduction;
-    }
-
-    public void setSuggestedDeduction(BigDecimal suggestedDeduction) {
-        this.suggestedDeduction = suggestedDeduction;
-    }
-
-    public int getHeavyRejectedTaskCount() {
-        return heavyRejectedTaskCount;
-    }
-
-    public void setHeavyRejectedTaskCount(int heavyRejectedTaskCount) {
-        this.heavyRejectedTaskCount = heavyRejectedTaskCount;
     }
 
     public List<Map<String, Object>> getTasks() {

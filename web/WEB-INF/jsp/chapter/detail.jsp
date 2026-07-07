@@ -1,24 +1,24 @@
 <%--
   1. HEAD         — CSS imports
   2. HEADER       — Shared navigation header
-  3. BREADCRUMB   — Điều hướng My Series › Series › Chapter
-  4. ACTION BAR   — Nút Delete / Submit for review / Manuscript Workspace
-  5. TAB BAR      — 3 tab: Pages | Tasks | Edit details
-     5a. TAB PAGES     — Lưới page slots + thanh tiến độ
-     5b. TAB TASKS     — Bảng task + popover Approve/Reject
-     5c. TAB EDIT      — Form sửa title & deadline
-  6. SIDEBAR      — Meta panel + legend màu + task list rút gọn
-  7. MODAL: pageCompareModal        — So sánh version page
-  8. MODAL: pageUploadModal         — Upload ảnh page slot
-  9. MODAL: assignTaskModal         — Gán task cho assistant
+  3. BREADCRUMB   — Navigation: My Series › Series › Chapter
+  4. ACTION BAR   — Delete / Submit for review / Manuscript Workspace buttons
+  5. TAB BAR      — 3 tabs: Pages | Tasks | Edit details
+     5a. TAB PAGES     — Page slot grid + progress bar
+     5b. TAB TASKS     — Task table + Approve/Reject popover
+     5c. TAB EDIT      — Form to edit title & deadline
+  6. SIDEBAR      — Meta panel + color legend + condensed task list
+  7. MODAL: pageCompareModal        — Compare page versions
+  8. MODAL: pageUploadModal         — Upload page slot image
+  9. MODAL: assignTaskModal         — Assign task to assistant
   10. MODAL: taskReassignModal      — Reassign task
-  11. MODAL: taskOverdueDecisionModal — Xử lý task overdue
-  12. CONFIG SCRIPT — Truyền contextPath xuống JS
+  11. MODAL: taskOverdueDecisionModal — Handle overdue task
+  12. CONFIG SCRIPT — Pass contextPath down to JS
 --%>
 <%@page contentType="text/html" pageEncoding="UTF-8"%>
 <!DOCTYPE html>
 <html>
-<%-- [1] HEAD: import global CSS (styles.css) và CSS riêng trang này (chapter-detail.css) --%>
+<%-- [1] HEAD: import global CSS (styles.css) and this page's own CSS (chapter-detail.css) --%>
 <head>
     <meta charset="UTF-8">
     <title>Chapter Detail</title>
@@ -26,14 +26,14 @@
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/chaptertask/chapter-detail.css?v=20260703history" />
 </head>
 <body>
-<%-- [2] HEADER: shared navigation bar dùng chung toàn app, xem common/header.jsp --%>
+<%-- [2] HEADER: shared navigation bar used across the whole app, see common/header.jsp --%>
 <jsp:include page="../common/header.jsp" />
 
 <div id="detailResult" class="alert error chapter-detail-inline-1"></div>
-<%-- 
-    [3] BREADCRUMB: thanh điều hướng vị trí hiện tại
-    Hiển thị: My Series › {tên series} › {tên chapter} [STATUS]
-    breadcrumbSeries và breadcrumbChapter để trống — SJS tự điền sau khi fetch API
+<%--
+    [3] BREADCRUMB: shows the current location
+    Displays: My Series › {series name} › {chapter name} [STATUS]
+    breadcrumbSeries and breadcrumbChapter start empty — JS fills them in after fetching the API
 --%>
 <div id="breadcrumb" class="chapter-detail-inline-2">
     <a href="${pageContext.request.contextPath}/main/series" class="chapter-detail-inline-3">My Series</a>
@@ -43,11 +43,11 @@
     <span id="breadcrumbChapter" class="chapter-detail-inline-5"></span>
     <span id="breadcrumbStatusPill" class="chapter-detail-inline-6"></span>
 </div>
-<%-- 
-    [4] ACTION BAR: 3 nút hành động chính, mặc định ẩn, JS show tuỳ điều kiện
-    - btnDelete: chỉ hiện khi chapter ở PLANNING và chưa có task (BR xóa chapter)
-    - btnMarkDone: chỉ hiện khi chapter đủ điều kiện submit manuscript
-    - btnManuscriptWorkspace: link sang trang review manuscript
+<%--
+    [4] ACTION BAR: 3 main action buttons, hidden by default, JS shows them based on conditions
+    - btnDelete: only shown when the chapter is in PLANNING and has no tasks yet (chapter deletion business rule)
+    - btnMarkDone: only shown when the chapter is eligible to submit the manuscript
+    - btnManuscriptWorkspace: link to the manuscript review page
 --%>
 <div class="chapter-detail-inline-7">
     <button id="btnDelete" class="btn small chapter-detail-inline-8 is-hidden-initial" type="button">Delete chapter</button>
@@ -57,12 +57,12 @@
 
 <div class="chapter-workspace">
     <div class="section-card chapter-main-card">
-<%-- 
-    [5] TAB BAR: 3 tab điều hướng nội dung chính
-    - Pages (5a): quản lý page slots, gán task
-    - Tasks (5b): xem & duyệt task
-    - Edit details (5c): sửa thông tin chapter
-    Số trên badge (tabPageCount, tabTaskCount) do JS cập nhật
+<%--
+    [5] TAB BAR: 3 tabs for navigating the main content
+    - Pages (5a): manage page slots, assign tasks
+    - Tasks (5b): view & review tasks
+    - Edit details (5c): edit chapter information
+    The badge counts (tabPageCount, tabTaskCount) are updated by JS
 --%>
         <div id="tabBar" class="chapter-tab-bar">
             <button class="chapter-tab-btn active" type="button" data-tab="pages">
@@ -73,11 +73,11 @@
             </button>
             <button class="chapter-tab-btn" type="button" data-tab="edit">Edit details</button>
         </div>
-<%-- 
-    [5a] TAB PAGES: lưới thumbnail tất cả page slots của chapter
-    - Mangaka có thể chọn nhiều slot → bấm "Gán task" → mở assignTaskModal
-    - Bấm vào từng slot → mở pageUploadModal để upload/xem ảnh
-    - pagesOwnerActions (nút + Thêm trang) chỉ hiện với Mangaka chủ series
+<%--
+    [5a] TAB PAGES: thumbnail grid of all page slots in the chapter
+    - Mangaka can select multiple slots → click "Assign task" → opens assignTaskModal
+    - Click a slot → opens pageUploadModal to upload/view the image
+    - pagesOwnerActions (the + Add page button) is only shown to the Mangaka who owns the series
 --%>
         <div id="tabPages" class="chapter-tab-panel">
             <div class="pages-toolbar">
@@ -102,10 +102,10 @@
             <div id="pageSlotGrid" class="page-slot-grid">
                 <p class="chapter-detail-inline-19">Loading pages...</p>
             </div>
-<%-- 
-    [5a.1] PROGRESS BAR: thanh tiến độ chapter
-    Công thức BR-TSK-11: (Approved tasks / Total tasks) × 100%
-    JS tự cập nhật mỗi khi có task đổi trạng thái
+<%--
+    [5a.1] PROGRESS BAR: chapter progress bar
+    Formula BR-TSK-11: (Approved tasks / Total tasks) × 100%
+    JS automatically updates it whenever a task's status changes
 --%>
             <div id="progressSection">
                 <div class="chapter-detail-inline-20">
@@ -115,12 +115,12 @@
                 <div class="progress"><span id="progressFill" class="chapter-detail-inline-23"></span></div>
             </div>
         </div>
-<%-- 
-    [5b] TAB TASKS: bảng danh sách tất cả task thuộc chapter này
-    Cột: ID | Pages | Type | Assigned To | Status | Due Date | Action
-    taskPopoverHost chứa 2 popover inline (không phải modal):
-      - taskApprovePopover: Mangaka approve task, comment tuỳ chọn
-      - taskRejectPopover: Mangaka reject task, bắt buộc nhập lý do (BR-TSK-05)
+<%--
+    [5b] TAB TASKS: table listing all tasks belonging to this chapter
+    Columns: ID | Pages | Type | Assigned To | Status | Due Date | Action
+    taskPopoverHost contains 2 inline popovers (not modals):
+      - taskApprovePopover: Mangaka approves the task, comment is optional
+      - taskRejectPopover: Mangaka rejects the task, reason is required (BR-TSK-05)
 --%>
         <div id="tabTasks" class="chapter-tab-panel chapter-detail-inline-24">
             <div id="chapterTaskTableWrap" class="section-card chapter-detail-inline-25">
@@ -166,11 +166,11 @@
                 </div>
             </div>
         </div>
-<%-- 
-    [5c] TAB EDIT: form sửa thông tin chapter
-    Chỉ Mangaka chủ series mới thao tác được
-    Trường: Title, Submission deadline
-    BR-CHP-02: deadline phải cách publication date ít nhất 14 ngày
+<%--
+    [5c] TAB EDIT: form to edit chapter information
+    Only the Mangaka who owns the series can perform this
+    Fields: Title, Submission deadline
+    BR-CHP-02: deadline must be at least 14 days before the publication date
 --%>
         <div id="tabEdit" class="chapter-tab-panel chapter-detail-inline-28">
             <form id="chapterUpdateForm" class="form-grid chapter-inline-update-form" data-prevent-submit>
@@ -183,11 +183,11 @@
             </form>
         </div>
     </div>
-<%-- 
-    [6] SIDEBAR PHẢI: 3 panel thông tin phụ trợ
-    - Meta panel: deadline, tổng số trang, status, % tiến độ (JS điền)
-    - Legend màu: giải thích 4 trạng thái page slot (Trống/Đang làm/Chờ duyệt/Hoàn tất)
-    - Task list rút gọn: danh sách nhanh các task (JS điền vào sidebarTaskList)
+<%--
+    [6] RIGHT SIDEBAR: 3 supporting info panels
+    - Meta panel: deadline, total page count, status, % progress (filled in by JS)
+    - Color legend: explains the 4 page slot states (Empty/In progress/Pending review/Done)
+    - Condensed task list: a quick list of tasks (JS fills sidebarTaskList)
 --%>
     <aside>
         <div class="panel chapter-detail-inline-30">
@@ -242,8 +242,8 @@
         </div>
     </aside>
 </div>
-<%-- [7] MODAL pageCompareModal: so sánh các version ảnh của một page
-Mở khi: click "Compare" trên page slot đã có lịch sử upload--%>
+<%-- [7] MODAL pageCompareModal: compares image versions of a page
+Opens when: clicking "Compare" on a page slot that has upload history --%>
 <div id="pageCompareModal" class="chapter-detail-inline-51">
   <div class="chapter-detail-inline-52">
     <button id="pageCompareClose" class="chapter-detail-inline-53">&times;</button>
@@ -251,7 +251,7 @@ Mở khi: click "Compare" trên page slot đã có lịch sử upload--%>
     <div id="pageCompareBody"></div>
   </div>
 </div>
-<%-- [7b] MODAL pageHistoryModal: lịch sử upload ảnh + stage của một page, cho phép Mangaka chủ rollback --%>
+<%-- [7b] MODAL pageHistoryModal: upload + stage history of a page, allows the owning Mangaka to roll back --%>
 <div id="pageHistoryModal" class="chapter-detail-inline-51">
   <div class="chapter-detail-inline-52">
     <button id="pageHistoryClose" class="chapter-detail-inline-53">&times;</button>
@@ -259,10 +259,10 @@ Mở khi: click "Compare" trên page slot đã có lịch sử upload--%>
     <div id="pageHistoryBody"></div>
   </div>
 </div>
-<%-- 
-    [8] MODAL pageUploadModal: upload/xem/xóa ảnh một page slot
-    Stage picker: tick 5 stage (Sketching→Inking→Coloring→Screentone→Lettering)
-    pageUploadDelete chỉ hiện với Mangaka (JS kiểm tra isOwner())
+<%--
+    [8] MODAL pageUploadModal: upload/view/delete the image of a page slot
+    Stage picker: tick off the 5 stages (Sketching→Inking→Coloring→Screentone→Lettering)
+    pageUploadDelete is only shown to the Mangaka (JS checks isOwner())
 --%>
 <div id="pageUploadModal" class="modal-backdrop" aria-hidden="true">
     <div class="modal-card modal-card-wide" role="dialog" aria-modal="true" aria-labelledby="pageUploadTitle">
@@ -291,10 +291,10 @@ Mở khi: click "Compare" trên page slot đã có lịch sử upload--%>
         </div>
     </div>
 </div>
-<%-- 
-    [9] MODAL assignTaskModal: gán task mới cho assistant
-    Điền sẵn trang đã chọn từ lưới Pages vào assignPageChips
-    BR-CHP-03: chỉ Mangaka gán | BR-CHP-05: không tự gán cho mình
+<%--
+    [9] MODAL assignTaskModal: assign a new task to an assistant
+    Pre-fills assignPageChips with the pages selected from the Pages grid
+    BR-CHP-03: only Mangaka can assign | BR-CHP-05: cannot assign to self
 --%>
 <div id="assignTaskModal" class="modal-backdrop" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="assignTaskTitle">
@@ -319,9 +319,9 @@ Mở khi: click "Compare" trên page slot đã có lịch sử upload--%>
         </form>
     </div>
 </div>
-<%-- 
-    [10] MODAL taskReassignModal: đổi assistant đang làm task
-    BR-TSK-03: khi reassign → task reset về In Progress, xóa submission cũ
+<%--
+    [10] MODAL taskReassignModal: change the assistant working on a task
+    BR-TSK-03: on reassign → task resets to In Progress, previous submission is cleared
 --%>
 <div id="taskReassignModal" class="modal-backdrop" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="taskReassignTitle">
@@ -340,12 +340,12 @@ Mở khi: click "Compare" trên page slot đã có lịch sử upload--%>
         </form>
     </div>
 </div>
-<%-- 
-    [11] MODAL taskOverdueDecisionModal: xử lý task quá hạn (BR-TSK-10)
-    3 lựa chọn:
-      - Extend: gia hạn due date
-      - Reassign: đổi assistant + due date mới
-      - Delete: xóa task khỏi production tracking (cần nhập lý do)
+<%--
+    [11] MODAL taskOverdueDecisionModal: handle an overdue task (BR-TSK-10)
+    3 choices:
+      - Extend: extend the due date
+      - Reassign: change assistant + set a new due date
+      - Delete: remove the task from production tracking (reason required)
 --%>
 <div id="taskOverdueDecisionModal" class="modal-backdrop" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="taskOverdueDecisionTitle">
@@ -397,10 +397,10 @@ Mở khi: click "Compare" trên page slot đã có lịch sử upload--%>
         </div>
     </div>
 </div>
-<%-- 
-    [12] CONFIG SCRIPT: truyền contextPath từ server xuống JS
-    Cần thiết để fetch() gọi đúng API URL khi app deploy trên subdirectory
-    Đặt trước chapter-detail.js để JS đọc được ngay khi load
+<%--
+    [12] CONFIG SCRIPT: passes contextPath from the server down to JS
+    Needed so fetch() calls the correct API URL when the app is deployed under a subdirectory
+    Placed before chapter-detail.js so JS can read it immediately on load
 --%>
 <script src="${pageContext.request.contextPath}/assets/js/chaptertask/chapter-detail.js?v=20260703history"
         data-context-path="${pageContext.request.contextPath}"></script>

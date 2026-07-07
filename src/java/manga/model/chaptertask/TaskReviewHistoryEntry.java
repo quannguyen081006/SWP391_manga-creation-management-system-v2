@@ -4,7 +4,7 @@ import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
 
-/** 1 round submit/review trong lịch sử nộp bài của 1 PageTask. */
+/** One submit/review round in the submission history of a PageTask. */
 public class TaskReviewHistoryEntry {
     private int roundNumber;
     private Timestamp submittedAt;

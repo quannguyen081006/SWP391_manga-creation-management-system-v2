@@ -241,22 +241,23 @@
             <p class="sal-section-label">02 — Gross salary</p>
             <div class="sal-formula">
                 <div>Gross = Σ (ratePerPage × pages)</div>
-                <div class="sal-comment">// Cộng dồn theo task type của các task approved chưa trả lương</div>
+                <div class="sal-comment">// Summed by task type across approved tasks not yet paid</div>
             </div>
-            <p class="sal-note">Chỉnh đơn giá tại bảng Task Type Rates ở trên.</p>
+            <p class="sal-note">Adjust the unit rates in the Task Type Rates table above.</p>
         </div>
 
         <div class="sal-section">
             <p class="sal-section-label">03 — Bonus</p>
             <div class="sal-formula">
                 <div>Bonus = KPI ≥ T ? Gross × B / 100 : 0</div>
+                <div class="sal-comment">// Bonus-only policy: no bonus is granted when KPI is below the threshold, and there are no other deductions.</div>
             </div>
 
             <div class="sal-var-row">
                 <span class="sal-dot sal-dot-bonus" aria-hidden="true"></span>
                 <div class="sal-var-copy">
                     <p class="sal-var-name">KPI threshold (T)</p>
-                    <p class="sal-var-desc">Điểm KPI tối thiểu để được thưởng</p>
+                    <p class="sal-var-desc">Minimum KPI score required to earn a bonus</p>
                 </div>
                 <div class="sal-var-control">
                     <input class="sal-var-input" id="kpiBonusThreshold" type="number"
@@ -270,7 +271,7 @@
                 <span class="sal-dot sal-dot-bonus" aria-hidden="true"></span>
                 <div class="sal-var-copy">
                     <p class="sal-var-name">Bonus rate (B)</p>
-                    <p class="sal-var-desc">Phần trăm thưởng tính trên gross</p>
+                    <p class="sal-var-desc">Bonus percentage applied to gross salary</p>
                 </div>
                 <div class="sal-var-control">
                     <input class="sal-var-input" id="bonusPercent" type="number"
@@ -282,58 +283,9 @@
         </div>
 
         <div class="sal-section">
-            <p class="sal-section-label">04 — Deduction</p>
+            <p class="sal-section-label">04 — Net salary</p>
             <div class="sal-formula">
-                <div>Deduct = (lateTasks × P₁) + (tasks rejected ≥ R times × P₂)</div>
-            </div>
-
-            <div class="sal-var-row">
-                <span class="sal-dot sal-dot-penalty" aria-hidden="true"></span>
-                <div class="sal-var-copy">
-                    <p class="sal-var-name">Late penalty (P₁)</p>
-                    <p class="sal-var-desc">Phạt mỗi task duyệt sau due date</p>
-                </div>
-                <div class="sal-var-control">
-                    <input class="sal-var-input" id="penaltyPerLateTask" type="number"
-                           name="penaltyPerLateTask" min="0" step="1000"
-                           value="${settings.penaltyPerLateTask}" required />
-                    <span class="sal-var-unit">VND / task</span>
-                </div>
-            </div>
-
-            <div class="sal-var-row">
-                <span class="sal-dot sal-dot-threshold" aria-hidden="true"></span>
-                <div class="sal-var-copy">
-                    <p class="sal-var-name">Rejection threshold (R)</p>
-                    <p class="sal-var-desc">Số lần reject tối thiểu để bị phạt P₂</p>
-                </div>
-                <div class="sal-var-control">
-                    <input class="sal-var-input" id="rejectionPenaltyThreshold" type="number"
-                           name="rejectionPenaltyThreshold" min="1"
-                           value="${settings.rejectionPenaltyThreshold}" required />
-                    <span class="sal-var-unit">lần</span>
-                </div>
-            </div>
-
-            <div class="sal-var-row">
-                <span class="sal-dot sal-dot-penalty" aria-hidden="true"></span>
-                <div class="sal-var-copy">
-                    <p class="sal-var-name">Rejection penalty (P₂)</p>
-                    <p class="sal-var-desc">Phạt mỗi task đạt ngưỡng R</p>
-                </div>
-                <div class="sal-var-control">
-                    <input class="sal-var-input" id="penaltyPerRejectedTask" type="number"
-                           name="penaltyPerRejectedTask" min="0" step="1000"
-                           value="${settings.penaltyPerRejectedTask}" required />
-                    <span class="sal-var-unit">VND / task</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="sal-section">
-            <p class="sal-section-label">05 — Net salary</p>
-            <div class="sal-formula">
-                <div>Net = Gross + Bonus − Deduct</div>
+                <div>Net = Gross + Bonus</div>
             </div>
         </div>
 

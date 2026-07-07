@@ -43,7 +43,7 @@
 .page-slot-num { position: absolute; top: 6px; left: 8px; font-size: 11px; font-weight: 700; color: #374151; z-index: 2; }
 .page-slot.state-empty { border: 3px dashed #d1d5db; background: #f9fafb; color: #9ca3af; }
 .page-slot.state-empty:hover { border-color: #9ca3af; background: #f3f4f6; }
-/* Đã upload nhưng chưa có task → nét đứt xám giống trống */
+/* Uploaded but no task yet → gray dashed border, same as empty */
 .page-slot.state-uploaded { border: 3px dashed #9ca3af; background: #f3f4f6; }
 .page-slot.state-uploaded:hover { border-color: #6b7280; background: #e5e7eb; }
 .page-slot.state-selected { box-shadow: 0 0 0 3px #8b5cf6; border-color: #7c3aed !important; }
@@ -158,11 +158,11 @@
 .task-decision-label.approved { color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; }
 .task-decision-label.rejected { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; }
 #chapterTaskTableWrap { overflow: visible; }
-/* Đang làm → vàng */
+/* In progress → yellow */
 .page-slot.task-in-progress { border: 3px solid #f59e0b !important; background: #fffbeb !important; }
 /* Submitted → blue */
 .page-slot.task-submitted { border: 3px solid #3b82f6 !important; background: #eff6ff !important; }
-/* Hoàn tất → green */
+/* Complete → green */
 .page-slot.stage-complete {
     border: 3px solid #10b981 !important;
     background: #ecfdf5 !important;

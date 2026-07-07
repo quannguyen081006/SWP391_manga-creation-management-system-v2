@@ -19,21 +19,21 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * REST API controller quan ly PageTask (task ve trang) — nhom /api/v1.
+ * REST API controller for managing PageTask (page drawing tasks) — /api/v1 group.
  *
- * MUC LUC:
- *  1.  listVisible()   - GET   /api/v1/tasks                           - Lay task theo quyen cua user (co the filter status/chapterId)
- *  2.  list()          - GET   /api/v1/chapters/{chapterId}/tasks       - Lay task theo chapter
- *  3.  create()        - POST  /api/v1/chapters/{chapterId}/tasks       - Tao task moi giao cho assistant
- *  4.  patch()         - PATCH /api/v1/tasks/{id}                       - Cap nhat mot phan task (dueDate/priority/notes)
- *  5.  detail()        - GET   /api/v1/tasks/{id}                       - Xem chi tiet task
- *  6.  update()        - PUT   /api/v1/tasks/{id}                       - Cap nhat toan bo task
- *  7.  updateStatus()  - PATCH /api/v1/tasks/{id}/status                - Assistant cap nhat trang thai task
- *  8.  approve()       - POST  /api/v1/tasks/{id}/approve               - Mangaka duyet task
- *  9.  reject()        - POST  /api/v1/tasks/{id}/reject                - Mangaka tu choi task
- * 10.  deleteTask()    - POST  /api/v1/tasks/{id}/delete                - Xoa task (dung POST thay vi DELETE)
- * 11.  reassignTask()  - POST  /api/v1/tasks/{id}/reassign              - Chuyen task sang assistant khac
- * 12.  extendTask()    - POST  /api/v1/tasks/{id}/extend                - Gia han deadline task
+ * TABLE OF CONTENTS:
+ *  1.  listVisible()   - GET   /api/v1/tasks                           - Get tasks by user permission (can filter by status/chapterId)
+ *  2.  list()          - GET   /api/v1/chapters/{chapterId}/tasks       - Get tasks by chapter
+ *  3.  create()        - POST  /api/v1/chapters/{chapterId}/tasks       - Create a new task assigned to an assistant
+ *  4.  patch()         - PATCH /api/v1/tasks/{id}                       - Partially update task (dueDate/priority/notes)
+ *  5.  detail()        - GET   /api/v1/tasks/{id}                       - View task detail
+ *  6.  update()        - PUT   /api/v1/tasks/{id}                       - Update the entire task
+ *  7.  updateStatus()  - PATCH /api/v1/tasks/{id}/status                - Assistant updates task status
+ *  8.  approve()       - POST  /api/v1/tasks/{id}/approve               - Mangaka approves task
+ *  9.  reject()        - POST  /api/v1/tasks/{id}/reject                - Mangaka rejects task
+ * 10.  deleteTask()    - POST  /api/v1/tasks/{id}/delete                - Delete task (uses POST instead of DELETE)
+ * 11.  reassignTask()  - POST  /api/v1/tasks/{id}/reassign              - Reassign task to another assistant
+ * 12.  extendTask()    - POST  /api/v1/tasks/{id}/extend                - Extend task deadline
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -43,11 +43,11 @@ public class PageTaskApiController {
     private PageTaskService pageTaskService;
 
     // ============================================================
-    // 1. LIST TASK THEO QUYEN USER
+    // 1. LIST TASKS BY USER PERMISSION
     // GET /api/v1/tasks?status=&chapterId=
-    // - ASSISTANT: chi thay task duoc giao cho minh
-    // - MANGAKA/TANTOU/ADMIN: thay task thuoc series/chapter co quyen
-    // - status va chapterId deu optional, dung de filter them
+    // - ASSISTANT: only sees tasks assigned to them
+    // - MANGAKA/TANTOU/ADMIN: sees tasks belonging to series/chapters they have permission for
+    // - status and chapterId are both optional, used for additional filtering
     // ============================================================
     @RequestMapping(value = "/tasks", method = RequestMethod.GET)
     public ApiResponse<List<TaskSummary>> listVisible(
@@ -59,9 +59,9 @@ public class PageTaskApiController {
     }
 
     // ============================================================
-    // 2. LIST TASK THEO CHAPTER
+    // 2. LIST TASKS BY CHAPTER
     // GET /api/v1/chapters/{chapterId}/tasks
-    // - Service tu filter theo role (ASSISTANT chi thay task cua minh)
+    // - Service filters by role (ASSISTANT only sees their own tasks)
     // ============================================================
     @RequestMapping(value = "/chapters/{chapterId}/tasks", method = RequestMethod.GET)
     public ApiResponse<List<TaskSummary>> list(@PathVariable("chapterId") long chapterId, HttpSession session) {
@@ -70,13 +70,13 @@ public class PageTaskApiController {
     }
 
     // ============================================================
-    // 3. TAO TASK MOI
+    // 3. CREATE NEW TASK
     // POST /api/v1/chapters/{chapterId}/tasks
-    // - Chi MANGAKA chu chapter moi duoc tao (service enforce BR-CHP-03, BR-CHP-05)
-    // - pageRangeStart/End: pham vi trang, khong duoc chong nhau (BR-CHP-07)
-    // - dueDate: khong vuot qua deadline chapter (BR-CHP-08)
-    // - priority mac dinh NORMAL neu khong truyen
-    // - taskType va notes optional
+    // - Only the MANGAKA who owns the chapter can create (service enforces BR-CHP-03, BR-CHP-05)
+    // - pageRangeStart/End: page range, must not overlap (BR-CHP-07)
+    // - dueDate: must not exceed the chapter deadline (BR-CHP-08)
+    // - priority defaults to NORMAL if not provided
+    // - taskType and notes are optional
     // ============================================================
     @RequestMapping(value = "/chapters/{chapterId}/tasks", method = RequestMethod.POST)
     public ApiResponse<TaskSummary> create(
@@ -98,11 +98,11 @@ public class PageTaskApiController {
     }
 
     // ============================================================
-    // 4. CAP NHAT MOT PHAN TASK (PATCH)
+    // 4. PARTIAL TASK UPDATE (PATCH)
     // PATCH /api/v1/tasks/{id}
-    // - Chi cap nhat duoc: dueDate, priority, notes — tat ca optional
-    // - Khong doi duoc assistantId hay pageRange qua endpoint nay
-    //   (dung reassign() hoac update() neu can doi nhung truong do)
+    // - Only these fields can be updated: dueDate, priority, notes — all optional
+    // - assistantId and pageRange cannot be changed via this endpoint
+    //   (use reassign() or update() if those fields need to change)
     // ============================================================
     @RequestMapping(value = "/tasks/{id}", method = RequestMethod.PATCH)
     public ApiResponse<TaskSummary> patch(
@@ -116,9 +116,9 @@ public class PageTaskApiController {
     }
 
     // ============================================================
-    // 5. XEM CHI TIET TASK
+    // 5. VIEW TASK DETAIL
     // GET /api/v1/tasks/{id}
-    // - Service kiem tra quyen xem theo role
+    // - Service checks view permission by role
     // ============================================================
     @RequestMapping(value = "/tasks/{id}", method = RequestMethod.GET)
     public ApiResponse<TaskSummary> detail(@PathVariable("id") long id, HttpSession session) {
@@ -127,10 +127,10 @@ public class PageTaskApiController {
     }
 
     // ============================================================
-    // 5b. LICH SU SUBMIT/REVIEW CUA TASK
+    // 5b. TASK SUBMIT/REVIEW HISTORY
     // GET /api/v1/tasks/{id}/submission-history
-    // - Tra ve toan bo cac round nop bai (khong chi lan gan nhat)
-    // - Quyen xem giong detail() (tai su dung getDetail() de kiem tra)
+    // - Returns all submission rounds (not just the most recent one)
+    // - View permission is the same as detail() (reuses getDetail() for the check)
     // ============================================================
     @RequestMapping(value = "/tasks/{id}/submission-history", method = RequestMethod.GET)
     public ApiResponse<List<TaskReviewHistoryEntry>> submissionHistory(@PathVariable("id") long id, HttpSession session) {
@@ -139,11 +139,11 @@ public class PageTaskApiController {
     }
 
     // ============================================================
-    // 6. CAP NHAT TOAN BO TASK (PUT)
+    // 6. UPDATE ENTIRE TASK (PUT)
     // PUT /api/v1/tasks/{id}
-    // - Tat ca params bat buoc (khac voi PATCH)
-    // - Dung khi can thay doi ca assistantId hoac pageRange
-    // - BR-TSK-03: doi assistantId reset trang thai task ve PENDING
+    // - All params are required (unlike PATCH)
+    // - Used when assistantId or pageRange also needs to change
+    // - BR-TSK-03: changing assistantId resets task status to PENDING
     // ============================================================
     @RequestMapping(value = "/tasks/{id}", method = RequestMethod.PUT)
     public ApiResponse<TaskSummary> update(
@@ -178,10 +178,10 @@ public class PageTaskApiController {
     }
 
     // ============================================================
-    // 7. ASSISTANT CAP NHAT TRANG THAI TASK
+    // 7. ASSISTANT UPDATES TASK STATUS
     // PATCH /api/v1/tasks/{id}/status
-    // - Flow hop le: Pending -> In-Progress -> Submitted (BR-TSK-01)
-    // - Chi assistant duoc giao task moi duoc goi endpoint nay (service enforce)
+    // - Valid flow: Pending -> In-Progress -> Submitted (BR-TSK-01)
+    // - Only the assistant assigned to the task can call this endpoint (service enforced)
     // ============================================================
     @RequestMapping(value = "/tasks/{id}/status", method = RequestMethod.PATCH)
     public ApiResponse<Object> updateStatus(
@@ -194,11 +194,11 @@ public class PageTaskApiController {
     }
 
     // ============================================================
-    // 8. DUYET TASK
+    // 8. APPROVE TASK
     // POST /api/v1/tasks/{id}/approve
-    // - Chi MANGAKA chu chapter moi duoc duyet (service enforce)
-    // - comment optional
-    // - Task da APPROVED khong the rollback (BR-TSK-06)
+    // - Only the MANGAKA who owns the chapter can approve (service enforced)
+    // - comment is optional
+    // - An APPROVED task cannot be rolled back (BR-TSK-06)
     // ============================================================
     @RequestMapping(value = "/tasks/{id}/approve", method = RequestMethod.POST)
     public ApiResponse<Object> approve(
@@ -211,10 +211,10 @@ public class PageTaskApiController {
     }
 
     // ============================================================
-    // 9. TU CHOI TASK
+    // 9. REJECT TASK
     // POST /api/v1/tasks/{id}/reject
-    // - reason bat buoc (khac voi web form o ModuleWebController hardcode "Rejected via web form")
-    // - Sau 3 lan reject: service tu dong escalate len Tantou Editor (BR-TSK-05)
+    // - reason is required (unlike the web form in ModuleWebController which hardcodes "Rejected via web form")
+    // - After 3 rejections: service automatically escalates to Tantou Editor (BR-TSK-05)
     // ============================================================
     @RequestMapping(value = "/tasks/{id}/reject", method = RequestMethod.POST)
     public ApiResponse<Object> reject(
@@ -227,11 +227,11 @@ public class PageTaskApiController {
     }
 
     // ============================================================
-    // 10. XOA TASK
+    // 10. DELETE TASK
     // POST /api/v1/tasks/{id}/delete
-    // - Dung POST thay vi DELETE (co the de tranh gioi han cua mot so client)
-    // - reason bat buoc
-    // - Quyen xoa do service kiem tra
+    // - Uses POST instead of DELETE (possibly to avoid restrictions on some clients)
+    // - reason is required
+    // - Delete permission is checked by the service
     // ============================================================
     @RequestMapping(value = "/tasks/{id}/delete", method = RequestMethod.POST)
     public ApiResponse<Object> deleteTask(
@@ -244,11 +244,11 @@ public class PageTaskApiController {
     }
 
     // ============================================================
-    // 11. CHUYEN TASK SANG ASSISTANT KHAC
+    // 11. REASSIGN TASK TO ANOTHER ASSISTANT
     // POST /api/v1/tasks/{id}/reassign
-    // - reason bat buoc
-    // - newDueDate optional: neu co thi cap nhat deadline moi
-    // - BR-TSK-03: reassign reset trang thai task ve PENDING, xoa submission cu
+    // - reason is required
+    // - newDueDate is optional: if provided, updates the new deadline
+    // - BR-TSK-03: reassigning resets task status to PENDING, clears the old submission
     // ============================================================
     @RequestMapping(value = "/tasks/{id}/reassign", method = RequestMethod.POST)
     public ApiResponse<TaskSummary> reassignTask(
@@ -262,11 +262,11 @@ public class PageTaskApiController {
     }
 
     // ============================================================
-    // 12. GIA HAN DEADLINE TASK
+    // 12. EXTEND TASK DEADLINE
     // POST /api/v1/tasks/{id}/extend
-    // - newDueDate bat buoc
-    // - reason optional
-    // - newDueDate van phai nam trong deadline cua chapter (service enforce BR-CHP-08)
+    // - newDueDate is required
+    // - reason is optional
+    // - newDueDate must still fall within the chapter deadline (service enforces BR-CHP-08)
     // ============================================================
     @RequestMapping(value = "/tasks/{id}/extend", method = RequestMethod.POST)
     public ApiResponse<Object> extendTask(

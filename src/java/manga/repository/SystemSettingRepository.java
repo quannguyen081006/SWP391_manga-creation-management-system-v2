@@ -17,9 +17,6 @@ public class SystemSettingRepository {
     public static final String MINIMUM_VOTE_QUORUM = "proposal.minimumVoteQuorum";
     public static final String SALARY_KPI_BONUS_THRESHOLD = "salary.kpiBonusThreshold";
     public static final String SALARY_BONUS_PERCENT = "salary.bonusPercent";
-    public static final String SALARY_PENALTY_PER_LATE_TASK = "salary.penaltyPerLateTask";
-    public static final String SALARY_REJECTION_PENALTY_THRESHOLD = "salary.rejectionPenaltyThreshold";
-    public static final String SALARY_PENALTY_PER_REJECTED_TASK = "salary.penaltyPerRejectedTask";
     public static final String SALARY_KPI_ON_TIME_WEIGHT = "salary.kpiOnTimeWeight";
     public static final String SALARY_KPI_QUALITY_WEIGHT = "salary.kpiQualityWeight";
     public static final String PAGE_TASK_PHASH_THRESHOLD = "pageTask.phashHammingThreshold";
@@ -130,21 +127,15 @@ public class SystemSettingRepository {
         }
     }
 
+    /** Salary is bonus-only now: no more late/rejection penalty keys are stored. */
     public void setSalarySettings(int kpiBonusThreshold, BigDecimal bonusPercent,
-            BigDecimal penaltyPerLateTask, int rejectionPenaltyThreshold,
-            BigDecimal penaltyPerRejectedTask, int kpiOnTimeWeight,
-            int kpiQualityWeight) {
+            int kpiOnTimeWeight, int kpiQualityWeight) {
         try (Connection conn = dataSource.getConnection()) {
             conn.setAutoCommit(false);
             try {
                 ensureSettingsTable(conn);
                 upsertValue(conn, SALARY_KPI_BONUS_THRESHOLD, String.valueOf(kpiBonusThreshold));
                 upsertValue(conn, SALARY_BONUS_PERCENT, bonusPercent.toPlainString());
-                upsertValue(conn, SALARY_PENALTY_PER_LATE_TASK, penaltyPerLateTask.toPlainString());
-                upsertValue(conn, SALARY_REJECTION_PENALTY_THRESHOLD,
-                        String.valueOf(rejectionPenaltyThreshold));
-                upsertValue(conn, SALARY_PENALTY_PER_REJECTED_TASK,
-                        penaltyPerRejectedTask.toPlainString());
                 upsertValue(conn, SALARY_KPI_ON_TIME_WEIGHT,
                         String.valueOf(kpiOnTimeWeight));
                 upsertValue(conn, SALARY_KPI_QUALITY_WEIGHT,
@@ -189,6 +180,16 @@ public class SystemSettingRepository {
                 + "updatedAt datetime NOT NULL DEFAULT GETDATE())";
         try (Statement st = conn.createStatement()) {
             st.executeUpdate(sql);
+        }
+        // One-time cleanup: the late/rejection salary penalty feature was removed;
+        // delete any leftover keys from earlier app versions so SystemSetting doesn't
+        // accumulate dead configuration rows.
+        String cleanupSql = "IF OBJECT_ID('dbo.SystemSetting', 'U') IS NOT NULL "
+                + "DELETE FROM dbo.SystemSetting WHERE settingKey IN ("
+                + "'salary.penaltyPerLateTask', 'salary.rejectionPenaltyThreshold', "
+                + "'salary.penaltyPerRejectedTask')";
+        try (Statement st = conn.createStatement()) {
+            st.executeUpdate(cleanupSql);
         }
         settingsTableReady = Boolean.TRUE;
     }

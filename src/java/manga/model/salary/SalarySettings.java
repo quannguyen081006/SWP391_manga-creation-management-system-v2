@@ -5,9 +5,6 @@ import java.math.BigDecimal;
 public class SalarySettings {
     private int kpiBonusThreshold;
     private BigDecimal bonusPercent;
-    private BigDecimal penaltyPerLateTask;
-    private int rejectionPenaltyThreshold;
-    private BigDecimal penaltyPerRejectedTask;
     private int kpiOnTimeWeight;
     private int kpiQualityWeight;
 
@@ -25,30 +22,6 @@ public class SalarySettings {
 
     public void setBonusPercent(BigDecimal bonusPercent) {
         this.bonusPercent = bonusPercent;
-    }
-
-    public BigDecimal getPenaltyPerLateTask() {
-        return penaltyPerLateTask;
-    }
-
-    public void setPenaltyPerLateTask(BigDecimal penaltyPerLateTask) {
-        this.penaltyPerLateTask = penaltyPerLateTask;
-    }
-
-    public int getRejectionPenaltyThreshold() {
-        return rejectionPenaltyThreshold;
-    }
-
-    public void setRejectionPenaltyThreshold(int rejectionPenaltyThreshold) {
-        this.rejectionPenaltyThreshold = rejectionPenaltyThreshold;
-    }
-
-    public BigDecimal getPenaltyPerRejectedTask() {
-        return penaltyPerRejectedTask;
-    }
-
-    public void setPenaltyPerRejectedTask(BigDecimal penaltyPerRejectedTask) {
-        this.penaltyPerRejectedTask = penaltyPerRejectedTask;
     }
 
     public int getKpiOnTimeWeight() {

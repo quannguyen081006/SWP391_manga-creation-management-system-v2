@@ -16,16 +16,16 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * REST API controller cho Chapter — nhóm /api/v1.
+ * REST API controller for Chapter — /api/v1 group.
  *
- * MUC LUC:
- *  1. listAll()      - GET  /api/v1/chapters                        - Lay toan bo chapter ma user co quyen xem
- *  2. list()         - GET  /api/v1/series/{seriesId}/chapters      - Lay chapter theo series
- *  3. create()       - POST /api/v1/series/{seriesId}/chapters      - Tao chapter moi
- *  4. detail()       - GET  /api/v1/chapters/{id}                   - Xem chi tiet chapter
- *  5. update()       - PUT  /api/v1/chapters/{id}                   - Cap nhat chapter
- *  6. submitReview() - POST /api/v1/chapters/{id}/submit-review     - Nop chapter len editorial review
- *  7. delete()       - DELETE /api/v1/chapters/{id}                 - Xoa chapter
+ * TABLE OF CONTENTS:
+ *  1. listAll()      - GET  /api/v1/chapters                        - Get all chapters the user has permission to view
+ *  2. list()         - GET  /api/v1/series/{seriesId}/chapters      - Get chapters by series
+ *  3. create()       - POST /api/v1/series/{seriesId}/chapters      - Create a new chapter
+ *  4. detail()       - GET  /api/v1/chapters/{id}                   - View chapter detail
+ *  5. update()       - PUT  /api/v1/chapters/{id}                   - Update chapter
+ *  6. submitReview() - POST /api/v1/chapters/{id}/submit-review     - Submit chapter for editorial review
+ *  7. delete()       - DELETE /api/v1/chapters/{id}                 - Delete chapter
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -37,7 +37,7 @@ public class ChapterApiController {
     // ============================================================
     // 1. LIST ALL CHAPTERS
     // GET /api/v1/chapters
-    // - Lay toan bo chapter ma user co quyen xem (service tu filter theo role)
+    // - Get all chapters the user has permission to view (service filters by role)
     // ============================================================
     @RequestMapping(value = "/chapters", method = RequestMethod.GET)
     public ApiResponse<List<ChapterSummary>> listAll(HttpSession session) {
@@ -48,8 +48,8 @@ public class ChapterApiController {
     // ============================================================
     // 2. LIST CHAPTERS BY SERIES
     // GET /api/v1/series/{seriesId}/chapters
-    // - Lay danh sach chapter theo seriesId
-    // - Chi can check login, khong filter them theo role
+    // - Get chapters by seriesId
+    // - Only requires login check, no additional role filtering
     // ============================================================
     @RequestMapping(value = "/series/{seriesId}/chapters", method = RequestMethod.GET)
     public ApiResponse<List<ChapterSummary>> list(@PathVariable("seriesId") long seriesId, HttpSession session) {
@@ -60,10 +60,10 @@ public class ChapterApiController {
     // ============================================================
     // 3. CREATE CHAPTER
     // POST /api/v1/series/{seriesId}/chapters
-    // - Chi MANGAKA cua series do moi duoc tao (service enforce BR-CHP-01)
-    // - Params bat buoc: title, submissionDeadline
-    // - totalPages mac dinh = 0 neu khong truyen
-    // - BR-CHP-02: submissionDeadline phai truoc publicationDate it nhat 14 ngay (service enforce)
+    // - Only the MANGAKA of that series can create (service enforces BR-CHP-01)
+    // - Required params: title, submissionDeadline
+    // - totalPages defaults to 0 if not provided
+    // - BR-CHP-02: submissionDeadline must be at least 14 days before publicationDate (service enforced)
     // ============================================================
     @RequestMapping(value = "/series/{seriesId}/chapters", method = RequestMethod.POST)
     public ApiResponse<ChapterSummary> create(
@@ -79,8 +79,8 @@ public class ChapterApiController {
     // ============================================================
     // 4. CHAPTER DETAIL
     // GET /api/v1/chapters/{id}
-    // - Lay chi tiet mot chapter theo id
-    // - Chi can check login
+    // - Get chapter detail by id
+    // - Only requires login check
     // ============================================================
     @RequestMapping(value = "/chapters/{id}", method = RequestMethod.GET)
     public ApiResponse<ChapterSummary> detail(@PathVariable("id") long id, HttpSession session) {
@@ -91,10 +91,10 @@ public class ChapterApiController {
     // ============================================================
     // 5. UPDATE CHAPTER
     // PUT /api/v1/chapters/{id}
-    // - Tat ca params deu optional (chi truyen cai nao muon cap nhat)
-    // - Co nhieu ten param cho deadline (submissionDeadline / deadline / chapterDeadline)
-    //   -> service tu xu ly, controller chi truyen het vao
-    // - Quyen cap nhat do service kiem tra (thuong chi MANGAKA so huu chapter)
+    // - All params are optional (only pass the ones you want to update)
+    // - Multiple param names for deadline (submissionDeadline / deadline / chapterDeadline)
+    //   -> service handles it, controller just passes everything through
+    // - Update permission is checked by the service (usually only the MANGAKA who owns the chapter)
     // ============================================================
     @RequestMapping(value = "/chapters/{id}", method = RequestMethod.PUT)
     public ApiResponse<ChapterSummary> update(
@@ -114,9 +114,9 @@ public class ChapterApiController {
     // ============================================================
     // 6. SUBMIT CHAPTER FOR EDITORIAL REVIEW
     // POST /api/v1/chapters/{id}/submit-review
-    // - Chuyen chapter sang trang thai EDITORIAL_REVIEW
-    // - Service enforce: chapter phai dat 100% task APPROVED (BR-MAN-01, BR-MAN-02)
-    // - Tra ve null data, chi confirm bang message
+    // - Moves the chapter to EDITORIAL_REVIEW status
+    // - Service enforces: chapter must have 100% of tasks APPROVED (BR-MAN-01, BR-MAN-02)
+    // - Returns null data, only confirms via message
     // ============================================================
     @RequestMapping(value = "/chapters/{id}/submit-review", method = RequestMethod.POST)
     public ApiResponse<Object> submitReview(@PathVariable("id") long id, HttpSession session) {
@@ -128,8 +128,8 @@ public class ChapterApiController {
     // ============================================================
     // 7. DELETE CHAPTER
     // DELETE /api/v1/chapters/{id}
-    // - Xoa chapter (service enforce quyen va dieu kien hop le)
-    // - Tra ve null data, chi confirm bang message
+    // - Deletes chapter (service enforces permission and validity conditions)
+    // - Returns null data, only confirms via message
     // ============================================================
     @RequestMapping(value = "/chapters/{id}", method = RequestMethod.DELETE)
     public ApiResponse<Object> delete(@PathVariable("id") long id, HttpSession session) {

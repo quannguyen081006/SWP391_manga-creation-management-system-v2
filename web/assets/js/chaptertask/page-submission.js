@@ -1,30 +1,30 @@
 /**
  * page-submission.js
- * Lưới upload/submit ảnh trang cho Assistant (Task Detail view).
- * Config: global PAGE_TASK (inject từ JSP, gồm taskId, chapterId, pageStart,
+ * Page image upload/submit grid for the Assistant (Task Detail view).
+ * Config: global PAGE_TASK (injected from JSP, includes taskId, chapterId, pageStart,
  *         pageEnd, taskType, status, canUpdate, canSubmit, ctx)
  *
- * MỤC LỤC
+ * TABLE OF CONTENTS
  * ──────────────────────────────────────────────────────────
- * 1. KHỞI TẠO & BIẾN TRẠNG THÁI
- * 2. TIỆN ÍCH
+ * 1. INITIALIZATION & STATE VARIABLES
+ * 2. UTILITIES
  *    2a. escapeHtml, imageUrl
  *    2b. API helpers (readJson, apiGet, apiPost, apiDelete)
- *    2c. Đếm trang (totalPages, uploadedCount)
+ *    2c. Page counting (totalPages, uploadedCount)
  * 3. STAGE WORKFLOW          (stageOrder, nextStageForPage)
  * 4. RENDER UI
  *    4a. Progress bar        (renderProgressBar)
- *    4b. Card từng trang     (renderCard)
- *    4c. Grid tổng           (renderGrid, renderAll, updateCard)
+ *    4b. Per-page card       (renderCard)
+ *    4c. Overall grid        (renderGrid, renderAll, updateCard)
  *    4d. Submit bar          (renderSubmitBar)
  *    4e. Light-box preview   (openImagePreview)
- * 5. XỬ LÝ FILE & UPLOAD
- *    5a. Chọn file           (pickFile)
- *    5b. Upload lần đầu      (handleUpload)
- *    5c. Thay thế ảnh        (handleReplace)
- *    5d. Xóa ảnh             (handleDelete)
+ * 5. FILE HANDLING & UPLOAD
+ *    5a. Choose file         (pickFile)
+ *    5b. Initial upload      (handleUpload)
+ *    5c. Replace image       (handleReplace)
+ *    5d. Delete image        (handleDelete)
  * 6. SUBMIT TASK             (handleSubmit)
- * 7. KHỞI ĐỘNG               (initPageGrid)
+ * 7. STARTUP                 (initPageGrid)
  * 8. EVENT LISTENERS
  * ──────────────────────────────────────────────────────────
  */
@@ -49,32 +49,32 @@
         ctx: configScript.getAttribute('data-context-path') || ''
     };
 
-    // ─── 1. KHỞI TẠO & BIẾN TRẠNG THÁI ──────────────────────────────────────
-    // pageImages: map pageNumber → image object (null nếu chưa upload)
+    // ─── 1. INITIALIZATION & STATE VARIABLES ────────────────────────────────
+    // pageImages: map of pageNumber → image object (null if not yet uploaded)
     var pageImages = {};
-    // pageSlots: map pageNumber → slot object từ chapter (chứa completedStage)
+    // pageSlots: map of pageNumber → slot object from the chapter (contains completedStage)
     var pageSlots = {};
-    // loadingPage: số trang đang upload/delete (null = không có gì đang chạy)
+    // loadingPage: page number currently uploading/deleting (null = nothing running)
     var loadingPage = null;
-    // pendingPageNum/pendingAction: lưu lại trang và hành động khi input file được trigger
+    // pendingPageNum/pendingAction: remembers the page and action when the file input is triggered
     var pendingPageNum = null;
-    var pendingAction = 'upload';  // 'upload' hoặc 'replace'
+    var pendingAction = 'upload';  // 'upload' or 'replace'
 
     var gridEl         = document.getElementById('pageGrid');
     var progressEl     = document.getElementById('pageProgressBar');
     var submitBarEl    = document.getElementById('stickySubmitBar');
-    var fileInput      = document.getElementById('pageFileInput');  // input[type=file] ẩn
+    var fileInput      = document.getElementById('pageFileInput');  // hidden input[type=file]
     var toastContainer = document.getElementById('toastContainer');
 
-    // Cache trạng thái approved để tránh tính lại nhiều lần
+    // Cache the approved state to avoid recomputing it repeatedly
     var isApproved = String(PAGE_TASK.status || '').toUpperCase() === 'APPROVED';
 
-    // ─── 2c. TIỆN ÍCH: ĐẾM TRANG ─────────────────────────────────────────────
+    // ─── 2c. UTILITIES: PAGE COUNTING ───────────────────────────────────────
     function totalPages() {
         return PAGE_TASK.pageEnd - PAGE_TASK.pageStart + 1;
     }
 
-    // Số trang đã có ảnh (có id → đã lưu trên server)
+    // Number of pages that already have an image (has an id → saved on the server)
     function uploadedCount() {
         var count = 0;
         for (var p = PAGE_TASK.pageStart; p <= PAGE_TASK.pageEnd; p++) {
@@ -85,7 +85,7 @@
         return count;
     }
 
-    // ─── 2a. TIỆN ÍCH: ESCAPE HTML & IMAGE URL ───────────────────────────────
+    // ─── 2a. UTILITIES: ESCAPE HTML & IMAGE URL ─────────────────────────────
     function escapeHtml(value) {
         if (value === null || value === undefined) {
             return '';
@@ -95,7 +95,7 @@
         });
     }
 
-    // Chuẩn hoá URL ảnh: thêm contextPath nếu chưa có
+    // Normalize the image URL: prepend contextPath if missing
     function imageUrl(fileUrl) {
         var url = String(fileUrl || '');
         if (url.indexOf('http://') === 0 || url.indexOf('https://') === 0) {
@@ -107,8 +107,8 @@
         return PAGE_TASK.ctx + url;
     }
 
-    // ─── 2b. TIỆN ÍCH: API HELPERS ───────────────────────────────────────────
-    // Parse response JSON; throw Error nếu HTTP lỗi hoặc body.success === false
+    // ─── 2b. UTILITIES: API HELPERS ─────────────────────────────────────────
+    // Parse the response JSON; throw an Error if the HTTP call failed or body.success === false
     async function readJson(res) {
         var text = await res.text();
         var body = null;
@@ -126,13 +126,13 @@
         return body;
     }
 
-    // Trả về body.data nếu có, hoặc toàn bộ body
+    // Return body.data if present, otherwise the whole body
     async function apiGet(url) {
         var body = await readJson(await fetch(url, { headers: { Accept: 'application/json' } }));
         return body && body.data !== undefined ? body.data : body;
     }
 
-    // POST multipart/form-data (dùng cho upload ảnh)
+    // POST multipart/form-data (used for image uploads)
     async function apiPost(url, formData) {
         var body = await readJson(await fetch(url, {
             method: 'POST',
@@ -149,7 +149,7 @@
         }));
     }
 
-    // CSS class cho progress bar theo status task
+    // CSS class for the progress bar based on the task status
     function statusProgressClass() {
         var s = String(PAGE_TASK.status || '').toUpperCase();
         if (s === 'PENDING') return 'status-pending';
@@ -161,7 +161,7 @@
         return 'status-in-progress';
     }
 
-    // Toast thông báo tự tắt sau 3 giây
+    // Toast notification that auto-dismisses after 3 seconds
     function showToast(message, type) {
         if (!toastContainer) {
             return;
@@ -175,19 +175,19 @@
         }, 3000);
     }
 
-    // Load tất cả ảnh của task từ server, lưu vào pageImages theo pageNumber
+    // Load all images for the task from the server, storing them into pageImages by pageNumber
     async function loadImages() {
         var data = await apiGet(PAGE_TASK.ctx + '/api/v1/tasks/' + PAGE_TASK.taskId + '/images');
         (data || []).forEach(function (img) {
             var pn = img.pageNumber;
-            // Chỉ lấy ảnh thuộc range trang của task này
+            // Only keep images that fall within this task's page range
             if (pn >= PAGE_TASK.pageStart && pn <= PAGE_TASK.pageEnd) {
                 pageImages[pn] = img;
             }
         });
     }
 
-    // Load page slot của chapter để biết completedStage của từng trang
+    // Load the chapter's page slots to determine the completedStage of each page
     async function loadPageSlots() {
         var data = await apiGet(PAGE_TASK.ctx + '/api/v1/chapters/' + PAGE_TASK.chapterId + '/pages');
         (data || []).forEach(function (slot) {
@@ -198,7 +198,7 @@
     }
 
     // ─── 3. STAGE WORKFLOW ────────────────────────────────────────────────────
-    // Thứ tự các giai đoạn sản xuất một trang manga
+    // Order of production stages for a manga page
     var stageOrder = ['SKETCHING', 'INKING', 'COLORING', 'SCREENTONE', 'LETTERING'];
 
     function normalizeStage(stage) {
@@ -206,8 +206,8 @@
         return stageOrder.indexOf(s) >= 0 ? s : '';
     }
 
-    // Trả về stage tiếp theo của trang dựa trên completedStage trong pageSlots
-    // Nếu chưa có stage nào → SKETCHING; nếu đã xong hết → giữ nguyên stage cuối
+    // Return the next stage for the page based on completedStage in pageSlots
+    // If no stage yet → SKETCHING; if all stages are done → keep the last stage
     function nextStageForPage(pageNum) {
         var slot = pageSlots[pageNum] || {};
         var current = normalizeStage(slot.completedStage);
@@ -218,7 +218,7 @@
     }
 
     // ─── 4a. RENDER: PROGRESS BAR ─────────────────────────────────────────────
-    // Hiển thị thanh tiến độ: X/Y trang đã upload, màu theo status task
+    // Display the progress bar: X/Y pages uploaded, colored based on the task status
     function renderProgressBar() {
         if (!progressEl) {
             return;
@@ -238,12 +238,12 @@
             + '</div></div>';
     }
 
-    // ─── 4b. RENDER: CARD TỪNG TRANG ─────────────────────────────────────────
-    // Mỗi card hiển thị:
-    // - Đã có ảnh: thumbnail + tên file + nút Download / Replace / Delete
-    // - Chưa có ảnh: vùng click để upload (+ / Page N / stage)
-    // - isApproved: chỉ còn nút Download, không sửa được
-    // - loadingPage === pageNum: overlay "Uploading…"
+    // ─── 4b. RENDER: PER-PAGE CARD ────────────────────────────────────────────
+    // Each card displays:
+    // - Has an image: thumbnail + file name + Download / Replace / Delete buttons
+    // - No image yet: clickable area to upload (+ / Page N / stage)
+    // - isApproved: only the Download button remains, no edits allowed
+    // - loadingPage === pageNum: "Uploading…" overlay
     function renderCard(pageNum) {
         var img = pageImages[pageNum];
         var loading = loadingPage === pageNum;
@@ -259,7 +259,7 @@
 
         if (img) {
             var url = imageUrl(img.fileUrl);
-            // "inherited" = ảnh lấy từ chapter (base image), không phải task upload trực tiếp
+            // "inherited" = image taken from the chapter (base image), not uploaded directly by the task
             var inherited = String(img.note || '').toUpperCase() === 'CHAPTER_PAGE' || !img.id;
             var approvedBadge = isApproved
                 ? '<span class="approved-badge" title="Approved by Mangaka, image has been updated to the chapter">✓ Approved</span>'

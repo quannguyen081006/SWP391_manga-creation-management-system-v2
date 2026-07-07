@@ -16,62 +16,62 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
 /**
- * Repository quản lý các page slot trong một chapter.
+ * Repository managing page slots within a chapter.
  *
- * Mỗi "page slot" đại diện cho một trang vẽ trong chapter (vd: trang 1, trang 2...).
- * Page slot gắn với chapter và có thể được assign vào PageTask của assistant.
+ * Each "page slot" represents a drawn page within a chapter (e.g. page 1, page 2...).
+ * A page slot belongs to a chapter and can be assigned to an assistant's PageTask.
  *
- * =====================  MỤC LỤC  =====================
- *  1. KIỂM TRA TABLE / COLUMN SẴN SÀNG
- *     - isPageTableReady()          : kiểm tra bảng Page tồn tại chưa (lazy + cache)
- *     - requirePageTableReady()     : throw nếu bảng chưa có
- *     - ensurePageStageColumnReady(): tự động ALTER TABLE thêm cột completedStage nếu thiếu
+ * =====================  TABLE OF CONTENTS  =====================
+ *  1. TABLE / COLUMN READINESS CHECKS
+ *     - isPageTableReady()          : checks whether the Page table exists (lazy + cached)
+ *     - requirePageTableReady()     : throws if the table doesn't exist
+ *     - ensurePageStageColumnReady(): automatically ALTER TABLE to add the completedStage column if missing
  *
- *  2. QUERY DANH SÁCH PAGE
- *     - listByChapter(chapterId)    : lấy tất cả page slot của chapter, kèm task đang active
- *     - listEmptySlots(chapterId, limit) : lấy các slot chưa có ảnh (status = EMPTY)
- *     - findById(pageId)            : lấy một page slot theo ID
+ *  2. PAGE LIST QUERIES
+ *     - listByChapter(chapterId)    : gets all page slots for a chapter, along with the active task
+ *     - listEmptySlots(chapterId, limit) : gets slots without an image (status = EMPTY)
+ *     - findById(pageId)            : gets a single page slot by ID
  *
- *  3. TẠO PAGE SLOT
- *     - create(chapterId, pageNumber)        : tạo 1 slot, trả về ID
- *     - bulkCreate(chapterId, totalPages)    : tạo nhiều slot cùng lúc (dùng khi tạo chapter mới)
- *     - bulkCreate(conn, chapterId, totalPages) : overload dùng connection có sẵn (trong transaction)
+ *  3. CREATE PAGE SLOT
+ *     - create(chapterId, pageNumber)        : creates a single slot, returns its ID
+ *     - bulkCreate(chapterId, totalPages)    : creates multiple slots at once (used when creating a new chapter)
+ *     - bulkCreate(conn, chapterId, totalPages) : overload using an existing connection (within a transaction)
  *
- *  4. ĐẾM PAGE
- *     - countByChapter(chapterId)   : tổng số slot trong chapter
- *     - countUploaded(chapterId)    : số slot đã có ảnh upload
- *     - nextPageNumber(chapterId)   : số trang tiếp theo sẽ được tạo
+ *  4. PAGE COUNTS
+ *     - countByChapter(chapterId)   : total number of slots in the chapter
+ *     - countUploaded(chapterId)    : number of slots that already have an uploaded image
+ *     - nextPageNumber(chapterId)   : the next page number to be created
  *
- *  5. CẬP NHẬT TRẠNG THÁI / ẢNH
- *     - markUploaded(...)           : đánh dấu IN_PROGRESS khi assistant upload ảnh
- *     - markApproved(...)           : đánh dấu APPROVED khi tantou duyệt
- *     - promoteTaskImage(...)       : sync ảnh từ task được approve vào page slot
- *     - upsertUploadedByPageNumber(): upsert page theo pageNumber (tạo mới nếu chưa có)
+ *  5. STATUS / IMAGE UPDATES
+ *     - markUploaded(...)           : marks IN_PROGRESS when the assistant uploads an image
+ *     - markApproved(...)           : marks APPROVED when the tantou approves
+ *     - promoteTaskImage(...)       : syncs the image from an approved task into the page slot
+ *     - upsertUploadedByPageNumber(): upserts a page by pageNumber (creates a new one if not present)
  *
- *  6. XÓA PAGE
- *     - delete(pageId)              : xóa slot, chặn nếu đang có task active
+ *  6. DELETE PAGE
+ *     - delete(pageId)              : deletes a slot, blocked if there is an active task
  *
- *  7. STAGE PROGRESSION (pipeline vẽ)
- *     - resolveNextStage()          : tính stage tiếp theo, validate không lùi stage
- *     - resolveTaskCompletionStage(): tính stage hoàn thành dựa theo taskType
- *     - normalizeStage()            : chuẩn hóa tên stage (vd: "INK" -> "INKING")
- *     Thứ tự stage: SKETCHING -> INKING -> COLORING -> SCREENTONE -> LETTERING
+ *  7. STAGE PROGRESSION (drawing pipeline)
+ *     - resolveNextStage()          : computes the next stage, validates that it doesn't move backwards
+ *     - resolveTaskCompletionStage(): computes the completion stage based on taskType
+ *     - normalizeStage()            : normalizes the stage name (e.g. "INK" -> "INKING")
+ *     Stage order: SKETCHING -> INKING -> COLORING -> SCREENTONE -> LETTERING
  * ======================================================
  */
 @Repository
 public class PageRepository {
 
-    /** Tên bảng dùng trong SQL, có schema prefix để tránh conflict. */
+    /** Table name used in SQL, with schema prefix to avoid conflicts. */
     public static final String TABLE_PAGE = "[dbo].[Page]";
 
-    /** Các trạng thái task được coi là "đã đóng" - không tính là active khi check block delete. */
+    /** Task statuses considered "closed" - not counted as active when checking delete blocks. */
     private static final String SQL_CLOSED_TASK_STATUSES = "'APPROVED','DELETED','REASSIGNED','CANCELLED'";
 
-    /** Thứ tự các stage trong pipeline vẽ manga. Dùng để validate stage progression. */
+    /** Order of stages in the manga drawing pipeline. Used to validate stage progression. */
     private static final List<String> PAGE_STAGES = Arrays.asList(
             "SKETCHING", "INKING", "COLORING", "SCREENTONE", "LETTERING");
 
-    /** Cache lazy: null = chưa kiểm tra, true/false = kết quả. Dùng volatile để thread-safe. */
+    /** Lazy cache: null = not checked yet, true/false = the result. Uses volatile for thread safety. */
     private volatile Boolean pageTableReady;
     private volatile Boolean pageStageColumnReady;
     private volatile Boolean pageRevisionTableReady;
@@ -80,10 +80,10 @@ public class PageRepository {
     private DataSource dataSource;
 
     // =====================================================================
-    // 1. KIỂM TRA TABLE / COLUMN SẴN SÀNG
+    // 1. TABLE / COLUMN READINESS CHECKS
     // =====================================================================
 
-    /** Throw IllegalArgumentException nếu bảng Page chưa được tạo. */
+    /** Throws IllegalArgumentException if the Page table has not been created. */
     private void requirePageTableReady() {
         if (!isPageTableReady()) {
             throw new IllegalArgumentException(
@@ -92,9 +92,9 @@ public class PageRepository {
     }
 
     /**
-     * Kiểm tra bảng Page tồn tại chưa.
-     * Kết quả được cache vào pageTableReady để không query lại mỗi lần.
-     * Double-checked locking để an toàn khi nhiều thread chạy đồng thời.
+     * Checks whether the Page table exists.
+     * The result is cached in pageTableReady so it isn't queried again each time.
+     * Double-checked locking for safety when multiple threads run concurrently.
      */
     private boolean isPageTableReady() {
         if (pageTableReady != null) {
@@ -121,9 +121,9 @@ public class PageRepository {
     }
 
     /**
-     * Đảm bảo cột completedStage tồn tại trong bảng Page.
-     * Nếu chưa có thì tự ALTER TABLE thêm vào (migration nhỏ tự động).
-     * Cũng dùng double-checked locking + cache.
+     * Ensures the completedStage column exists in the Page table.
+     * If it doesn't exist yet, automatically runs ALTER TABLE to add it (a small automatic migration).
+     * Also uses double-checked locking + caching.
      */
     public void ensurePageStageColumnReady() {
         if (!isPageTableReady()) {
@@ -157,8 +157,8 @@ public class PageRepository {
     }
 
     /**
-     * Đảm bảo bảng PageRevision (lịch sử thay đổi ảnh/stage của page) tồn tại.
-     * Tự CREATE TABLE nếu chưa có - tránh phải chạy migration tay trên máy đồng đội.
+     * Ensures the PageRevision table (history of image/stage changes for a page) exists.
+     * Automatically runs CREATE TABLE if it doesn't exist - avoids having to run a manual migration on teammates' machines.
      */
     private void ensurePageRevisionTableReady() {
         if (!isPageTableReady()) {
@@ -181,16 +181,23 @@ public class PageRepository {
                     + "[changedBy] [bigint] NULL, "
                     + "[changedAt] [datetime] NOT NULL, "
                     + "[source] [varchar](20) NOT NULL, "
+                    + "[imagePhash] [char](16) NULL, "
                     + "CONSTRAINT [PK_PageRevision] PRIMARY KEY CLUSTERED ([id] ASC))";
             String indexSql =
                     "IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_PageRevision_pageId' "
                     + "AND object_id = OBJECT_ID('dbo.PageRevision')) "
                     + "CREATE INDEX [IX_PageRevision_pageId] ON [dbo].[PageRevision]([pageId] ASC, [id] DESC)";
+            String columnSql =
+                    "IF OBJECT_ID('dbo.PageRevision','U') IS NOT NULL "
+                    + "AND COL_LENGTH('dbo.PageRevision', 'imagePhash') IS NULL "
+                    + "ALTER TABLE [dbo].[PageRevision] ADD [imagePhash] [char](16) NULL";
             try (Connection conn = dataSource.getConnection();
                  PreparedStatement create = conn.prepareStatement(createSql);
-                 PreparedStatement index = conn.prepareStatement(indexSql)) {
+                 PreparedStatement index = conn.prepareStatement(indexSql);
+                 PreparedStatement column = conn.prepareStatement(columnSql)) {
                 create.executeUpdate();
                 index.executeUpdate();
+                column.executeUpdate();
                 pageRevisionTableReady = Boolean.TRUE;
             } catch (SQLException ex) {
                 throw new RuntimeException("Cannot prepare page revision table", ex);
@@ -198,11 +205,11 @@ public class PageRepository {
         }
     }
 
-    /** Ghi 1 mốc lịch sử thay đổi ảnh/stage của page. Gọi sau mỗi lần update page thành công. */
-    private void recordRevision(long pageId, String imageUrl, String stage, long changedBy, String source) {
+    /** Records one history entry for a page's image/stage change. Called after each successful page update. */
+    private void recordRevision(long pageId, String imageUrl, String stage, long changedBy, String source, String imagePhash) {
         ensurePageRevisionTableReady();
-        String sql = "INSERT INTO [dbo].[PageRevision] (pageId, imageUrl, completedStage, changedBy, changedAt, source) "
-                + "VALUES (?, ?, ?, ?, GETDATE(), ?)";
+        String sql = "INSERT INTO [dbo].[PageRevision] (pageId, imageUrl, completedStage, changedBy, changedAt, source, imagePhash) "
+                + "VALUES (?, ?, ?, ?, GETDATE(), ?, ?)";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, pageId);
@@ -210,6 +217,7 @@ public class PageRepository {
             ps.setString(3, stage);
             ps.setLong(4, changedBy);
             ps.setString(5, source);
+            ps.setString(6, imagePhash);
             ps.executeUpdate();
         } catch (SQLException ex) {
             throw new RuntimeException("Cannot record page revision", ex);
@@ -217,7 +225,7 @@ public class PageRepository {
     }
 
     /**
-     * Lấy toàn bộ lịch sử thay đổi ảnh/stage của 1 page, mới nhất trước.
+     * Gets the full history of image/stage changes for a page, newest first.
      */
     public List<PageRevisionEntry> listRevisions(long pageId) {
         ensurePageRevisionTableReady();
@@ -250,18 +258,19 @@ public class PageRepository {
     }
 
     /**
-     * Rollback page về đúng ảnh + stage của 1 mốc lịch sử cũ.
-     * Ghi trực tiếp (KHÔNG qua resolveNextStage) vì rollback cố ý lùi stage.
-     * Sau đó append 1 mốc mới source=ROLLBACK để giữ timeline liên tục.
+     * Rolls a page back to the exact image + stage of a previous history entry.
+     * Writes directly (bypassing resolveNextStage) since a rollback intentionally moves the stage backwards.
+     * Then appends a new entry with source=ROLLBACK to keep the timeline continuous.
      */
     public void rollbackToRevision(long pageId, long revisionId, long changedBy) {
         requirePageTableReady();
         ensurePageStageColumnReady();
         ensurePageRevisionTableReady();
 
-        String readSql = "SELECT imageUrl, completedStage FROM [dbo].[PageRevision] WHERE id = ? AND pageId = ?";
+        String readSql = "SELECT imageUrl, completedStage, imagePhash FROM [dbo].[PageRevision] WHERE id = ? AND pageId = ?";
         String imageUrl;
         String stage;
+        String imagePhash;
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(readSql)) {
             ps.setLong(1, revisionId);
@@ -272,6 +281,7 @@ public class PageRepository {
                 }
                 imageUrl = rs.getString("imageUrl");
                 stage = rs.getString("completedStage");
+                imagePhash = rs.getString("imagePhash");
             }
         } catch (SQLException ex) {
             throw new RuntimeException("Cannot load page revision", ex);
@@ -294,18 +304,18 @@ public class PageRepository {
             throw new RuntimeException("Cannot rollback page", ex);
         }
 
-        recordRevision(pageId, imageUrl, stage, changedBy, "ROLLBACK");
+        recordRevision(pageId, imageUrl, stage, changedBy, "ROLLBACK", imagePhash);
     }
 
     // =====================================================================
-    // 2. QUERY DANH SÁCH PAGE
+    // 2. PAGE LIST QUERIES
     // =====================================================================
 
     /**
-     * SQL lấy danh sách page slot của chapter.
-     * Dùng OUTER APPLY để join với PageTask active gần nhất (nếu có),
-     * giúp hiển thị thông tin task và assistant đang xử lý trang đó.
-     * Task "đã đóng" (APPROVED/DELETED/REASSIGNED/CANCELLED) không được tính.
+     * SQL to fetch the list of page slots for a chapter.
+     * Uses OUTER APPLY to join with the most recent active PageTask (if any),
+     * to show the task and assistant information currently working on that page.
+     * "Closed" tasks (APPROVED/DELETED/REASSIGNED/CANCELLED) are not counted.
      */
     private static final String LIST_SQL =
             "SELECT p.id, p.chapterId, p.pageNumber, p.imageUrl, p.uploadedBy, p.uploadedAt, p.status, p.completedStage, "
@@ -324,8 +334,8 @@ public class PageRepository {
             + "ORDER BY p.pageNumber";
 
     /**
-     * Lấy toàn bộ page slot của chapter, kèm task active và assistant tương ứng.
-     * Trả về list rỗng nếu bảng Page chưa tồn tại (graceful degradation).
+     * Gets all page slots of a chapter, along with the corresponding active task and assistant.
+     * Returns an empty list if the Page table does not exist yet (graceful degradation).
      */
     public List<PageSlotSummary> listByChapter(long chapterId) {
         if (!isPageTableReady()) {
@@ -351,7 +361,7 @@ public class PageRepository {
         return rows;
     }
 
-    /** Lấy page slot theo ID. Trả về null nếu không tìm thấy hoặc bảng chưa sẵn sàng. */
+    /** Gets a page slot by ID. Returns null if not found or the table isn't ready. */
     public PageSlotSummary findById(long pageId) {
         if (!isPageTableReady()) {
             return null;
@@ -384,8 +394,8 @@ public class PageRepository {
     }
 
     /**
-     * Lấy các slot chưa có ảnh (status = EMPTY), giới hạn số lượng trả về.
-     * Dùng để tìm trang nào chưa có ai làm để assign task mới.
+     * Gets slots without an image (status = EMPTY), limited to a number of results.
+     * Used to find pages nobody is working on yet so a new task can be assigned.
      */
     public List<PageSlotSummary> listEmptySlots(long chapterId, int limit) {
         if (!isPageTableReady()) {
@@ -415,10 +425,10 @@ public class PageRepository {
     }
 
     // =====================================================================
-    // 3. TẠO PAGE SLOT
+    // 3. CREATE PAGE SLOT
     // =====================================================================
 
-    /** Tạo 1 page slot mới với status EMPTY. Trả về ID của slot vừa tạo. */
+    /** Creates a new page slot with status EMPTY. Returns the ID of the newly created slot. */
     public long create(long chapterId, int pageNumber) {
         requirePageTableReady();
         ensurePageStageColumnReady();
@@ -439,7 +449,7 @@ public class PageRepository {
         }
     }
 
-    /** Tạo nhiều page slot cùng lúc (1..totalPages). Dùng khi tạo chapter mới. */
+    /** Creates multiple page slots at once (1..totalPages). Used when creating a new chapter. */
     public void bulkCreate(long chapterId, int totalPages) {
         try (Connection conn = dataSource.getConnection()) {
             bulkCreate(conn, chapterId, totalPages);
@@ -449,8 +459,8 @@ public class PageRepository {
     }
 
     /**
-     * Overload dùng connection bên ngoài truyền vào - dùng trong transaction.
-     * Dùng batch insert để tối ưu performance khi tạo nhiều trang.
+     * Overload accepting an externally provided connection - used within a transaction.
+     * Uses batch insert to optimize performance when creating many pages.
      */
     public void bulkCreate(Connection conn, long chapterId, int totalPages) throws SQLException {
         if (totalPages < 1) {
@@ -472,10 +482,10 @@ public class PageRepository {
     }
 
     // =====================================================================
-    // 4. ĐẾM PAGE
+    // 4. PAGE COUNTS
     // =====================================================================
 
-    /** Đếm tổng số page slot trong chapter. */
+    /** Counts the total number of page slots in a chapter. */
     public int countByChapter(long chapterId) {
         if (!isPageTableReady()) {
             return 0;
@@ -492,7 +502,7 @@ public class PageRepository {
         }
     }
 
-    /** Đếm số slot đã được upload ảnh (imageUrl != null). */
+    /** Counts the number of slots that already have an uploaded image (imageUrl != null). */
     public int countUploaded(long chapterId) {
         if (!isPageTableReady()) {
             return 0;
@@ -509,7 +519,7 @@ public class PageRepository {
         }
     }
 
-    /** Trả về số trang tiếp theo sẽ được tạo = MAX(pageNumber) + 1. */
+    /** Returns the next page number to be created = MAX(pageNumber) + 1. */
     public int nextPageNumber(long chapterId) {
         requirePageTableReady();
         String sql = "SELECT ISNULL(MAX(pageNumber), 0) + 1 FROM " + TABLE_PAGE + " WHERE chapterId = ?";
@@ -530,31 +540,36 @@ public class PageRepository {
     }
 
     // =====================================================================
-    // 5. CẬP NHẬT TRẠNG THÁI / ẢNH
+    // 5. STATUS / IMAGE UPDATES
     // =====================================================================
 
-    /** Đánh dấu trang IN_PROGRESS khi assistant upload ảnh lên. */
+    /** Marks a page IN_PROGRESS when the assistant uploads an image. */
     public void markUploaded(long pageId, String imageUrl, long uploadedBy) {
-        markUploaded(pageId, imageUrl, uploadedBy, null);
+        markUploaded(pageId, imageUrl, uploadedBy, null, null);
     }
 
-    /** Overload của markUploaded, kèm thông tin completedStage. */
+    /** Overload of markUploaded, including completedStage information. */
     public void markUploaded(long pageId, String imageUrl, long uploadedBy, String completedStage) {
-        markImage(pageId, imageUrl, uploadedBy, "IN_PROGRESS", completedStage);
+        markUploaded(pageId, imageUrl, uploadedBy, completedStage, null);
     }
 
-    /** Đánh dấu trang APPROVED (không kèm stage). */
+    /** Overload of markUploaded, including completedStage + imagePhash (to prevent duplicate images across the whole chapter). */
+    public void markUploaded(long pageId, String imageUrl, long uploadedBy, String completedStage, String imagePhash) {
+        markImage(pageId, imageUrl, uploadedBy, "IN_PROGRESS", completedStage, imagePhash);
+    }
+
+    /** Marks a page APPROVED (without a stage). */
     public void markApproved(long pageId, String imageUrl, long uploadedBy) {
         markApproved(pageId, imageUrl, uploadedBy, null);
     }
 
-    /** Đánh dấu trang APPROVED, kèm completedStage. */
+    /** Marks a page APPROVED, including completedStage. */
     public void markApproved(long pageId, String imageUrl, long uploadedBy, String completedStage) {
-        markImage(pageId, imageUrl, uploadedBy, "APPROVED", completedStage);
+        markImage(pageId, imageUrl, uploadedBy, "APPROVED", completedStage, null);
     }
 
-    /** Hàm trung tâm cập nhật imageUrl, uploadedBy, status, completedStage cho page. */
-    private void markImage(long pageId, String imageUrl, long uploadedBy, String status, String completedStage) {
+    /** Central function that updates imageUrl, uploadedBy, status, and completedStage for a page. */
+    private void markImage(long pageId, String imageUrl, long uploadedBy, String status, String completedStage, String imagePhash) {
         requirePageTableReady();
         ensurePageStageColumnReady();
         String stage = resolveNextStage(pageId, completedStage);
@@ -572,15 +587,15 @@ public class PageRepository {
         } catch (SQLException ex) {
             throw new RuntimeException("Cannot update page image", ex);
         }
-        // stage có thể null (giữ nguyên stage cũ) -> đọc lại stage thực tế để ghi lịch sử cho đúng
+        // stage may be null (keep the old stage) -> re-read the actual stage to record history correctly
         String effectiveStage = stage != null ? stage : findCurrentCompletedStage(pageId);
-        recordRevision(pageId, imageUrl, effectiveStage, uploadedBy, "MANGAKA_UPLOAD");
+        recordRevision(pageId, imageUrl, effectiveStage, uploadedBy, "MANGAKA_UPLOAD", imagePhash);
     }
 
     /**
-     * Sync ảnh từ task được approve vào page slot theo (chapterId, pageNumber).
-     * Nếu slot chưa tồn tại thì tự tạo mới rồi mới update.
-     * Dùng taskType để tính stage hoàn thành tương ứng.
+     * Syncs the image from an approved task into the page slot by (chapterId, pageNumber).
+     * If the slot doesn't exist yet, creates it first then updates it.
+     * Uses taskType to compute the corresponding completion stage.
      */
     public void promoteTaskImage(long chapterId, int pageNumber, String imageUrl, long uploadedBy, String taskType) {
         requirePageTableReady();
@@ -605,7 +620,7 @@ public class PageRepository {
         }
     }
 
-    /** Cập nhật ảnh và stage cho page khi task được approve, dùng taskType để suy stage. */
+    /** Updates the image and stage for a page when a task is approved, using taskType to derive the stage. */
     private void markTaskApproved(long pageId, String imageUrl, long uploadedBy, String taskType) {
         requirePageTableReady();
         ensurePageStageColumnReady();
@@ -624,18 +639,20 @@ public class PageRepository {
             throw new RuntimeException("Cannot update page image", ex);
         }
         String effectiveStage = stage != null ? stage : findCurrentCompletedStage(pageId);
-        recordRevision(pageId, imageUrl, effectiveStage, uploadedBy, "TASK_APPROVED");
+        // imagePhash = null: this image came from a task already uploaded by the assistant via ChapterImageRepository,
+        // the hash was already saved there so there's no need to duplicate it here.
+        recordRevision(pageId, imageUrl, effectiveStage, uploadedBy, "TASK_APPROVED", null);
     }
 
     /**
-     * Upsert page slot theo (chapterId, pageNumber): update nếu đã có, tạo mới nếu chưa có.
-     * Dùng khi đồng bộ ảnh từ task vào page mà không cần biết pageId trước.
+     * Upserts a page slot by (chapterId, pageNumber): updates if it exists, creates if not.
+     * Used when syncing an image from a task into a page without knowing the pageId in advance.
      */
     public void upsertUploadedByPageNumber(long chapterId, int pageNumber, String imageUrl, long uploadedBy) {
         upsertUploadedByPageNumber(chapterId, pageNumber, imageUrl, uploadedBy, null);
     }
 
-    /** Overload của upsertUploadedByPageNumber, kèm completedStage. */
+    /** Overload of upsertUploadedByPageNumber, including completedStage. */
     public void upsertUploadedByPageNumber(long chapterId, int pageNumber, String imageUrl, long uploadedBy, String completedStage) {
         requirePageTableReady();
         if (imageUrl == null || imageUrl.trim().isEmpty()) {
@@ -660,13 +677,13 @@ public class PageRepository {
     }
 
     // =====================================================================
-    // 6. XÓA PAGE
+    // 6. DELETE PAGE
     // =====================================================================
 
     /**
-     * Xóa page slot.
-     * Chặn nếu đang có task active (chưa đóng) cover trang đó.
-     * Dùng pageRangeStart/End của PageTask để kiểm tra overlap.
+     * Deletes a page slot.
+     * Blocked if there is an active (not closed) task covering that page.
+     * Uses PageTask's pageRangeStart/End to check for overlap.
      */
     public void delete(long pageId) {
         requirePageTableReady();
@@ -686,7 +703,7 @@ public class PageRepository {
                     pageNumber = rs.getInt("pageNumber");
                 }
             }
-            // Kiểm tra task đang active không - nếu có thì không cho xóa
+            // Check whether there is an active task - if so, deletion is not allowed
             try (PreparedStatement task = conn.prepareStatement(taskSql)) {
                 task.setLong(1, chapterId);
                 task.setInt(2, pageNumber);
@@ -710,12 +727,12 @@ public class PageRepository {
 
     // =====================================================================
     // 7. STAGE PROGRESSION
-    // Thứ tự: SKETCHING -> INKING -> COLORING -> SCREENTONE -> LETTERING
+    // Order: SKETCHING -> INKING -> COLORING -> SCREENTONE -> LETTERING
     // =====================================================================
 
     /**
-     * Tính stage tiếp theo dựa trên stage hiện tại và stage được request.
-     * Không cho phép lùi stage hoặc nhảy cóc quá 1 bước.
+     * Computes the next stage based on the current stage and the requested stage.
+     * Does not allow moving the stage backwards or skipping more than one step.
      */
     private String resolveNextStage(long pageId, String requestedStage) {
         String current = findCurrentCompletedStage(pageId);
@@ -738,8 +755,8 @@ public class PageRepository {
     }
 
     /**
-     * Tính stage hoàn thành dựa theo taskType khi task được approve.
-     * Nếu taskType là MIXED thì tự tính stage tiếp theo từ stage hiện tại.
+     * Computes the completion stage based on taskType when a task is approved.
+     * If taskType is MIXED, automatically computes the next stage from the current stage.
      */
     private String resolveTaskCompletionStage(long pageId, String taskType) {
         String current = findCurrentCompletedStage(pageId);
@@ -752,7 +769,7 @@ public class PageRepository {
         }
         int currentIndex = PAGE_STAGES.indexOf(current);
         if (currentIndex >= PAGE_STAGES.size() - 1) {
-            return current; // Đã ở stage cuối, không tăng nữa
+            return current; // Already at the final stage, don't advance further
         }
         int nextIndex = currentIndex + 1;
         if (normalized != null) {
@@ -767,7 +784,7 @@ public class PageRepository {
         return PAGE_STAGES.get(nextIndex);
     }
 
-    /** Đọc completedStage hiện tại của page từ DB. */
+    /** Reads the page's current completedStage from the DB. */
     private String findCurrentCompletedStage(long pageId) {
         String sql = "SELECT completedStage FROM " + TABLE_PAGE + " WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -785,8 +802,8 @@ public class PageRepository {
     }
 
     /**
-     * Chuẩn hóa tên stage: uppercase, xử lý alias ("INK" -> "INKING", "TONE" -> "SCREENTONE"...).
-     * Throw nếu stage không hợp lệ.
+     * Normalizes the stage name: uppercase, handles aliases ("INK" -> "INKING", "TONE" -> "SCREENTONE"...).
+     * Throws if the stage is invalid.
      */
     private String normalizeStage(String stage) {
         if (stage == null || stage.trim().isEmpty()) {
@@ -811,8 +828,8 @@ public class PageRepository {
     // =====================================================================
 
     /**
-     * Map ResultSet sang PageSlotSummary đầy đủ (bao gồm thông tin task và assistant).
-     * Dùng cho listByChapter có JOIN với PageTask và User.
+     * Maps a ResultSet to a full PageSlotSummary (including task and assistant information).
+     * Used by listByChapter which JOINs with PageTask and User.
      */
     private PageSlotSummary map(ResultSet rs) throws SQLException {
         PageSlotSummary slot = new PageSlotSummary();
@@ -836,8 +853,8 @@ public class PageRepository {
     }
 
     /**
-     * Đọc cột string optional - không throw nếu cột không tồn tại trong ResultSet.
-     * Dùng để tương thích với DB cũ chưa có cột completedStage.
+     * Reads an optional string column - does not throw if the column doesn't exist in the ResultSet.
+     * Used for compatibility with older DBs that don't have the completedStage column.
      */
     private String readOptionalString(ResultSet rs, String column) throws SQLException {
         try {
@@ -847,7 +864,7 @@ public class PageRepository {
         }
     }
 
-    /** Kiểm tra exception có phải do bảng Page không tồn tại không. */
+    /** Checks whether the exception is caused by the Page table not existing. */
     private boolean isMissingPageTable(Throwable ex) {
         while (ex != null) {
             String msg = ex.getMessage();

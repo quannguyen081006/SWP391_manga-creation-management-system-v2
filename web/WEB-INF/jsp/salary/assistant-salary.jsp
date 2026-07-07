@@ -28,7 +28,6 @@
                             <th>KPI score</th>
                             <th>Gross salary</th>
                             <th>Bonus</th>
-                            <th>Deduction</th>
                             <th>Net salary</th>
                         </tr>
                     </thead>
@@ -46,11 +45,10 @@
                             <td><fmt:formatNumber value="${r.kpiScore}" minFractionDigits="2" maxFractionDigits="2" /></td>
                             <td><fmt:formatNumber value="${r.grossSalary}" maxFractionDigits="0" /> VND</td>
                             <td><fmt:formatNumber value="${r.bonus}" maxFractionDigits="0" /> VND</td>
-                            <td><fmt:formatNumber value="${r.deduction}" maxFractionDigits="0" /> VND</td>
                             <td class="money-strong"><fmt:formatNumber value="${r.netSalary}" maxFractionDigits="0" /> VND</td>
                         </tr>
                         <tr class="task-detail-row" id="period-tasks-${r.periodId}">
-                            <td colspan="7">
+                            <td colspan="6">
                                 <c:choose>
                                     <c:when test="${not empty r.tasks}">
                                         <div class="salary-task-list">
@@ -80,19 +78,6 @@
                                                     <span>Due <strong><fmt:formatDate value="${t.dueDate}" pattern="dd/MM/yyyy" /></strong></span>
                                                     <span>Approved <strong><fmt:formatDate value="${t.approvedAt}" pattern="dd/MM/yyyy" /></strong></span>
                                                     <span>Rejections <strong>${t.rejectionCount}</strong></span>
-                                                    <c:choose>
-                                                        <c:when test="${not empty t.deductionReasons}">
-                                                            <span class="salary-task-penalty">
-                                                                <c:forEach items="${t.deductionReasons}" var="reason" varStatus="reasonStatus">
-                                                                    <c:if test="${not reasonStatus.first}"> · </c:if><c:out value="${reason}" />
-                                                                </c:forEach>
-                                                                · -<fmt:formatNumber value="${t.deductionAmount}" maxFractionDigits="0" /> VND
-                                                            </span>
-                                                        </c:when>
-                                                        <c:otherwise>
-                                                            <span class="salary-task-clean">No deduction</span>
-                                                        </c:otherwise>
-                                                    </c:choose>
                                                 </div>
                                                 <div class="salary-page-panel"
                                                      id="my-task-pages-${r.periodId}-${t.id}">

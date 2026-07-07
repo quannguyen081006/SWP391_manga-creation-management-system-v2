@@ -14,39 +14,39 @@ import java.util.List;
 
 /**
  * ============================================================
- * PageTaskService - Nghiệp vụ quản lý Page Task
+ * PageTaskService - Page Task management business logic
  * ============================================================
  *
- * MỤC LỤC:
+ * TABLE OF CONTENTS:
  * ----------------------------------------------------------
- * [1] TRUY VẤN TASK
- *     - listVisible()          : Liệt kê task theo quyền người dùng
- *     - listForWebTaskPage()   : Lọc task cho trang web (Assistant chỉ thấy task của mình)
- *     - listByChapter()        : Liệt kê task theo chapter (có kiểm tra quyền)
- *     - getDetail()            : Lấy chi tiết task (có kiểm tra quyền xem)
- *     - getDetailView()        : Lấy chi tiết kèm các cờ hành động UI
- * [2] TẠO & CẬP NHẬT TASK (Mangaka)
- *     - create()               : Tạo task mới
- *     - update()               : Cập nhật toàn bộ thông tin task
- *     - patch()                : Cập nhật dueDate / priority / notes
- * [3] VÒNG ĐỜI TASK
- *     - updateStatusByAssistant(): Assistant nộp task
- *     - approve()              : Mangaka duyệt task
- *     - reject()               : Mangaka từ chối task
- *     - delete()               : Mangaka xoá task
- *     - reassign()             : Mangaka phân công lại
- *     - extend()               : Mangaka gia hạn task OVERDUE
+ * [1] TASK QUERIES
+ *     - listVisible()          : List tasks according to user permissions
+ *     - listForWebTaskPage()   : Filter tasks for the web page (Assistant only sees their own tasks)
+ *     - listByChapter()        : List tasks by chapter (with permission check)
+ *     - getDetail()            : Get task details (with view permission check)
+ *     - getDetailView()        : Get details with UI action flags
+ * [2] CREATE & UPDATE TASK (Mangaka)
+ *     - create()               : Create a new task
+ *     - update()               : Update the full task information
+ *     - patch()                : Update dueDate / priority / notes
+ * [3] TASK LIFECYCLE
+ *     - updateStatusByAssistant(): Assistant submits task
+ *     - approve()              : Mangaka approves task
+ *     - reject()               : Mangaka rejects task
+ *     - delete()               : Mangaka deletes task
+ *     - reassign()             : Mangaka reassigns task
+ *     - extend()               : Mangaka extends an OVERDUE task
  * [4] JOB SCHEDULER
- *     - refreshTaskAging()     : Cập nhật trạng thái OVERDUE + DELAYED (gọi trước mỗi query)
- *     - markOverdueTasks()     : Đánh dấu task quá hạn
- *     - markDelayedTasks()     : Đánh dấu task trễ tiến độ
- *     - remindDueSoonTasks()   : Nhắc task sắp đến hạn 24h
- *     - escalatePendingOverdueDecisions(): Tự huỷ task OVERDUE không có quyết định sau 3 ngày
+ *     - refreshTaskAging()     : Update OVERDUE + DELAYED status (called before every query)
+ *     - markOverdueTasks()     : Mark overdue tasks
+ *     - markDelayedTasks()     : Mark tasks that are behind schedule
+ *     - remindDueSoonTasks()   : Remind about tasks due within 24h
+ *     - escalatePendingOverdueDecisions(): Auto-cancel OVERDUE tasks with no decision after 3 days
  * [5] HELPER / PRIVATE
- *     - requireTask()          : Lấy task hoặc ném exception
- *     - requireCanView()       : Kiểm tra quyền xem task (BR-42)
- *     - validateRejectReason() : Validate lý do từ chối
- * [6] INNER CLASS: DetailView  : DTO kèm cờ hành động cho UI
+ *     - requireTask()          : Get task or throw exception
+ *     - requireCanView()       : Check task view permission (BR-42)
+ *     - validateRejectReason() : Validate rejection reason
+ * [6] INNER CLASS: DetailView  : DTO with action flags for the UI
  * ============================================================
  */
 @Service
@@ -56,12 +56,12 @@ public class PageTaskService {
     private PageTaskRepository pageTaskRepository;
 
     // ============================================================
-    // [1] TRUY VẤN TASK
+    // [1] TASK QUERIES
     // ============================================================
 
     /**
-     * Liệt kê task hiển thị với người dùng, có thể lọc theo status và chapterId.
-     * Gọi refreshTaskAging() trước để đảm bảo trạng thái OVERDUE/DELAYED luôn cập nhật.
+     * List tasks visible to the user, optionally filtered by status and chapterId.
+     * Calls refreshTaskAging() first to ensure OVERDUE/DELAYED status is always up to date.
      */
     public List<TaskSummary> listVisible(AuthenticatedUser user, String status, Long chapterId) {
         refreshTaskAging();
@@ -69,9 +69,9 @@ public class PageTaskService {
     }
 
     /**
-     * Lọc danh sách task cho trang web:
-     * - Không phải ASSISTANT: trả về toàn bộ danh sách
-     * - ASSISTANT: chỉ trả về task được giao cho chính họ
+     * Filter the task list for the web page:
+     * - Not ASSISTANT: return the full list
+     * - ASSISTANT: return only tasks assigned to themselves
      */
     public List<TaskSummary> listForWebTaskPage(AuthenticatedUser user, List<TaskSummary> allTasks) {
         refreshTaskAging();
@@ -88,10 +88,10 @@ public class PageTaskService {
     }
 
     /**
-     * Liệt kê task theo chapter, kiểm tra quyền theo role (BR-42):
-     * - ADMIN: thấy tất cả
-     * - MANGAKA: chỉ thấy nếu là chủ chapter
-     * - TANTOU_EDITOR: chỉ thấy nếu được phân công cho series
+     * List tasks by chapter, with role-based permission check (BR-42):
+     * - ADMIN: sees everything
+     * - MANGAKA: only sees it if they own the chapter
+     * - TANTOU_EDITOR: only sees it if assigned to the series
      */
     public List<TaskSummary> listByChapter(long chapterId, AuthenticatedUser user) {
         if (user.hasRole("ADMIN")) {
@@ -117,38 +117,38 @@ public class PageTaskService {
         throw new IllegalArgumentException("Only MANGAKA/TANTOU_EDITOR/ADMIN can view chapter task list (BR-42)");
     }
 
-    /** Lấy chi tiết task, kiểm tra quyền xem (BR-42) */
+    /** Get task details, checking view permission (BR-42) */
     public TaskSummary getDetail(long taskId, AuthenticatedUser user) {
         TaskSummary task = requireTask(taskId);
         requireCanView(task, user);
         return task;
     }
 
-    /** Lấy toàn bộ lịch sử submit/review của task, tái dùng check quyền xem của getDetail(). */
+    /** Get the full submit/review history of a task, reusing getDetail()'s view permission check. */
     public List<TaskReviewHistoryEntry> getSubmissionHistory(long taskId, AuthenticatedUser user) {
         getDetail(taskId, user);
         return pageTaskRepository.listReviewHistory(taskId);
     }
 
     /**
-     * Lấy chi tiết task kèm các cờ hành động cho UI:
-     * - canAssistantUpdate : assistant có thể upload ảnh / chỉnh sửa không?
-     * - canAssistantSubmit : assistant có thể nộp task không?
-     * - isOwnerMangaka     : người dùng có phải Mangaka chủ task không?
-     * - canMangakaReview   : Mangaka có thể duyệt/từ chối không? (task đang SUBMITTED)
+     * Get task details along with UI action flags:
+     * - canAssistantUpdate : can the assistant upload images / make edits?
+     * - canAssistantSubmit : can the assistant submit the task?
+     * - isOwnerMangaka     : is the user the Mangaka who owns the task?
+     * - canMangakaReview   : can the Mangaka approve/reject? (task is SUBMITTED)
      */
     public DetailView getDetailView(long taskId, AuthenticatedUser user) {
         refreshTaskAging();
         TaskSummary task = getDetail(taskId, user);
 
         boolean isAssignedAssistant = user.hasRole("ASSISTANT") && user.getId() == task.getAssistantId();
-        // Assistant có thể update khi task đang active hoặc chờ review
+        // Assistant can update while the task is active or pending review
         boolean canAssistantUpdate = isAssignedAssistant
                 && ("IN_PROGRESS".equalsIgnoreCase(task.getStatus())
                 || "SUBMITTED".equalsIgnoreCase(task.getStatus())
                 || "REJECTED".equalsIgnoreCase(task.getStatus())
                 || "OVERDUE".equalsIgnoreCase(task.getStatus()));
-        // Assistant chỉ được submit khi chưa ở trạng thái SUBMITTED
+        // Assistant can only submit when not already in SUBMITTED status
         boolean canAssistantSubmit = isAssignedAssistant
                 && ("IN_PROGRESS".equalsIgnoreCase(task.getStatus())
                 || "REJECTED".equalsIgnoreCase(task.getStatus())
@@ -161,13 +161,13 @@ public class PageTaskService {
     }
 
     // ============================================================
-    // [2] TẠO & CẬP NHẬT TASK (Mangaka)
+    // [2] CREATE & UPDATE TASK (Mangaka)
     // ============================================================
 
     /**
-     * Tạo task mới cho chapter.
-     * Yêu cầu: MANGAKA và là chủ chapter (BR-31).
-     * taskType mặc định là MIXED nếu không truyền.
+     * Create a new task for a chapter.
+     * Requirements: MANGAKA and owner of the chapter (BR-31).
+     * taskType defaults to MIXED if not provided.
      */
     public TaskSummary create(
             long chapterId,
@@ -199,8 +199,8 @@ public class PageTaskService {
     }
 
     /**
-     * Cập nhật toàn bộ thông tin task (kể cả đổi assistant, page range, taskType).
-     * Dùng khi Mangaka muốn thay đổi cấu trúc task.
+     * Update the full task information (including assistant, page range, taskType).
+     * Used when the Mangaka wants to change the task's structure.
      */
     public TaskSummary update(
             long taskId,
@@ -223,8 +223,8 @@ public class PageTaskService {
     }
 
     /**
-     * Cập nhật một phần task: chỉ dueDate / priority / notes.
-     * Giữ nguyên giá trị cũ nếu tham số không được truyền.
+     * Partially update a task: only dueDate / priority / notes.
+     * Keeps the existing value if a parameter is not provided.
      */
     public TaskSummary patch(long taskId, AuthenticatedUser user, String dueDate, String priority, String notes) {
         SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can update task");
@@ -245,16 +245,16 @@ public class PageTaskService {
     }
 
     // ============================================================
-    // [3] VÒNG ĐỜI TASK
+    // [3] TASK LIFECYCLE
     // ============================================================
 
-    /** Assistant nộp task để Mangaka review (chỉ được nộp SUBMITTED) */
+    /** Assistant submits task for Mangaka review (can only submit as SUBMITTED) */
     public void updateStatusByAssistant(long taskId, AuthenticatedUser user, String status) {
         SessionUserUtil.requireRole(user, "ASSISTANT", "Only ASSISTANT can submit task for review");
         pageTaskRepository.updateStatusByAssistant(taskId, user.getId(), status.toUpperCase());
     }
 
-    /** Mangaka duyệt task SUBMITTED; kiểm tra quyền sở hữu trước khi gọi repository */
+    /** Mangaka approves a SUBMITTED task; checks ownership before calling the repository */
     public void approve(long taskId, AuthenticatedUser user, String comment) {
         SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can approve task");
         if (pageTaskRepository.getTaskOwnerMangaka(taskId) != user.getId()) {
@@ -264,8 +264,8 @@ public class PageTaskService {
     }
 
     /**
-     * Mangaka từ chối task SUBMITTED; lý do từ chối bắt buộc 5-300 ký tự.
-     * Kiểm tra quyền sở hữu trước khi gọi repository.
+     * Mangaka rejects a SUBMITTED task; the rejection reason must be 5-300 characters.
+     * Checks ownership before calling the repository.
      */
     public void reject(long taskId, AuthenticatedUser user, String reason) {
         SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can reject task");
@@ -276,16 +276,16 @@ public class PageTaskService {
         pageTaskRepository.rejectByMangaka(taskId, user.getId(), reason.trim());
     }
 
-    /** Mangaka xoá task (chỉ xoá được IN_PROGRESS hoặc OVERDUE) */
+    /** Mangaka deletes a task (can only delete IN_PROGRESS or OVERDUE tasks) */
     public void delete(long taskId, AuthenticatedUser user, String reason) {
         SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can delete task");
         pageTaskRepository.deleteByMangaka(taskId, user.getId(), reason);
     }
 
     /**
-     * Mangaka phân công lại task cho assistant khác.
-     * newDueDate có thể null nếu task không phải OVERDUE.
-     * Trả về TaskSummary của task mới được tạo.
+     * Mangaka reassigns a task to a different assistant.
+     * newDueDate may be null if the task is not OVERDUE.
+     * Returns the TaskSummary of the newly created task.
      */
     public TaskSummary reassign(long taskId, AuthenticatedUser user, long assistantId, String reason, String newDueDate) {
         SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can reassign task");
@@ -294,7 +294,7 @@ public class PageTaskService {
         return pageTaskRepository.findById(newTaskId);
     }
 
-    /** Mangaka gia hạn task OVERDUE: đặt dueDate mới, reset về IN_PROGRESS */
+    /** Mangaka extends an OVERDUE task: sets a new dueDate, resets status to IN_PROGRESS */
     public void extend(long taskId, AuthenticatedUser user, String newDueDate, String reason) {
         SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can extend task");
         pageTaskRepository.extendOverdueTask(taskId, user.getId(), Date.valueOf(newDueDate), reason);
@@ -305,30 +305,30 @@ public class PageTaskService {
     // ============================================================
 
     /**
-     * Cập nhật đồng thời trạng thái DELAYED và OVERDUE.
-     * Được gọi tự động trước mỗi query liệt kê/xem task để đảm bảo dữ liệu luôn mới.
+     * Updates both DELAYED and OVERDUE statuses.
+     * Called automatically before every task list/view query to keep data fresh.
      */
     public void refreshTaskAging() {
         pageTaskRepository.markDelayedTasks();
         pageTaskRepository.markOverdueTasks();
     }
 
-    /** Đánh dấu task đã quá dueDate sang OVERDUE (dùng cho scheduler riêng lẻ) */
+    /** Marks tasks past their dueDate as OVERDUE (used by the standalone scheduler) */
     public void markOverdueTasks() {
         pageTaskRepository.markOverdueTasks();
     }
 
-    /** Đánh dấu task bị trễ tiến độ (cờ DELAYED, không đổi status) */
+    /** Marks tasks that are behind schedule (DELAYED flag, does not change status) */
     public void markDelayedTasks() {
         pageTaskRepository.markDelayedTasks();
     }
 
-    /** Nhắc assistant về task sắp đến hạn trong 24 giờ */
+    /** Reminds assistants about tasks due within 24 hours */
     public void remindDueSoonTasks() {
         pageTaskRepository.notifyDueSoonTasks();
     }
 
-    /** Tự động huỷ (CANCELLED) task OVERDUE mà Mangaka không có quyết định sau 3 ngày */
+    /** Automatically cancels (CANCELLED) OVERDUE tasks that the Mangaka has not decided on after 3 days */
     public void escalatePendingOverdueDecisions() {
         pageTaskRepository.escalatePendingOverdueDecisions();
     }
@@ -337,7 +337,7 @@ public class PageTaskService {
     // [5] HELPER / PRIVATE
     // ============================================================
 
-    /** Lấy task theo ID; ném exception nếu không tồn tại */
+    /** Get task by ID; throws exception if not found */
     private TaskSummary requireTask(long taskId) {
         TaskSummary task = pageTaskRepository.findById(taskId);
         if (task == null) {
@@ -347,11 +347,11 @@ public class PageTaskService {
     }
 
     /**
-     * Kiểm tra quyền xem task (BR-42):
-     * - ADMIN: luôn được xem
-     * - MANGAKA: phải là chủ chapter
-     * - TANTOU_EDITOR: phải được phân công cho series
-     * - ASSISTANT: phải là người được giao task
+     * Checks task view permission (BR-42):
+     * - ADMIN: always allowed
+     * - MANGAKA: must be the chapter owner
+     * - TANTOU_EDITOR: must be assigned to the series
+     * - ASSISTANT: must be the assignee of the task
      */
     private void requireCanView(TaskSummary task, AuthenticatedUser user) {
         long chapterId = task.getChapterId();
@@ -368,7 +368,7 @@ public class PageTaskService {
         }
     }
 
-    /** Validate lý do từ chối: bắt buộc 5-300 ký tự */
+    /** Validates the rejection reason: must be 5-300 characters */
     private void validateRejectReason(String reason) {
         if (reason == null || reason.trim().length() < 5) {
             throw new IllegalArgumentException("Rejection reason must be at least 5 characters");
@@ -383,19 +383,19 @@ public class PageTaskService {
     // ============================================================
 
     /**
-     * DTO trả về chi tiết task kèm các cờ hành động cho UI.
-     * Các cờ được tính tại thời điểm load để controller/view không cần tính lại logic.
+     * DTO returning task details along with UI action flags.
+     * Flags are computed at load time so the controller/view doesn't need to recompute the logic.
      */
     public static class DetailView {
 
         private final TaskSummary task;
-        /** Assistant có thể upload ảnh / chỉnh sửa task không? */
+        /** Can the assistant upload images / edit the task? */
         private final boolean canAssistantUpdate;
-        /** Assistant có thể nộp task không? */
+        /** Can the assistant submit the task? */
         private final boolean canAssistantSubmit;
-        /** Người dùng có phải Mangaka chủ task không? */
+        /** Is the user the Mangaka who owns the task? */
         private final boolean canMangakaTaskOwner;
-        /** Mangaka có thể duyệt/từ chối không? (task đang SUBMITTED) */
+        /** Can the Mangaka approve/reject? (task is SUBMITTED) */
         private final boolean canMangakaReview;
 
         public DetailView(

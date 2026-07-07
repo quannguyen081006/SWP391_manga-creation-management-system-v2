@@ -1,21 +1,21 @@
 <%--
-  MỤC ĐÍCH: Màn hình quản lý tất cả task:
-            - Assistant: xem task được giao, bấm vào để vào trang submission
-    - Bảng task (tbody#taskRows): render server-side bằng JSTL <c:forEach> luôn khi load
-    - Metric cards (Active/Submitted/Delayed/Overdue/Completed): JS đếm lại và điền sau
-    - Filter pills (taskStatusPills): JS render sau khi load
-    - Action column (cột Action trong bảng): JS điền nút tuỳ theo role và status
-  CẤU TRÚC:
+  PURPOSE: Screen for managing all tasks:
+            - Assistant: view assigned tasks, click to go to the submission page
+    - Task table (tbody#taskRows): rendered server-side with JSTL <c:forEach> on every load
+    - Metric cards (Active/Submitted/Delayed/Overdue/Completed): JS recounts and fills these in afterward
+    - Filter pills (taskStatusPills): JS renders these after load
+    - Action column (the Action column in the table): JS fills in buttons based on role and status
+  STRUCTURE:
     [1] HEAD           — CSS import
-    [2] METRIC CARDS   — 5 card đếm số task theo nhóm, JS điền số vào sau
-    [3] ALERT BOX      — Hiển thị lỗi API inline
-    [4] TASK ACTIONS   — Panel chứa nút "Create Task", chỉ hiện với Mangaka (JS kiểm tra)
-    [5] MODAL: taskCreateModal  — Form tạo task mới (chọn chapter → load assistant → điền range/type/date)
-    [6] BẢNG ALL TASKS — Danh sách toàn bộ task, render server-side, cột Action để trống cho JS điền
-    [7] POPOVER: approve/reject — Inline popover (không phải modal) để Mangaka duyệt task
-                                   Approve: comment tuỳ chọn | Reject: bắt buộc nhập lý do
-    [8] MODAL: taskViewModal    — Modal xem/sửa chi tiết task (JS điền nội dung động)
-    [9] CONFIG SCRIPT  — Truyền contextPath xuống task-list.js
+    [2] METRIC CARDS   — 5 cards counting tasks by group, JS fills in the numbers afterward
+    [3] ALERT BOX      — Shows API errors inline
+    [4] TASK ACTIONS   — Panel containing the "Create Task" button, only shown to Mangaka (JS checks this)
+    [5] MODAL: taskCreateModal  — Form to create a new task (select chapter → load assistants → fill in range/type/date)
+    [6] ALL TASKS TABLE — List of all tasks, rendered server-side, Action column left empty for JS to fill in
+    [7] POPOVER: approve/reject — Inline popover (not a modal) for the Mangaka to review a task
+                                   Approve: comment optional | Reject: reason required
+    [8] MODAL: taskViewModal    — Modal to view/edit task details (JS fills in the content dynamically)
+    [9] CONFIG SCRIPT  — Passes contextPath down to task-list.js
 --%>
 <%@page contentType="text/html" pageEncoding="UTF-8"%>
 <%@taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
@@ -33,10 +33,10 @@
 <%-- Chapter/task note: task table and review popover CSS is in /assets/css/chaptertask/task-list.css, not embedded in JSP. --%>
 
 <%--
-    [2] METRIC CARDS: 5 card tóm tắt số lượng task theo trạng thái
-    Giá trị mặc định là 0, JS đọc bảng taskRows rồi đếm lại và điền vào các id này
-    Active = IN_PROGRESS | Submitted = SUBMITTED | Delayed = đã trễ nhưng chưa OVERDUE
-    Overdue = quá deadline | Completed = APPROVED
+    [2] METRIC CARDS: 5 cards summarizing task counts by status
+    Default value is 0, JS reads the taskRows table then recounts and fills in these ids
+    Active = IN_PROGRESS | Submitted = SUBMITTED | Delayed = late but not yet OVERDUE
+    Overdue = past deadline | Completed = APPROVED
 --%>
 <section class="metric-grid">
     <article class="metric-card"><div id="activeTasks" class="metric-value">0</div><div class="metric-label">Active</div></article>
@@ -46,13 +46,13 @@
     <article class="metric-card"><div id="completedTasks" class="metric-value metric-ok">0</div><div class="metric-label">Completed</div></article>
 </section>
 
-<%-- [3] ALERT BOX: JS show khi có lỗi API (approve/reject/create thất bại) --%>
+<%-- [3] ALERT BOX: JS shows this when an API error occurs (approve/reject/create failed) --%>
 <div id="taskResult" class="alert error task-alert-hidden"></div>
 
 <%--
-    [4] TASK ACTIONS PANEL: chứa nút "Create Task"
-    JS kiểm tra role — chỉ Mangaka mới thấy panel này
-    Nút data-modal-open="taskCreateModal" → JS bắt sự kiện mở modal [5]
+    [4] TASK ACTIONS PANEL: contains the "Create Task" button
+    JS checks the role — only Mangaka sees this panel
+    Button data-modal-open="taskCreateModal" → JS handles the event to open modal [5]
 --%>
 <div id="taskActions" class="section-card task-actions-panel">
     <div class="section-head">
@@ -65,12 +65,12 @@
 </div>
 
 <%--
-    [5] MODAL taskCreateModal: form tạo task mới
-    Flow chọn: Chapter (dropdown) → tự load danh sách Assistant theo chapter đó
-              → điền Page Start/End + Task Type + Due Date → submit
-    createTaskDeadlineHint: JS điền gợi ý deadline tối đa (chapter deadline - 3 ngày)
-    taskCreateError: JS hiện lỗi validate hoặc lỗi API
-    Lưu ý: form này THIẾU option SCREENTONE trong taskType — chỉ có 4/5 stage
+    [5] MODAL taskCreateModal: form to create a new task
+    Selection flow: Chapter (dropdown) → automatically loads the Assistant list for that chapter
+              → fill in Page Start/End + Task Type + Due Date → submit
+    createTaskDeadlineHint: JS fills in the suggested max deadline (chapter deadline - 3 days)
+    taskCreateError: JS shows validation errors or API errors
+    Note: this form is MISSING the SCREENTONE option in taskType — only 4/5 stages are present
 --%>
 <div id="taskCreateModal" class="modal-backdrop" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="taskCreateTitle">
@@ -105,12 +105,12 @@
 </div>
 
 <%--
-    [6] BẢNG ALL TASKS: danh sách task render server-side bằng JSTL
-    Status chip đổi màu theo trạng thái: OVERDUE=đỏ, IN_PROGRESS=vàng, PENDING=xám, APPROVED=xanh, còn lại=draft
-    Cột Action (td cuối) để TRỐNG — JS điền nút tuỳ theo role và task.status:
-      - Mangaka + SUBMITTED → nút Approve / Reject
-      - Assistant + IN_PROGRESS → nút View (vào task detail để upload)
-    taskStatusPills: JS render filter pills để lọc theo status
+    [6] ALL TASKS TABLE: task list rendered server-side with JSTL
+    Status chip color changes by status: OVERDUE=red, IN_PROGRESS=yellow, PENDING=gray, APPROVED=green, others=draft
+    Action column (last td) is left EMPTY — JS fills in buttons based on role and task.status:
+      - Mangaka + SUBMITTED → Approve / Reject buttons
+      - Assistant + IN_PROGRESS → View button (goes to task detail to upload)
+    taskStatusPills: JS renders filter pills to filter by status
 --%>
 <div class="section-card task-table-card">
     <div class="section-head task-table-head">
@@ -144,7 +144,7 @@
                         <span class="status-chip ${t.status=='OVERDUE' ? 'status-overdue' : (t.status=='IN_PROGRESS' ? 'status-progress' : (t.status=='PENDING' ? 'status-pending' : (t.status=='APPROVED' ? 'status-approved' : 'status-draft')))}">${t.status}</span>
                     </td>
                     <td>${t.dueDate}</td>
-                    <td></td><%-- JS điền nút Action vào đây --%>
+                    <td></td><%-- JS fills in the Action button here --%>
                 </tr>
             </c:forEach>
             <c:if test="${empty tasks}"><tr><td colspan="8">No tasks found.</td></tr></c:if>
@@ -152,11 +152,11 @@
     </table>
 
     <%--
-        [7] POPOVER approve/reject: hiện inline trên bảng (không phải modal riêng)
-        taskPopoverScrim: lớp mờ phía sau, click vào để đóng popover
-        taskApprovePopover: Mangaka approve, comment tuỳ chọn, không cần điền vẫn approve được
-        taskRejectPopover:  Mangaka reject, BẮT BUỘC nhập lý do (nút Confirm disabled cho đến khi có text)
-                            rejectPopoverCounter: đếm ký tự realtime (0/300)
+        [7] POPOVER approve/reject: shown inline over the table (not a separate modal)
+        taskPopoverScrim: dimmed overlay behind it, click to close the popover
+        taskApprovePopover: Mangaka approves, comment optional, can approve without filling it in
+        taskRejectPopover:  Mangaka rejects, reason is REQUIRED (Confirm button disabled until text is entered)
+                            rejectPopoverCounter: real-time character counter (0/300)
     --%>
     <div id="taskPopoverHost" class="task-popover-host" aria-hidden="true">
     <div id="taskPopoverScrim" class="task-popover-scrim" aria-hidden="true"></div>
@@ -185,10 +185,10 @@
 </div>
 
 <%--
-    [8] MODAL taskViewModal: xem và sửa chi tiết task
-    Mở khi JS bắt click nút View/Edit trên hàng task
-    taskViewContent: JS fetch API lấy detail rồi render HTML vào đây
-    taskViewSaveBtn: JS gọi API PUT để lưu thay đổi (due date, notes...)
+    [8] MODAL taskViewModal: view and edit task details
+    Opens when JS catches a click on the View/Edit button on a task row
+    taskViewContent: JS fetches the API for details then renders the HTML here
+    taskViewSaveBtn: JS calls a PUT API to save changes (due date, notes...)
 --%>
 <div id="taskViewModal" class="modal-backdrop" aria-hidden="true">
     <div class="modal-card modal-card-wide" role="dialog" aria-modal="true" aria-labelledby="taskViewTitle">
@@ -204,7 +204,7 @@
     </div>
 </div>
 
-<%-- [9] CONFIG SCRIPT: truyền contextPath xuống task-list.js để fetch đúng API URL --%>
+<%-- [9] CONFIG SCRIPT: passes contextPath down to task-list.js so it fetches the correct API URL --%>
 <script src="${pageContext.request.contextPath}/assets/js/chaptertask/task-list.js?v=20260608split"
         data-context-path="${pageContext.request.contextPath}"></script>
 

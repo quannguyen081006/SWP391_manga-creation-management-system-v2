@@ -1,50 +1,50 @@
 /**
  * chapterList.js — Chapter Tracker Page Script
- * Hệ thống quản lý sản xuất manga (SWP391)
+ * Manga production management system (SWP391)
  *
  * ============================================================
- * MỤC LỤC (TABLE OF CONTENTS)
+ * TABLE OF CONTENTS
  * ============================================================
- * 1.  KHỞI TẠO BIẾN          — State, config, DOM refs
+ * 1.  VARIABLE INITIALIZATION — State, config, DOM refs
  * 2.  HELPER / UTILITY        — escapeHtml, formatDate, date math
- * 3.  DEADLINE DISPLAY        — Tính & hiển thị trạng thái deadline
+ * 3.  DEADLINE DISPLAY        — Compute & display deadline status
  * 4.  STATUS HELPERS          — isChapterDone, isOverdue, row CSS
- * 5.  FILTER & SORT           — Đếm, lọc, sort danh sách chapter
- * 6.  RENDER — PILLS          — Dropdown filter theo status
+ * 5.  FILTER & SORT           — Count, filter, sort the chapter list
+ * 6.  RENDER — PILLS          — Status filter dropdown
  * 7.  RENDER — TABLE GROUPS   — Overdue / In-Progress / Completed
- * 8.  RENDER — SIDEBAR        — Form tạo chapter + overview stats
- * 9.  DATA LOADING            — Gọi API, build state, trigger render
+ * 8.  RENDER — SIDEBAR        — Chapter creation form + overview stats
+ * 9.  DATA LOADING            — Call API, build state, trigger render
  * 10. EVENT LISTENERS         — Click (sort, filter, toggle), Submit form
  * ============================================================
  */
 
 (function () {
     /* ==========================================================
-     * 1. KHỞI TẠO BIẾN
+     * 1. VARIABLE INITIALIZATION
      * ==========================================================
-     * Đọc config từ window.CHAPTER_LIST_CONFIG do server inject vào JSP/HTML.
-     * filterSeriesId: nếu có → chỉ hiện chapter của series đó (URL ?seriesId=X).
-     * serverCanCreateChapter: cờ từ server để kiểm tra quyền tạo chapter.
+     * Reads config from window.CHAPTER_LIST_CONFIG injected by the server into the JSP/HTML.
+     * filterSeriesId: if present → only show chapters of that series (URL ?seriesId=X).
+     * serverCanCreateChapter: flag from the server to check chapter creation permission.
      * ========================================================== */
     var configScript = document.currentScript;
     var ctx = configScript ? configScript.getAttribute('data-context-path') || '' : '';
-    var box = document.getElementById('chapterResult');     // vùng hiện thông báo lỗi/success
-    var currentUser = null;                                 // user đang đăng nhập (load từ /api/v1/auth/me)
-    var seriesList = [];                                    // tất cả series user có quyền xem
-    var chapters = [];                                      // danh sách chapter (toàn bộ hoặc theo series)
-    var seriesById = {};                                    // map seriesId → seriesObject để tra nhanh
+    var box = document.getElementById('chapterResult');     // area showing error/success messages
+    var currentUser = null;                                 // currently logged-in user (loaded from /api/v1/auth/me)
+    var seriesList = [];                                    // all series the user has permission to view
+    var chapters = [];                                      // chapter list (all or filtered by series)
+    var seriesById = {};                                    // map seriesId → seriesObject for quick lookup
     var filterSeriesId = new URLSearchParams(window.location.search).get('seriesId');
-    var sortField = null;                                   // field đang sort: 'no'|'title'|'status'|'deadline'
-    var sortDir = 'asc';                                    // chiều sort
-    var completedVisible = false;                           // nhóm "Completed" có đang mở không
-    var chapterStatusFilter = 'ALL';                        // filter status đang chọn
+    var sortField = null;                                   // field currently being sorted: 'no'|'title'|'status'|'deadline'
+    var sortDir = 'asc';                                    // sort direction
+    var completedVisible = false;                           // whether the "Completed" group is expanded
+    var chapterStatusFilter = 'ALL';                        // currently selected status filter
     var serverCanCreateChapter = configScript && configScript.getAttribute('data-can-create-chapter') === 'true';
 
     /* ==========================================================
      * 2. HELPER / UTILITY
      * ========================================================== */
 
-    /** Escape ký tự HTML đặc biệt để tránh XSS khi render ra DOM. */
+    /** Escape special HTML characters to prevent XSS when rendering to the DOM. */
     function escapeHtml(value) {
         if (value === null || value === undefined) { return ''; }
         return String(value).replace(/[&<>\"]/g, function (ch) {
@@ -53,8 +53,8 @@
     }
 
     /**
-     * Chuẩn hoá nhiều dạng giá trị ngày thành chuỗi YYYY-MM-DD.
-     * Hỗ trợ: Unix timestamp (số), ISO 8601 (có 'T'), hoặc chuỗi ngày thô.
+     * Normalizes various date value formats into a YYYY-MM-DD string.
+     * Supports: Unix timestamp (number), ISO 8601 (contains 'T'), or a raw date string.
      */
     function formatDate(value) {
         if (value === null || value === undefined || value === '') { return ''; }
@@ -70,13 +70,13 @@
         return text;
     }
 
-    /** Trả về Date object (giờ = 00:00) hoặc null nếu không parse được. */
+    /** Returns a Date object (time = 00:00) or null if it can't be parsed. */
     function dateOnly(value) {
         var formatted = formatDate(value);
         return formatted ? new Date(formatted + 'T00:00:00') : null;
     }
 
-    /** Số ngày còn lại đến deadline (âm = đã quá hạn). */
+    /** Number of days remaining until the deadline (negative = overdue). */
     function daysUntilDate(value) {
         var due = dateOnly(value);
         if (!due) { return null; }
@@ -90,8 +90,8 @@
      * ========================================================== */
 
     /**
-     * Tạo text suffix cho deadline cell.
-     * VD: "3 days left", "2 days overdue", "Due today", "Done".
+     * Builds the suffix text for the deadline cell.
+     * E.g.: "3 days left", "2 days overdue", "Due today", "Done".
      */
     function deadlineSuffixText(daysLeft, isDone, isOverdue) {
         if (isDone) { return 'Done'; }
@@ -109,18 +109,18 @@
     }
 
     /**
-     * Render HTML cho ô deadline trong bảng.
-     * Màu sắc phân loại:
-     *   - Xanh lá   → done
-     *   - Đỏ + icon → overdue
-     *   - Cam       → còn ≤ 3 ngày (urgent)
-     *   - Xanh dương → bình thường
+     * Renders the HTML for the deadline cell in the table.
+     * Color classification:
+     *   - Green      → done
+     *   - Red + icon → overdue
+     *   - Orange     → ≤ 3 days left (urgent)
+     *   - Blue       → normal
      */
     function formatDeadlineCell(dateValue, isDone, isOverdue) {
         var formatted = formatDate(dateValue);
         if (!formatted) { return '<span class="chapter-empty-muted">—</span>'; }
         var daysLeft = daysUntilDate(dateValue);
-        // Tự động mark overdue nếu deadline đã qua mà chưa done
+        // Auto mark as overdue if the deadline has passed and it's not yet done
         if (!isDone && !isOverdue && daysLeft !== null && daysLeft < 0) {
             isOverdue = true;
         }
@@ -143,20 +143,20 @@
      * 4. STATUS HELPERS
      * ========================================================== */
 
-    /** Chapter được coi là "xong" nếu status là COMPLETE/APPROVED hoặc completionPct = 100. */
+    /** A chapter is considered "done" if its status is COMPLETE/APPROVED or completionPct = 100. */
     function isChapterDone(ch) {
         var st = String(ch.status || '').toUpperCase();
         return st === 'COMPLETE' || st === 'APPROVED' || Number(ch.completionPct || 0) >= 100;
     }
 
-    /** Chapter bị overdue nếu chưa done và deadline đã qua. */
+    /** A chapter is overdue if it's not done and its deadline has passed. */
     function isChapterOverdue(ch) {
         if (isChapterDone(ch)) { return false; }
         var daysLeft = daysUntilDate(ch.submissionDeadline);
         return daysLeft !== null && daysLeft < 0;
     }
 
-    /** CSS class cho row: overdue (đỏ) → delayed (vàng) → không có. */
+    /** CSS class for the row: overdue (red) → delayed (yellow) → none. */
     function chapterRowClass(ch, forceOverdue) {
         if (forceOverdue || isChapterOverdue(ch)) { return ' class="task-row-overdue"'; }
         if (ch.atRisk && !isChapterDone(ch)) { return ' class="task-row-delayed"'; }
@@ -164,9 +164,9 @@
     }
 
     /**
-     * Áp dụng width và màu cho progress bar fill.
-     * Dùng data attribute thay vì inline style để tránh lỗi CSP khi render HTML string.
-     * Gọi sau mỗi lần render bảng.
+     * Applies the width and color to the progress bar fill.
+     * Uses a data attribute instead of inline style to avoid CSP issues when rendering an HTML string.
+     * Called after every table render.
      */
     function applyChapterProgressStyles(root) {
         var scope = root || document;
@@ -178,7 +178,7 @@
         }
     }
 
-    /** Ngày hôm nay dạng YYYY-MM-DD (dùng cho min attribute của date input). */
+    /** Today's date in YYYY-MM-DD format (used for the min attribute of a date input). */
     function todayIso() {
         var date = new Date();
         var month = String(date.getMonth() + 1);
@@ -186,7 +186,7 @@
         return date.getFullYear() + '-' + (month.length < 2 ? '0' + month : month) + '-' + (day.length < 2 ? '0' + day : day);
     }
 
-    /** Cộng/trừ N ngày từ một giá trị ngày, trả về YYYY-MM-DD. */
+    /** Adds/subtracts N days from a date value, returning YYYY-MM-DD. */
     function addDaysIso(value, days) {
         var date = dateOnly(value);
         if (!date) { return ''; }
@@ -197,14 +197,14 @@
     }
 
     /**
-     * Deadline tối đa cho chapter = publicationDate của series - 7 ngày.
-     * Đảm bảo chapter phải nộp trước khi series xuất bản.
+     * The maximum deadline for a chapter = the series' publicationDate - 7 days.
+     * Ensures the chapter is submitted before the series is published.
      */
     function latestChapterDeadline(series) {
         return series && series.publicationDate ? addDaysIso(series.publicationDate, -7) : '';
     }
 
-    /** Kiểm tra currentUser có role cụ thể không (hỗ trợ nhiều dạng role object). */
+    /** Checks whether currentUser has a specific role (supports multiple role object shapes). */
     function hasRole(role) {
         var roles = currentUser && currentUser.roles ? currentUser.roles : [];
         if (String(currentUser && (currentUser.role || currentUser.activeRole || currentUser.currentRole || '')).toUpperCase() === role) {

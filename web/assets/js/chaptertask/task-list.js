@@ -1,50 +1,50 @@
 /**
  * task-list.js
- * Quản lý trang danh sách page task (All Tasks) cho Mangaka, Assistant, Tantou Editor.
+ * Manages the page task list ("All Tasks") for Mangaka, Assistant, and Tantou Editor.
  *
- * MỤC LỤC
+ * TABLE OF CONTENTS
  * ──────────────────────────────────────────────────────────
- * 1. KHỞI TẠO & BIẾN TRẠNG THÁI        (dòng ~20)
- * 2. TIỆN ÍCH (HELPERS)
+ * 1. INITIALIZATION & STATE VARIABLES  (line ~20)
+ * 2. UTILITIES (HELPERS)
  *    2a. escapeHtml / noopTaskPushMarker
- *    2b. Xử lý ngày (formatDate, dateOnly, daysUntilDate)
- *    2c. Render deadline (formatDeadlineCell)
- *    2d. Kiểm tra role & quyền (hasRole, isAssignedAssistant, isTaskOwner)
- * 3. LOGIC FILTER & ĐẾM STATUS          (computeTaskCounts, taskMatchesFilter)
- * 4. RENDER UI
+ *    2b. Date handling (formatDate, dateOnly, daysUntilDate)
+ *    2c. Deadline rendering (formatDeadlineCell)
+ *    2d. Role & permission checks (hasRole, isAssignedAssistant, isTaskOwner)
+ * 3. FILTER LOGIC & STATUS COUNTS       (computeTaskCounts, taskMatchesFilter)
+ * 4. UI RENDERING
  *    4a. Status pills / dropdown filter  (renderStatusPills)
- *    4b. Bảng task                       (renderTasks, renderTaskRowActions)
+ *    4b. Task table                      (renderTasks, renderTaskRowActions)
  *    4c. Metrics (active/submitted/...)  (renderMetrics)
- *    4d. Modal "xem task"                (renderViewModalContent, openTaskView)
- *    4e. Ảnh task                        (renderImages, loadTaskImages, renderImageForm)
- * 5. POPOVER APPROVE / REJECT           (openPopover, closePopovers, applyTaskDecision)
+ *    4d. "View task" modal               (renderViewModalContent, openTaskView)
+ *    4e. Task images                     (renderImages, loadTaskImages, renderImageForm)
+ * 5. APPROVE / REJECT POPOVER           (openPopover, closePopovers, applyTaskDecision)
  * 6. MODAL UTILITIES                    (openModal, closeModals)
  * 7. API CALLS                          (callApi, uploadMultipart, fillAssistantSelect)
- * 8. LOAD DỮ LIỆU                       (loadData)
+ * 8. DATA LOADING                       (loadData)
  * 9. EVENT LISTENERS                    (click, change, submit)
  * ──────────────────────────────────────────────────────────
  */
 
 (function () {
-    // ─── 1. KHỞI TẠO & BIẾN TRẠNG THÁI ──────────────────────────────────────
-    // ctx: context path của app (lấy từ TASK_LIST_CONFIG hoặc rỗng)
+    // ─── 1. INITIALIZATION & STATE VARIABLES ────────────────────────────────
+    // ctx: app context path (taken from TASK_LIST_CONFIG or empty)
     var configScript = document.currentScript;
     var ctx = configScript ? configScript.getAttribute('data-context-path') || '' : '';
-    var resultBox = document.getElementById('taskResult');   // div hiển thị thông báo chung
-    var currentUser = null;      // user đang đăng nhập (lấy từ /api/v1/auth/me)
-    var seriesList = [];         // danh sách series
-    var chapters = [];           // danh sách chapter
-    var tasks = [];              // danh sách task (toàn bộ, chưa filter)
-    var seriesById = {};         // lookup nhanh series theo id
-    var chapterById = {};        // lookup nhanh chapter theo id
-    var taskStatusFilter = 'ALL'; // filter hiện tại trên bảng
-    // Trạng thái popover approve/reject đang mở
+    var resultBox = document.getElementById('taskResult');   // div showing general notifications
+    var currentUser = null;      // currently logged-in user (from /api/v1/auth/me)
+    var seriesList = [];         // list of series
+    var chapters = [];           // list of chapters
+    var tasks = [];              // list of tasks (full, unfiltered)
+    var seriesById = {};         // quick lookup for series by id
+    var chapterById = {};        // quick lookup for chapter by id
+    var taskStatusFilter = 'ALL'; // current filter applied to the table
+    // State of the currently open approve/reject popover
     var activePopoverType = null;
     var activePopoverTaskId = null;
     var activePopoverCell = null;
-    var viewModalTaskId = null;  // taskId đang mở trong modal xem chi tiết
+    var viewModalTaskId = null;  // taskId currently open in the detail view modal
 
-    // ─── 2a. TIỆN ÍCH: ESCAPE HTML ───────────────────────────────────────────
+    // ─── 2a. UTILITY: ESCAPE HTML ────────────────────────────────────────────
     function escapeHtml(value) {
         if (value === null || value === undefined) {
             return '';
@@ -54,14 +54,14 @@
         });
     }
 
-    // Placeholder marker — dùng để test push task (không có logic thực)
+    // Placeholder marker — used to test task push (no real logic)
     function noopTaskPushMarker() {
         return 'task-push-test';
     }
 
-    // ─── 2b. TIỆN ÍCH: XỬ LÝ NGÀY ───────────────────────────────────────────
-    // Chuẩn hoá value ngày thành chuỗi "YYYY-MM-DD"
-    // Chấp nhận: timestamp số, chuỗi ISO có 'T', hoặc chuỗi đã format sẵn
+    // ─── 2b. UTILITY: DATE HANDLING ──────────────────────────────────────────
+    // Normalize a date value into a "YYYY-MM-DD" string
+    // Accepts: numeric timestamp, ISO string containing 'T', or an already-formatted string
     function formatDate(value) {
         if (value === null || value === undefined || value === '') {
             return '';
@@ -82,13 +82,13 @@
         return text;
     }
 
-    // Trả về Date object (giờ 00:00:00) từ value ngày
+    // Returns a Date object (at 00:00:00) from a date value
     function dateOnly(value) {
         var formatted = formatDate(value);
         return formatted ? new Date(formatted + 'T00:00:00') : null;
     }
 
-    // Tính số ngày còn lại đến deadline (âm = đã quá hạn)
+    // Calculates the number of days remaining until the deadline (negative = overdue)
     function daysUntilDate(value) {
         var due = dateOnly(value);
         if (!due) { return null; }
@@ -97,8 +97,8 @@
         return Math.ceil((due - today) / 86400000);
     }
 
-    // ─── 2c. TIỆN ÍCH: RENDER DEADLINE ───────────────────────────────────────
-    // Sinh text suffix cho deadline: "Done", "X days overdue", "Due today", v.v.
+    // ─── 2c. UTILITY: DEADLINE RENDERING ─────────────────────────────────────
+    // Generates the deadline suffix text: "Done", "X days overdue", "Due today", etc.
     function deadlineSuffixText(daysLeft, isDone, isOverdue) {
         if (isDone) { return 'Done'; }
         if (isOverdue) {
@@ -114,11 +114,11 @@
         return daysLeft + ' days left';
     }
 
-    // Render cell deadline với màu/class tương ứng trạng thái
-    // - done      → due-date-done (xám)
-    // - overdue   → due-date-overdue (đỏ) + icon ⚠
-    // - urgent (≤3 ngày) → due-date-urgent (cam)
-    // - bình thường       → due-date-active (xanh)
+    // Renders the deadline cell with the color/class matching its state
+    // - done      → due-date-done (gray)
+    // - overdue   → due-date-overdue (red) + ⚠ icon
+    // - urgent (≤3 days) → due-date-urgent (orange)
+    // - normal            → due-date-active (green)
     function formatDeadlineCell(dateValue, isDone, isOverdue) {
         var formatted = formatDate(dateValue);
         if (!formatted) { return '-'; }
@@ -141,12 +141,12 @@
         return '<span class="due-date-active">' + escapeHtml(formatted) + suffix + '</span>';
     }
 
-    // Task coi là "done" khi status = APPROVED
+    // A task is considered "done" when status = APPROVED
     function isTaskDone(task) {
         return String(task.status || '').toUpperCase() === 'APPROVED';
     }
 
-    // Ngày hôm nay theo format "YYYY-MM-DD"
+    // Today's date in "YYYY-MM-DD" format
     function todayIso() {
         var date = new Date();
         var month = String(date.getMonth() + 1);

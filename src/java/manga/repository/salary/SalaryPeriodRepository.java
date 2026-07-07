@@ -67,11 +67,14 @@ public class SalaryPeriodRepository {
         }
     }
 
-    public List<Long> findMangakasWithUnsalariedApprovedTasks() {
-        String sql = "SELECT DISTINCT s.mangakaId FROM PageTask pt "
-                + "JOIN Chapter c ON c.id = pt.chapterId "
-                + "JOIN Series s ON s.id = c.seriesId "
-                + "WHERE UPPER(pt.status) = 'APPROVED' AND pt.isSalaried = 0";
+    /**
+     * All Mangaka who currently have at least one assistant - the full set of Mangaka
+     * the automatic monthly rotation must open/settle a salary period for. Using
+     * MangakaAssistant (rather than "has approved tasks") means a period always exists
+     * for every active Mangaka, ready to accumulate tasks as they get approved.
+     */
+    public List<Long> listMangakaIdsWithAssistants() {
+        String sql = "SELECT DISTINCT mangakaId FROM MangakaAssistant";
         List<Long> ids = new ArrayList<Long>();
         try (Connection conn = dataSource.getConnection();
                 PreparedStatement ps = conn.prepareStatement(sql);
@@ -80,26 +83,9 @@ public class SalaryPeriodRepository {
                 ids.add(rs.getLong(1));
             }
         } catch (SQLException ex) {
-            throw new RuntimeException("Cannot list Mangakas with unpaid tasks", ex);
+            throw new RuntimeException("Cannot list Mangakas with assistants", ex);
         }
         return ids;
-    }
-
-    public boolean hasUnsalariedApprovedTasks(long mangakaId) {
-        String sql = "SELECT COUNT(1) FROM PageTask pt "
-                + "JOIN Chapter c ON c.id = pt.chapterId "
-                + "JOIN Series s ON s.id = c.seriesId "
-                + "WHERE s.mangakaId = ? AND UPPER(pt.status) = 'APPROVED' "
-                + "AND pt.isSalaried = 0";
-        try (Connection conn = dataSource.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, mangakaId);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() && rs.getInt(1) > 0;
-            }
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot check unpaid approved tasks", ex);
-        }
     }
 
     public List<Map<String, Object>> listPeriodsByMangaka(long mangakaId) {

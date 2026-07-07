@@ -1,11 +1,11 @@
 /**
  * chapter-detail.js
- * Script cho trang Chapter Detail — quản lý page slots, tasks, upload ảnh.
+ * Script for the Chapter Detail page — manages page slots, tasks, image uploads.
  *
  * ============================================================
- * MỤC LỤC
+ * TABLE OF CONTENTS
  * ============================================================
- * 1.  BIẾN TOÀN CỤC (state)
+ * 1.  GLOBAL VARIABLES (state)
  * 2.  UTILITY — escapeHtml, formatDate, initials, dateOnly, daysUntilDate, todayIso, addDaysIso
  * 3.  ROLE / PERMISSION — hasRole, isOwner
  * 4.  API HELPERS — callApi, uploadMultipart
@@ -36,35 +36,35 @@
 
 (function () {
     // ============================================================
-    // 1. BIẾN TOÀN CỤC (state)
+    // 1. GLOBAL VARIABLES (state)
     // ============================================================
     var configScript = document.currentScript;
     var ctx = configScript ? configScript.getAttribute('data-context-path') || '' : '';
     var params = new URLSearchParams(window.location.search);
-    var chapterId = params.get('id');       // ID chapter từ query string
-    var urlError = params.get('error');     // Lỗi được truyền qua URL (nếu có)
-    var currentUser = null;     // User đang đăng nhập (từ /api/v1/auth/me)
-    var chapter = null;         // Chi tiết chapter hiện tại
-    var seriesData = null;      // Series chứa chapter này
-    var pageSlots = [];         // Danh sách page slots của chapter
-    var chapterTasks = [];      // Danh sách tasks của chapter
-    var selectedPageIds = {};   // Map pageId → true cho các page đang được chọn để gán task
-    var lastSlotIndex = -1;     // Index slot cuối được click (dùng cho shift-click)
-    var pendingUploadPageId = null;  // PageId đang chờ upload trong modal
-    var pendingUploadSlot = null;    // Slot đang chờ upload trong modal
-    var activePopoverType = null;    // 'approve' | 'reject' — popover đang mở
-    var activePopoverTaskId = null;  // Task ID của popover đang mở
-    var activePopoverCell = null;    // DOM cell anchor của popover
-    var activeOverdueTaskId = null;  // Task ID trong modal overdue decision
-    var taskImagesCache = {};        // Cache ảnh theo taskId: { taskId: [imgObjects] }
-    var taskInlineLoaded = {};       // Đánh dấu task nào đã load inline xong
-    var metadataSaveTimer = null;    // Timer debounce cho auto-save metadata
+    var chapterId = params.get('id');       // Chapter ID from the query string
+    var urlError = params.get('error');     // Error passed via URL (if any)
+    var currentUser = null;     // Currently logged-in user (from /api/v1/auth/me)
+    var chapter = null;         // Details of the current chapter
+    var seriesData = null;      // Series that contains this chapter
+    var pageSlots = [];         // List of page slots in the chapter
+    var chapterTasks = [];      // List of tasks in the chapter
+    var selectedPageIds = {};   // Map of pageId → true for pages currently selected for task assignment
+    var lastSlotIndex = -1;     // Index of the last clicked slot (used for shift-click)
+    var pendingUploadPageId = null;  // PageId pending upload in the modal
+    var pendingUploadSlot = null;    // Slot pending upload in the modal
+    var activePopoverType = null;    // 'approve' | 'reject' — currently open popover
+    var activePopoverTaskId = null;  // Task ID of the currently open popover
+    var activePopoverCell = null;    // DOM cell anchor of the popover
+    var activeOverdueTaskId = null;  // Task ID in the overdue decision modal
+    var taskImagesCache = {};        // Image cache by taskId: { taskId: [imgObjects] }
+    var taskInlineLoaded = {};       // Marks which tasks have finished loading inline
+    var metadataSaveTimer = null;    // Debounce timer for metadata auto-save
 
     // ============================================================
     // 2. UTILITY
     // ============================================================
 
-    /** Escape HTML đặc biệt để tránh XSS khi render vào innerHTML */
+    /** Escape special HTML characters to prevent XSS when rendering into innerHTML */
     function escapeHtml(v) {
         if (v === null || v === undefined) {
             return '';
@@ -75,8 +75,8 @@
     }
 
     /**
-     * Format giá trị ngày thành chuỗi YYYY-MM-DD.
-     * Hỗ trợ: timestamp số, chuỗi ISO (có 'T'), hoặc chuỗi ngày sẵn.
+     * Format a date value into a YYYY-MM-DD string.
+     * Supports: numeric timestamp, ISO string (containing 'T'), or a plain date string.
      */
     function formatDate(v) {
         if (!v) {
@@ -98,8 +98,8 @@
     }
 
     /**
-     * Lấy chữ viết tắt từ tên đầy đủ (VD: "Nguyen Van A" → "NA").
-     * Dùng để hiển thị avatar assistant trên page slot.
+     * Get the initials from a full name (e.g. "Nguyen Van A" → "NA").
+     * Used to display the assistant avatar on a page slot.
      */
     function initials(name) {
         if (!name) {
@@ -112,13 +112,13 @@
         return parts[0].substring(0, 2).toUpperCase();
     }
 
-    /** Chuyển giá trị ngày thành Date object ở 00:00:00 local time */
+    /** Convert a date value into a Date object at 00:00:00 local time */
     function dateOnly(v) {
         var d = formatDate(v);
         return d ? new Date(d + 'T00:00:00') : null;
     }
 
-    /** Tính số ngày còn lại đến deadline. Âm = đã quá hạn. */
+    /** Compute the number of days remaining until the deadline. Negative = overdue. */
     function daysUntilDate(value) {
         var due = dateOnly(value);
         if (!due) {
@@ -129,7 +129,7 @@
         return Math.ceil((due - today) / 86400000);
     }
 
-    /** Trả về ngày hôm nay dạng YYYY-MM-DD */
+    /** Return today's date in YYYY-MM-DD format */
     function todayIso() {
         var date = new Date();
         var month = String(date.getMonth() + 1);
@@ -137,7 +137,7 @@
         return date.getFullYear() + '-' + (month.length < 2 ? '0' + month : month) + '-' + (day.length < 2 ? '0' + day : day);
     }
 
-    /** Cộng thêm `days` ngày vào một giá trị ngày, trả về YYYY-MM-DD */
+    /** Add `days` days to a date value, returning YYYY-MM-DD */
     function addDaysIso(value, days) {
         var date = dateOnly(value);
         if (!date) {
@@ -154,8 +154,8 @@
     // ============================================================
 
     /**
-     * Kiểm tra currentUser có role chỉ định không.
-     * Hỗ trợ cả field role đơn lẫn mảng roles (string hoặc object).
+     * Check whether currentUser has the specified role.
+     * Supports both a single role field and a roles array (string or object).
      */
     function hasRole(role) {
         if (!currentUser) {
@@ -176,8 +176,8 @@
     }
 
     /**
-     * Kiểm tra user hiện tại có phải owner (MANGAKA) của series này không.
-     * Dùng để ẩn/hiện các nút action chỉ dành cho Mangaka.
+     * Check whether the current user is the owner (MANGAKA) of this series.
+     * Used to show/hide action buttons that are only for the Mangaka.
      */
     function isOwner() {
         return hasRole('MANGAKA') && seriesData && Number(seriesData.mangakaId) === Number(currentUser.id);
@@ -188,10 +188,10 @@
     // ============================================================
 
     /**
-     * Gọi API JSON chung cho GET/POST/PUT/PATCH/DELETE.
-     * - GET/PUT/PATCH: data được serialize thành query string.
-     * - POST/DELETE: data được gửi trong body (form-urlencoded).
-     * Throws Error nếu response không OK hoặc body.success === false.
+     * Generic JSON API call for GET/POST/PUT/PATCH/DELETE.
+     * - GET/PUT/PATCH: data is serialized into the query string.
+     * - POST/DELETE: data is sent in the body (form-urlencoded).
+     * Throws an Error if the response is not OK or body.success === false.
      */
     async function callApi(method, path, data) {
         var opts = {method: method, headers: {'Accept': 'application/json'}};

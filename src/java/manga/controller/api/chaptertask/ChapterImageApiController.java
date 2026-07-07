@@ -24,23 +24,23 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * REST API controller quan ly anh trang cua chapter/task — nhom /api/v1.
+ * REST API controller that manages chapter/task page images — /api/v1 group.
  *
- * MUC LUC:
- *  1. upload()          - POST   /api/v1/chapters/{chapterId}/images  - Upload anh trang cho chapter
- *  2. listByChapter()   - GET    /api/v1/chapters/{chapterId}/images  - Lay danh sach anh theo chapter
- *  3. listByTask()      - GET    /api/v1/tasks/{taskId}/images        - Lay danh sach anh theo task
- *  4. deactivate()      - DELETE /api/v1/images/{imageId}             - Xoa mem (deactivate) anh
+ * TABLE OF CONTENTS:
+ *  1. upload()          - POST   /api/v1/chapters/{chapterId}/images  - Upload a page image for a chapter
+ *  2. listByChapter()   - GET    /api/v1/chapters/{chapterId}/images  - List images by chapter
+ *  3. listByTask()      - GET    /api/v1/tasks/{taskId}/images        - List images by task
+ *  4. deactivate()      - DELETE /api/v1/images/{imageId}             - Soft delete (deactivate) an image
  *
  * HELPER METHODS (private):
- *  - requireCanReadChapter() - Kiem tra quyen xem anh cua chapter
- *  - requireCanReadTask()    - Kiem tra quyen xem anh cua task
- *  - saveMultipartFileIfPresent() - Luu file upload xuong server neu co
- *  - findFilePart()          - Tim Part file trong request (thu "file", "image", "upload")
- *  - copy()                  - Ghi stream vao file
- *  - extractFileName()       - Lay ten file goc tu Content-Disposition header
- *  - sanitizeFileName()      - Lam sach ten file (bo ky tu dac biet)
- *  - originalNameFromUrl()   - Lay ten file tu URL neu khong upload truc tiep
+ *  - requireCanReadChapter() - Check permission to view a chapter's images
+ *  - requireCanReadTask()    - Check permission to view a task's images
+ *  - saveMultipartFileIfPresent() - Save the uploaded file to the server if present
+ *  - findFilePart()          - Find the file Part in the request (tries "file", "image", "upload")
+ *  - copy()                  - Write a stream to a file
+ *  - extractFileName()       - Get the original file name from the Content-Disposition header
+ *  - sanitizeFileName()      - Sanitize a file name (remove special characters)
+ *  - originalNameFromUrl()   - Get the file name from a URL when not uploaded directly
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -50,14 +50,14 @@ public class ChapterImageApiController {
     private ChapterImageRepository chapterImageRepository;
 
     // ============================================================
-    // 1. UPLOAD ANH TRANG
+    // 1. UPLOAD PAGE IMAGE
     // POST /api/v1/chapters/{chapterId}/images
-    // - TANTOU_EDITOR khong duoc upload (chi doc)
-    // - Ho tro 2 cach truyen file:
-    //     a) Multipart upload (file dinh kem) -> saveMultipartFileIfPresent() xu ly
-    //     b) URL co san (fileUrl hoac url param) -> luu thang URL vao DB
-    // - Neu ca hai cung co: multipart duoc uu tien, ghi de fileUrl
-    // - pageTaskId va imageType quyet dinh luu vao thu muc "task" hay "chapter"
+    // - TANTOU_EDITOR is not allowed to upload (read-only)
+    // - Supports 2 ways to provide the file:
+    //     a) Multipart upload (attached file) -> handled by saveMultipartFileIfPresent()
+    //     b) An existing URL (fileUrl or url param) -> save the URL directly to the DB
+    // - If both are present: multipart takes priority and overwrites fileUrl
+    // - pageTaskId and imageType decide whether to save into the "task" or "chapter" folder
     // ============================================================
     @RequestMapping(value = "/chapters/{chapterId}/images", method = RequestMethod.POST)
     public ApiResponse<ChapterImageItem> upload(
@@ -74,13 +74,13 @@ public class ChapterImageApiController {
         Integer pageNumber = parseInteger(request.getParameter("pageNumber"));
         String fileUrl = trimToNull(request.getParameter("fileUrl"));
         if (fileUrl == null) {
-            // Ho tro them param ten "url" de tuong thich voi client cu
+            // Also support the "url" param name for compatibility with older clients
             fileUrl = trimToNull(request.getParameter("url"));
         }
         String originalFileName = trimToNull(request.getParameter("originalFileName"));
         Long fileSizeBytes = parseLong(request.getParameter("fileSizeBytes"));
 
-        // Neu co file multipart thi ghi de fileUrl/originalFileName/fileSizeBytes tu params
+        // If a multipart file is present, overwrite fileUrl/originalFileName/fileSizeBytes from it
         UploadInfo upload = saveMultipartFileIfPresent(request, pageTaskId, imageType);
         if (upload != null) {
             fileUrl = upload.path;
@@ -88,16 +88,16 @@ public class ChapterImageApiController {
             fileSizeBytes = Long.valueOf(upload.size);
         }
 
-        // Mac dinh size = 0 neu khong xac dinh duoc
+        // Default size to 0 if it cannot be determined
         if (fileSizeBytes == null) {
             fileSizeBytes = Long.valueOf(0L);
         }
-        // Neu khong co ten file thi lay tu URL
+        // If there's no file name, derive it from the URL
         if (originalFileName == null && fileUrl != null) {
             originalFileName = originalNameFromUrl(fileUrl);
         }
 
-        // Tinh pHash cho file vua luu (chi khi upload truc tiep, khong ap dung khi chi truyen URL co san)
+        // Compute the pHash for the saved file (only for direct uploads, not applicable when only a URL is provided)
         String imagePhash = null;
         File savedFile = null;
         if (upload != null) {
@@ -119,7 +119,7 @@ public class ChapterImageApiController {
                     fileSizeBytes.longValue(),
                     imagePhash);
         } catch (IllegalArgumentException ex) {
-            // Upload bi tu choi (vd: trung anh) sau khi file da luu xuong dia -> don rac
+            // Upload rejected (e.g. duplicate image) after the file was already saved to disk -> clean up
             if (savedFile != null) {
                 savedFile.delete();
             }
@@ -128,23 +128,23 @@ public class ChapterImageApiController {
         return ApiResponse.ok(chapterImageRepository.findById(id), "Chapter image uploaded");
     }
 
-    // HELPER: Chi cho phep JPG/PNG/WEBP truoc khi tinh hash, tranh loi 500 khi upload nham file khong phai anh
+    // HELPER: Only allow JPG/PNG/WEBP before computing the hash, to avoid a 500 error when a non-image file is uploaded by mistake
     private void requireImageExtension(String originalFileName) {
         String name = originalFileName == null ? "" : originalFileName.toLowerCase(Locale.ENGLISH);
         if (!name.endsWith(".jpg") && !name.endsWith(".jpeg")
                 && !name.endsWith(".png") && !name.endsWith(".webp")) {
-            throw new IllegalArgumentException("Chỉ chấp nhận file ảnh JPG, PNG hoặc WEBP");
+            throw new IllegalArgumentException("Only JPG, PNG, or WEBP image files are accepted");
         }
     }
 
     // ============================================================
-    // 2. LIST ANH THEO CHAPTER
+    // 2. LIST IMAGES BY CHAPTER
     // GET /api/v1/chapters/{chapterId}/images
-    // - Kiem tra quyen qua requireCanReadChapter():
-    //     ADMIN: luon duoc
-    //     MANGAKA: phai la chu cua chapter do
-    //     TANTOU_EDITOR: phai la editor duoc assign vao series chua chapter do
-    //     ASSISTANT: phai co task duoc giao trong chapter do
+    // - Permission checked via requireCanReadChapter():
+    //     ADMIN: always allowed
+    //     MANGAKA: must be the owner of that chapter
+    //     TANTOU_EDITOR: must be the editor assigned to the series containing that chapter
+    //     ASSISTANT: must have an assigned task in that chapter
     // ============================================================
     @RequestMapping(value = "/chapters/{chapterId}/images", method = RequestMethod.GET)
     public ApiResponse<List<ChapterImageItem>> listByChapter(
@@ -156,11 +156,11 @@ public class ChapterImageApiController {
     }
 
     // ============================================================
-    // 3. LIST ANH THEO TASK
+    // 3. LIST IMAGES BY TASK
     // GET /api/v1/tasks/{taskId}/images
-    // - Lay chapterId tu task truoc, sau do kiem tra quyen qua requireCanReadTask()
-    // - ASSISTANT chi xem duoc neu chinh ho duoc assign task do
-    //   (khac voi listByChapter: assistant chi can co BAT KY task nao trong chapter)
+    // - First get chapterId from the task, then check permission via requireCanReadTask()
+    // - ASSISTANT can only view if they themselves are assigned to that task
+    //   (unlike listByChapter, where the assistant only needs ANY task in the chapter)
     // ============================================================
     @RequestMapping(value = "/tasks/{taskId}/images", method = RequestMethod.GET)
     public ApiResponse<List<ChapterImageItem>> listByTask(
@@ -173,11 +173,11 @@ public class ChapterImageApiController {
     }
 
     // ============================================================
-    // 4. DEACTIVATE ANH (XOA MEM)
+    // 4. DEACTIVATE IMAGE (SOFT DELETE)
     // DELETE /api/v1/images/{imageId}
-    // - TANTOU_EDITOR khong duoc xoa
-    // - Khong xoa cung khoi DB, chi danh dau inactive (soft delete)
-    // - Quyen xoa chi kiem tra role, khong kiem tra them ownership cu the
+    // - TANTOU_EDITOR is not allowed to delete
+    // - Does not hard delete from the DB, only marks it inactive (soft delete)
+    // - Delete permission only checks role, no additional specific ownership check
     // ============================================================
     @RequestMapping(value = "/images/{imageId}", method = RequestMethod.DELETE)
     public ApiResponse<Object> deactivate(
@@ -192,9 +192,9 @@ public class ChapterImageApiController {
     }
 
     // ============================================================
-    // HELPER: KIEM TRA QUYEN XEM ANH CHAPTER
-    // Thu tu uu tien: ADMIN -> MANGAKA (chu chapter) -> TANTOU (duoc assign) -> ASSISTANT (co task trong chapter)
-    // Nem IllegalArgumentException neu khong thoa man bat ky dieu kien nao
+    // HELPER: CHECK PERMISSION TO VIEW CHAPTER IMAGES
+    // Priority order: ADMIN -> MANGAKA (chapter owner) -> TANTOU (assigned) -> ASSISTANT (has task in chapter)
+    // Throws IllegalArgumentException if none of the conditions are satisfied
     // ============================================================
     private void requireCanReadChapter(long chapterId, AuthenticatedUser user) {
         if (user.hasRole("ADMIN")) {
@@ -213,9 +213,9 @@ public class ChapterImageApiController {
     }
 
     // ============================================================
-    // HELPER: KIEM TRA QUYEN XEM ANH TASK
-    // Giong requireCanReadChapter nhung ASSISTANT phai duoc assign chinh task do
-    // (khong du chi co task trong cung chapter)
+    // HELPER: CHECK PERMISSION TO VIEW TASK IMAGES
+    // Same as requireCanReadChapter but ASSISTANT must be assigned to that specific task
+    // (having any task in the same chapter is not enough)
     // ============================================================
     private void requireCanReadTask(long chapterId, long taskId, AuthenticatedUser user) {
         if (user.hasRole("ADMIN")) {
@@ -234,11 +234,11 @@ public class ChapterImageApiController {
     }
 
     // ============================================================
-    // HELPER: LUU FILE MULTIPART XUONG SERVER
-    // - Tra ve null neu request khong phai multipart
-    // - Thu lan luot cac field: "file", "image", "upload" (findFilePart)
-    // - Luu vao /img/task/ neu co pageTaskId hoac imageType = "PAGE", nguoc lai /img/chapter/
-    // - Ten file: {timestamp}_{sanitizedName} de tranh trung lap
+    // HELPER: SAVE MULTIPART FILE TO THE SERVER
+    // - Returns null if the request is not multipart
+    // - Tries fields in order: "file", "image", "upload" (findFilePart)
+    // - Saves to /img/task/ if pageTaskId is present or imageType = "PAGE", otherwise /img/chapter/
+    // - File name: {timestamp}_{sanitizedName} to avoid collisions
     // ============================================================
     private UploadInfo saveMultipartFileIfPresent(HttpServletRequest request, Long pageTaskId, String imageType) {
         String contentType = request.getContentType();
@@ -277,7 +277,7 @@ public class ChapterImageApiController {
         }
     }
 
-    // HELPER: Thu lan luot "file" -> "image" -> "upload", tra ve Part dau tien co size > 0
+    // HELPER: Tries "file" -> "image" -> "upload" in order, returns the first Part with size > 0
     private Part findFilePart(HttpServletRequest request) throws IOException, ServletException {
         Part part = request.getPart("file");
         if (part != null && part.getSize() > 0) {
@@ -294,7 +294,7 @@ public class ChapterImageApiController {
         return null;
     }
 
-    // HELPER: Ghi noi dung Part vao File dich voi buffer 8KB
+    // HELPER: Writes the Part's content to the target File using an 8KB buffer
     private void copy(Part part, File target) throws IOException {
         byte[] buffer = new byte[8192];
         try (InputStream in = part.getInputStream();
@@ -306,8 +306,8 @@ public class ChapterImageApiController {
         }
     }
 
-    // HELPER: Lay ten file goc tu Content-Disposition header cua Part
-    // Fallback ve "chapter-image" neu khong tim thay
+    // HELPER: Gets the original file name from the Part's Content-Disposition header
+    // Falls back to "chapter-image" if not found
     private String extractFileName(Part part) {
         String header = part.getHeader("content-disposition");
         if (header != null) {
@@ -326,8 +326,8 @@ public class ChapterImageApiController {
         return "chapter-image";
     }
 
-    // HELPER: Lam sach ten file — chi giu [A-Za-z0-9._-], thay the con lai bang "_"
-    // Cu the: chuan hoa separator, cat bo phan path, sanitize ky tu
+    // HELPER: Sanitizes the file name — keeps only [A-Za-z0-9._-], replacing everything else with "_"
+    // Specifically: normalizes the separator, strips the path portion, then sanitizes characters
     private String sanitizeFileName(String fileName) {
         String name = fileName == null ? "chapter-image" : fileName;
         name = name.replace('\\', '/');
@@ -342,8 +342,8 @@ public class ChapterImageApiController {
         return name;
     }
 
-    // HELPER: Lay ten file tu URL (bo query string, lay phan sau dau / cuoi cung)
-    // Fallback ve "external-image" neu URL khong xac dinh duoc ten file
+    // HELPER: Gets the file name from a URL (strips the query string, takes the part after the last /)
+    // Falls back to "external-image" if the file name cannot be determined from the URL
     private String originalNameFromUrl(String fileUrl) {
         String value = fileUrl;
         int query = value.indexOf('?');
@@ -385,9 +385,9 @@ public class ChapterImageApiController {
     }
 
     private static class UploadInfo {
-        private final String path;         // Duong dan relative tren server (luu vao DB)
-        private final String originalName; // Ten file goc tu client (dung khi hien thi)
-        private final long size;           // Kich thuoc file (bytes)
+        private final String path;         // Relative path on the server (saved to DB)
+        private final String originalName; // Original file name from the client (used when displaying)
+        private final long size;           // File size (bytes)
 
         private UploadInfo(String path, String originalName, long size) {
             this.path = path;

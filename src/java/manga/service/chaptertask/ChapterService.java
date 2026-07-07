@@ -13,25 +13,25 @@ import java.util.List;
 
 /**
  * ============================================================
- * ChapterService - Nghiệp vụ quản lý Chapter
+ * ChapterService - Chapter management business logic
  * ============================================================
  *
- * MỤC LỤC:
+ * TABLE OF CONTENTS:
  * ----------------------------------------------------------
- * [1] TRUY VẤN CHAPTER
- *     - listAll()              : Liệt kê chapter theo quyền người dùng
- *     - listBySeries()         : Liệt kê chapter theo series
- *     - getDetail()            : Lấy chi tiết một chapter
- * [2] TẠO & CẬP NHẬT CHAPTER (Mangaka)
- *     - create()               : Tạo chapter mới
- *     - update()               : Cập nhật title / submissionDeadline
- * [3] VÒNG ĐỜI CHAPTER
- *     - submitForReview()      : Nộp chapter để Tantou Editor review
- *     - delete()               : Xoá chapter
- * [4] NHẮC NHỞ DEADLINE (Scheduler)
- *     - remindApproachingDeadlines(): Nhắc 7 ngày, 3 ngày, và missed deadline
+ * [1] CHAPTER QUERIES
+ *     - listAll()              : List chapters according to user permissions
+ *     - listBySeries()         : List chapters belonging to a series
+ *     - getDetail()            : Get details of a chapter
+ * [2] CREATE & UPDATE CHAPTER (Mangaka)
+ *     - create()               : Create a new chapter
+ *     - update()               : Update title / submissionDeadline
+ * [3] CHAPTER LIFECYCLE
+ *     - submitForReview()      : Submit chapter for Tantou Editor review
+ *     - delete()               : Delete chapter
+ * [4] DEADLINE REMINDERS (Scheduler)
+ *     - remindApproachingDeadlines(): Remind at 7 days, 3 days, and missed deadline
  * [5] HELPER
- *     - firstPresent()         : Lấy giá trị đầu tiên không null/rỗng
+ *     - firstPresent()         : Get the first non-null/non-empty value
  * ============================================================
  */
 @Service
@@ -44,20 +44,20 @@ public class ChapterService {
     private PageTaskRepository pageTaskRepository;
 
     // ============================================================
-    // [1] TRUY VẤN CHAPTER
+    // [1] CHAPTER QUERIES
     // ============================================================
 
-    /** Liệt kê chapter hiển thị với người dùng (phân quyền xử lý ở repository) */
+    /** List chapters visible to the user (permission handling is done in the repository) */
     public List<ChapterSummary> listAll(AuthenticatedUser user) {
         return chapterRepository.listAll(user);
     }
 
-    /** Liệt kê tất cả chapter thuộc một series */
+    /** List all chapters belonging to a series */
     public List<ChapterSummary> listBySeries(long seriesId) {
         return chapterRepository.listBySeries(seriesId);
     }
 
-    /** Lấy chi tiết chapter; ném exception nếu không tồn tại */
+    /** Get chapter details; throws exception if not found */
     public ChapterSummary getDetail(long chapterId) {
         ChapterSummary chapter = chapterRepository.findById(chapterId);
         if (chapter == null) {
@@ -67,13 +67,13 @@ public class ChapterService {
     }
 
     // ============================================================
-    // [2] TẠO & CẬP NHẬT CHAPTER (Mangaka)
+    // [2] CREATE & UPDATE CHAPTER (Mangaka)
     // ============================================================
 
     /**
-     * Tạo chapter mới trong series.
-     * Yêu cầu: người dùng phải là MANGAKA và là chủ sở hữu series.
-     * totalPages phải ≥ 1.
+     * Create a new chapter within a series.
+     * Requirements: the user must be MANGAKA and the owner of the series.
+     * totalPages must be >= 1.
      */
     public ChapterSummary create(long seriesId, AuthenticatedUser user, String title, String submissionDeadline, int totalPages) {
         SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can create chapter");
@@ -92,10 +92,10 @@ public class ChapterService {
     }
 
     /**
-     * Cập nhật title và/hoặc submissionDeadline của chapter.
-     * Hỗ trợ nhiều tên tham số deadline khác nhau từ các client (submissionDeadline,
-     * publicationDate, deadline, chapterDeadline) — lấy giá trị đầu tiên có mặt.
-     * Nếu không có deadline nào được truyền, chỉ cập nhật title.
+     * Update the title and/or submissionDeadline of a chapter.
+     * Supports several different deadline parameter names from clients (submissionDeadline,
+     * publicationDate, deadline, chapterDeadline) — takes the first one present.
+     * If no deadline is passed, only the title is updated.
      */
     public ChapterSummary update(
             long chapterId,
@@ -113,12 +113,12 @@ public class ChapterService {
         }
 
         ChapterSummary existing = getDetail(chapterId);
-        // Giữ nguyên title cũ nếu không truyền title mới
+        // Keep the existing title if no new title is passed
         String nextTitle = (title == null || title.trim().isEmpty()) ? existing.getTitle() : title;
 
         String deadlineText = firstPresent(submissionDeadline, publicationDate, deadline, chapterDeadline);
         if (deadlineText == null) {
-            // Không có deadline → chỉ cập nhật title
+            // No deadline provided -> only update title
             chapterRepository.updateChapterTitle(chapterId, nextTitle);
             return getDetail(chapterId);
         }
@@ -128,36 +128,36 @@ public class ChapterService {
     }
 
     // ============================================================
-    // [3] VÒNG ĐỜI CHAPTER
+    // [3] CHAPTER LIFECYCLE
     // ============================================================
 
-    /** Mangaka nộp chapter để Tantou Editor review */
+    /** Mangaka submits chapter for Tantou Editor review */
     public void submitForReview(long chapterId, AuthenticatedUser user) {
         SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can submit chapter for review");
         chapterRepository.submitForReview(chapterId, user.getId());
     }
 
-    /** Mangaka xoá chapter (chỉ được xoá chapter của chính mình) */
+    /** Mangaka deletes a chapter (can only delete their own chapters) */
     public void delete(long chapterId, AuthenticatedUser user) {
         SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can delete chapter");
         chapterRepository.deleteChapter(chapterId, user.getId());
     }
 
     // ============================================================
-    // [4] NHẮC NHỞ DEADLINE (Scheduler)
+    // [4] DEADLINE REMINDERS (Scheduler)
     // ============================================================
 
     /**
-     * Gửi thông báo nhắc deadline chapter theo 3 mức, được gọi bởi ChapterDeadlineScheduler (09:00 hàng ngày):
+     * Sends chapter deadline reminder notifications at 3 levels, invoked by ChapterDeadlineScheduler (daily at 09:00):
      *
-     *   - 7 ngày trước deadline → thông báo CHAPTER_DEADLINE_SOON cho Mangaka
-     *   - 3 ngày trước deadline → thông báo CHAPTER_DEADLINE_URGENT cho Mangaka
-     *   - Đã bỏ lỡ deadline    → thông báo CHAPTER_SUBMISSION_MISSED cho Tantou Editor
+     *   - 7 days before deadline -> CHAPTER_DEADLINE_SOON notification to Mangaka
+     *   - 3 days before deadline -> CHAPTER_DEADLINE_URGENT notification to Mangaka
+     *   - Missed deadline        -> CHAPTER_SUBMISSION_MISSED notification to Tantou Editor
      *
-     * Dùng createNotificationIfAbsentToday để tránh gửi trùng trong cùng một ngày.
+     * Uses createNotificationIfAbsentToday to avoid sending duplicates on the same day.
      */
     public void remindApproachingDeadlines() {
-        // Nhắc Mangaka: còn 7 ngày
+        // Remind Mangaka: 7 days left
         for (ChapterSummary ch : chapterRepository.findChaptersWithDeadlineInDays(7)) {
             long mangakaId = chapterRepository.findOwnerMangakaByChapter(ch.getId());
             pageTaskRepository.createNotificationIfAbsentToday(
@@ -171,7 +171,7 @@ public class ChapterService {
             );
         }
 
-        // Nhắc Mangaka: chỉ còn 3 ngày (urgent)
+        // Remind Mangaka: only 3 days left (urgent)
         for (ChapterSummary ch : chapterRepository.findChaptersWithDeadlineInDays(3)) {
             long mangakaId = chapterRepository.findOwnerMangakaByChapter(ch.getId());
             pageTaskRepository.createNotificationIfAbsentToday(
@@ -185,7 +185,7 @@ public class ChapterService {
             );
         }
 
-        // Báo Tantou Editor: chapter đã bỏ lỡ submission deadline
+        // Notify Tantou Editor: chapter has missed its submission deadline
         for (ChapterSummary ch : chapterRepository.findMissedSubmissionDeadlineChapters()) {
             long tantouId = chapterRepository.findSeriesTantou(ch.getSeriesId());
             pageTaskRepository.createNotificationIfAbsentToday(
@@ -203,7 +203,7 @@ public class ChapterService {
     // [5] HELPER
     // ============================================================
 
-    /** Trả về giá trị đầu tiên không null và không rỗng trong danh sách, hoặc null nếu không có */
+    /** Returns the first non-null and non-empty value in the list, or null if none */
     private String firstPresent(String... values) {
         for (String value : values) {
             if (value != null && !value.trim().isEmpty()) {

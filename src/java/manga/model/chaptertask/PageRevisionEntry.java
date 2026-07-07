@@ -3,7 +3,7 @@ package manga.model.chaptertask;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.sql.Timestamp;
 
-/** 1 mốc lịch sử thay đổi ảnh/stage của 1 page (chapter workspace). */
+/** One history entry for an image/stage change of a page (chapter workspace). */
 public class PageRevisionEntry {
     private long id;
     private String imageUrl;
