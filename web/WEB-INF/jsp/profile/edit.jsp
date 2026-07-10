@@ -1,5 +1,6 @@
 <%@page contentType="text/html" pageEncoding="UTF-8"%>
 <%@taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
+<%@taglib uri="http://java.sun.com/jsp/jstl/functions" prefix="fn" %>
 <!DOCTYPE html>
 <html>
 <head>
@@ -17,22 +18,35 @@
 <c:if test="${not empty user.avatarUrl}">
     <c:url value="${user.avatarUrl}" var="currentAvatarUrl" />
 </c:if>
+<c:set var="trimmedFullName" value="${fn:trim(user.fullName)}" />
+<c:choose>
+    <c:when test="${not empty trimmedFullName}">
+        <c:set var="nameParts" value="${fn:split(trimmedFullName, ' ')}" />
+        <c:set var="firstNamePart" value="${nameParts[0]}" />
+        <c:set var="lastNamePart" value="${nameParts[fn:length(nameParts)-1]}" />
+        <c:set var="avatarInitials" value="${fn:toUpperCase(fn:substring(firstNamePart, 0, 1))}${fn:toUpperCase(fn:substring(lastNamePart, 0, 1))}" />
+    </c:when>
+    <c:otherwise>
+        <c:set var="avatarInitials" value="U" />
+    </c:otherwise>
+</c:choose>
 
 <div class="profile-layout">
     <section class="section-card">
         <h1 class="profile-card-title">Profile Information</h1>
         <p class="profile-card-desc">Update your name, email address, and profile picture.</p>
 
-        <form class="profile-form" method="post" action="${pageContext.request.contextPath}/main/profile/update" enctype="multipart/form-data">
+        <form id="profileForm" class="profile-form" method="post" action="${pageContext.request.contextPath}/main/profile/update"
+              enctype="multipart/form-data">
             <div class="avatar-editor">
                 <c:choose>
                     <c:when test="${not empty currentAvatarUrl}">
-                        <img id="avatarPreview" class="profile-avatar-preview" src="${currentAvatarUrl}" alt="Current avatar" />
-                        <div id="avatarEmpty" class="profile-avatar-empty is-hidden">No avatar</div>
+                        <img id="avatarPreview" class="profile-avatar-preview" src="${currentAvatarUrl}" alt="Profile avatar" />
+                        <div id="avatarEmpty" class="profile-avatar-empty is-hidden"><c:out value="${avatarInitials}" /></div>
                     </c:when>
                     <c:otherwise>
-                        <img id="avatarPreview" class="profile-avatar-preview is-hidden" src="" alt="Current avatar" />
-                        <div id="avatarEmpty" class="profile-avatar-empty">No avatar</div>
+                        <img id="avatarPreview" class="profile-avatar-preview is-hidden" src="" alt="Profile avatar" />
+                        <div id="avatarEmpty" class="profile-avatar-empty"><c:out value="${avatarInitials}" /></div>
                     </c:otherwise>
                 </c:choose>
                 <div class="profile-field avatar-input-field">
@@ -54,42 +68,16 @@
                 <label for="email">Email</label>
                 <input id="email" type="email" name="email" value="<c:out value='${user.email}' />" maxlength="255" required />
             </div>
-            <div class="profile-actions">
-                <button class="btn primary" type="submit">Save Profile</button>
-            </div>
         </form>
+
+        <div class="profile-actions">
+            <a href="${pageContext.request.contextPath}/main/profile/change-password"
+               class="btn btn-secondary">
+                Change Password
+            </a>
+            <button class="btn btn-primary" type="submit" form="profileForm">Save Profile</button>
+        </div>
     </section>
-
-    <section class="section-card">
-        <h2 class="profile-card-title">Change Password</h2>
-        <p class="profile-card-desc">Use at least 5 characters for your new password.</p>
-
-        <form class="profile-form" method="post" action="${pageContext.request.contextPath}/main/profile/change-password">
-            <div class="profile-field">
-                <label for="currentPassword">Current Password</label>
-                <input id="currentPassword" type="password" name="currentPassword" required autocomplete="current-password" />
-            </div>
-            <div class="profile-field">
-                <label for="newPassword">New Password</label>
-                <input id="newPassword" type="password" name="newPassword" minlength="5" required autocomplete="new-password" />
-            </div>
-            <div class="profile-field">
-                <label for="confirmNewPassword">Confirm New Password</label>
-                <input id="confirmNewPassword" type="password" name="confirmNewPassword" minlength="5" required autocomplete="new-password" />
-            </div>
-            <div style="text-align:right;">
-                <button class="btn primary" type="submit">Change Password</button>
-            </div>
-        </form>
-    </section>
-
-    <div style="grid-column:1 / -1; text-align:right; margin-top:1rem; padding-right:0;">
-        <a href="${pageContext.request.contextPath}/main/logout"
-           data-confirm="Are you sure you want to logout?"
-           style="display:inline-block;padding:0.5rem 1.25rem;border-radius:6px;text-decoration:none;background-color:#e53935;color:#fff;border:none;cursor:pointer;font-size:0.9rem;">
-            Logout
-        </a>
-    </div>
 </div>
 
 <script src="${pageContext.request.contextPath}/assets/js/profile.js"></script>
