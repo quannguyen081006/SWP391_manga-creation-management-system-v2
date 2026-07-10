@@ -13,6 +13,7 @@
     <jsp:include page="/WEB-INF/jsp/common/header.jsp"/>
     
     <div class="history-container">
+        <%-- Server-rendered manuscript version timeline; no JavaScript is required. --%>
         <c:if test="${empty versions}">
             <div class="empty-state">
                 <h3>No manuscript versions found</h3>
@@ -76,6 +77,7 @@
                             </div>
                         </c:if>
 
+                        <%-- Revision notes explain why this version follows the previous one. --%>
                         <c:if test="${version.revisionNotes != null && not empty version.revisionNotes}">
                             <div class="feedback-section revision-notes">
                                 <div class="feedback-label">Revision Notes:</div>
@@ -90,6 +92,7 @@
                             <a href="${pageContext.request.contextPath}/main/manuscript-workspace/${version.id}/dashboard" class="btn btn-secondary">
                                 Dashboard
                             </a>
+                            <%-- previousVersionId links this version to its parent for comparison. --%>
                             <c:if test="${version.previousVersionId != null}">
                                 <a href="${pageContext.request.contextPath}/main/manuscript-workspace/compare?versionId1=${version.previousVersionId}&versionId2=${version.id}" class="btn btn-secondary">
                                     Compare With Previous

@@ -225,8 +225,7 @@ public class ManuscriptVersionApiController {
     }
 
     /**
-     * Get review decision history for manuscript version. GET
-     * /api/v1/manuscript-versions/{id}/decisions
+     * Returns ReviewDecision audit rows for one manuscript version.
      */
     @GetMapping("/{id}/decisions")
     public ApiResponse<List<manga.model.ReviewDecision>> getReviewDecisions(

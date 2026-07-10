@@ -4,10 +4,10 @@ import java.time.LocalDateTime;
 import manga.enums.ReviewDecisionType;
 
 /**
- * ReviewDecision entity - Audit trail for manuscript review decisions.
- * 
- * Tracks who approved or rejected a manuscript version, when, and why.
- * Preserves decision history forever for audit purposes.
+ * Purpose-built audit row for manuscript review decisions.
+ * ReviewDecision is separate from the general AuditLog table because manuscript
+ * review screens need reviewer, decision type, comment, and decision time in a
+ * domain-specific shape.
  */
 public class ReviewDecision {
     private Long id;

@@ -237,6 +237,7 @@
     </c:if>
     <div class="panel">
         <h2>Revision History</h2>
+        <%-- ProposalHistory is both the state-transition timeline and board vote record. --%>
         <table class="data-table">
             <thead>
                 <tr>

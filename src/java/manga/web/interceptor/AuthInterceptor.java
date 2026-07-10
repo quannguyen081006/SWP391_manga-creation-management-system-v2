@@ -9,24 +9,23 @@ import org.springframework.web.servlet.ModelAndView;
 
 public class AuthInterceptor implements HandlerInterceptor {
 
-        @Override
+    /**
+     * Centralizes login and RBAC checks before controllers run.
+     * Keeping this check in one interceptor avoids repeating the same session and
+     * role checks in every Spring MVC controller method.
+     */
+    @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         String uri = request.getRequestURI();
         String context = request.getContextPath();
 
-        // login -> pass
+        // Public routes must stay available without an AUTH_USER session.
         if (uri.endsWith("/login") || uri.endsWith("/logout")
                 || uri.contains("/assets/") || uri.endsWith("/redirect.jsp")) {
             return true;
         }
 
-        //check session
-        HttpSession session = request.getSession(false);
-        AuthenticatedUser user = null;
-        if (session != null && session.getAttribute("AUTH_USER") instanceof AuthenticatedUser) {
-            user = (AuthenticatedUser) session.getAttribute("AUTH_USER");
-        }
-
+        AuthenticatedUser user = getSessionUser(request);
         if (user == null) {
             // API callers get JSON status codes; browser pages redirect to login.
             if (uri.contains("/api/v1/")) {
@@ -37,12 +36,12 @@ public class AuthInterceptor implements HandlerInterceptor {
             return false;
         }
 
-        //dã login, check RBAC
+        // Controllers and JSPs can reuse the already-checked session user.
         request.setAttribute("AUTH_USER_CHECKED", user);
         preventCachedAuthenticatedPage(response, uri);
 
         if (!isAllowed(user, uri, context)) {
-            // BR-SYS RBAC: deny API with 403 but keep web users inside the app shell.
+            // RBAC denies API callers with 403 but keeps web users inside the app.
             if (uri.contains("/api/v1/")) {
                 writeJsonError(response, HttpServletResponse.SC_FORBIDDEN, "Forbidden");
             } else {
@@ -54,6 +53,21 @@ public class AuthInterceptor implements HandlerInterceptor {
         return true;
     }
 
+    /**
+     * Reads AUTH_USER from HttpSession when it is present and has the expected type.
+     */
+    private AuthenticatedUser getSessionUser(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        Object auth = session == null ? null : session.getAttribute("AUTH_USER");
+        if (auth instanceof AuthenticatedUser) {
+            return (AuthenticatedUser) auth;
+        }
+        return null;
+    }
+
+    /**
+     * Prevents browser cache from showing protected pages after logout.
+     */
     private void preventCachedAuthenticatedPage(HttpServletResponse response, String uri) {
         if (uri.contains("/assets/")) {
             return;
@@ -63,6 +77,9 @@ public class AuthInterceptor implements HandlerInterceptor {
         response.setDateHeader("Expires", 0);
     }
 
+    /**
+     * Sends the small JSON error shape expected by API clients.
+     */
     private void writeJsonError(HttpServletResponse response, int status, String message) throws Exception {
         response.setStatus(status);
         response.setCharacterEncoding("UTF-8");
@@ -71,6 +88,11 @@ public class AuthInterceptor implements HandlerInterceptor {
         response.getWriter().flush();
     }
 
+    /**
+     * Applies route-level RBAC rules after the user is known to be logged in.
+     * Rules are kept as clear if statements so a beginner can trace each URL
+     * prefix to its allowed roles without learning an extra mapping structure.
+     */
     private boolean isAllowed(AuthenticatedUser user, String uri, String context) {
         String path = uri.substring(context.length());
         if (path.startsWith("/api/v1/users")) {
@@ -112,11 +134,17 @@ public class AuthInterceptor implements HandlerInterceptor {
         return true;
     }
 
-        @Override
+    /**
+     * No-op hook required by HandlerInterceptor; work is done in preHandle.
+     */
+    @Override
     public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView modelAndView) {
     }
 
-        @Override
+    /**
+     * No-op hook required by HandlerInterceptor after request completion.
+     */
+    @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
     }
 }

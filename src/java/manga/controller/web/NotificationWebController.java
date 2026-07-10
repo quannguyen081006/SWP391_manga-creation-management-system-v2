@@ -11,6 +11,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.servlet.view.RedirectView;
 
+/**
+ * Server-rendered notification list and safe click-through redirects.
+ * Delete and read/unread toggle have no web form routes here; those stay on the API/JS path.
+ */
 @Controller
 @RequestMapping("/main/notifications")
 public class NotificationWebController {
@@ -18,7 +22,11 @@ public class NotificationWebController {
     @Autowired
     private NotificationRepository notificationRepository;
 
-        @RequestMapping(method = RequestMethod.GET)
+    /**
+     * Shows the full notification list. The page is server-rendered, while row
+     * delete and read/unread toggles still use the existing API/JS behavior.
+     */
+    @RequestMapping(method = RequestMethod.GET)
     public String list(HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
         model.addAttribute("notifications", notificationRepository.listByUser(user.getId(), 100));
@@ -26,14 +34,20 @@ public class NotificationWebController {
         return "notification/list";
     }
 
-        @RequestMapping(value = "/{id}/read", method = RequestMethod.POST)
+    /**
+     * Web fallback for marking one notification read from a form submit.
+     */
+    @RequestMapping(value = "/{id}/read", method = RequestMethod.POST)
     public String markRead(@PathVariable("id") long id, HttpSession session) {
         AuthenticatedUser user = requireUser(session);
         notificationRepository.markRead(user.getId(), id);
         return "redirect:/main/notifications";
     }
 
-        @RequestMapping(value = "/{id}/click", method = RequestMethod.GET)
+    /**
+     * Marks a notification read and redirects only to approved internal targets.
+     */
+    @RequestMapping(value = "/{id}/click", method = RequestMethod.GET)
     public RedirectView click(@PathVariable("id") long id, HttpSession session) {
         AuthenticatedUser user = requireUser(session);
         notificationRepository.markRead(user.getId(), id);
@@ -60,6 +74,11 @@ public class NotificationWebController {
         return (AuthenticatedUser) auth;
     }
 
+    /**
+     * Open-redirect guard for /{id}/click: only allowlisted internal /main/** paths.
+     * viewUrl is stored at creation time, but we re-validate here in case of stale or
+     * tampered rows; unknown paths fall back to the notification list.
+     */
     private boolean isSupportedViewUrl(String viewUrl) {
         if (viewUrl == null) {
             return false;
@@ -72,7 +91,7 @@ public class NotificationWebController {
         if (queryIndex >= 0) {
             path = path.substring(0, queryIndex);
         }
-        // Allow only known web routes so stored notification URLs cannot redirect externally.
+        // Regex allowlist of known app routes — external URLs never pass.
         return path.matches("/main/notifications")
                 || path.matches("/main/proposals/\\d+")
                 || path.matches("/main/proposals/\\d+/vote")

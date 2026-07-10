@@ -634,7 +634,10 @@ public class ModuleWebController {
         }
     }
 
-        @RequestMapping(value = "/users", method = RequestMethod.GET)
+    /**
+     * Shows the admin user-management table with current roles and status actions.
+     */
+    @RequestMapping(value = "/users", method = RequestMethod.GET)
     public String users(
             HttpSession session,
             @RequestParam(value = "created", required = false) Long created,
@@ -656,7 +659,12 @@ public class ModuleWebController {
         return users(session, null, null, model);
     }
 
-        @RequestMapping(value = "/users/new", method = RequestMethod.GET)
+    /**
+     * Opens the create-user form. The form uses one roleOption radio group so the
+     * UI mirrors the allowed role combinations instead of letting admins build an
+     * invalid checkbox combination.
+     */
+    @RequestMapping(value = "/users/new", method = RequestMethod.GET)
     public String userNew(HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
         requireAdmin(user);
@@ -667,7 +675,11 @@ public class ModuleWebController {
         return "user/form";
     }
 
-        @RequestMapping(value = "/users/{id}/edit", method = RequestMethod.GET)
+    /**
+     * Opens edit mode for profile fields only. Username is immutable identity, and
+     * roles are managed from the list page so role changes stay visible/auditable.
+     */
+    @RequestMapping(value = "/users/{id}/edit", method = RequestMethod.GET)
     public String userEdit(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
         requireAdmin(user);
@@ -682,7 +694,12 @@ public class ModuleWebController {
         return "user/form";
     }
 
-        @RequestMapping(value = "/users/create", method = RequestMethod.POST)
+    /**
+     * Creates a user after early controller validation, then assigns the selected
+     * role option. Repository checks remain the authority for uniqueness and ADMIN
+     * singleton rules because they run next to the database write.
+     */
+    @RequestMapping(value = "/users/create", method = RequestMethod.POST)
     public String userCreate(
             HttpSession session,
             @RequestParam("username") String username,
@@ -719,7 +736,12 @@ public class ModuleWebController {
         }
     }
 
-        @RequestMapping(value = "/users/{id}/update", method = RequestMethod.POST)
+    /**
+     * Updates only full name and email. Username and roles are intentionally not
+     * accepted here because username identifies the account and roles have their
+     * own list-page workflow.
+     */
+    @RequestMapping(value = "/users/{id}/update", method = RequestMethod.POST)
     public String userUpdate(
             @PathVariable("id") long id,
             HttpSession session,
@@ -741,7 +763,11 @@ public class ModuleWebController {
         }
     }
 
-        @RequestMapping(value = "/users/{id}/status", method = RequestMethod.POST)
+    /**
+     * Changes ACTIVE/INACTIVE status; the repository blocks deactivating the only
+     * active ADMIN so the system is never left without an administrator.
+     */
+    @RequestMapping(value = "/users/{id}/status", method = RequestMethod.POST)
     public String userStatus(
             @PathVariable("id") long id,
             HttpSession session,
@@ -761,7 +787,12 @@ public class ModuleWebController {
         }
     }
 
-        @RequestMapping(value = "/users/{id}/roles", method = RequestMethod.POST)
+    /**
+     * Adds one or more roles from the list page. Controller validation gives a
+     * quick error, while UserAdminRepository and RoleCombinationValidator enforce
+     * the same rules before saving.
+     */
+    @RequestMapping(value = "/users/{id}/roles", method = RequestMethod.POST)
     public String userRole(
             @PathVariable("id") long id,
             HttpSession session,
@@ -791,7 +822,11 @@ public class ModuleWebController {
         }
     }
 
-        @RequestMapping(value = "/users/{id}/roles/remove", method = RequestMethod.POST)
+    /**
+     * Removes one role from a user. Removing the final ADMIN role is blocked in
+     * the repository, which is the authoritative database-side guard.
+     */
+    @RequestMapping(value = "/users/{id}/roles/remove", method = RequestMethod.POST)
     public String userRoleRemove(
             @PathVariable("id") long id,
             HttpSession session,
@@ -814,6 +849,9 @@ public class ModuleWebController {
         }
     }
 
+    /**
+     * Reads AUTH_USER from session for controller methods that require login.
+     */
     private AuthenticatedUser requireUser(HttpSession session) {
         Object auth = session.getAttribute("AUTH_USER");
         if (auth == null || !(auth instanceof AuthenticatedUser)) {
@@ -822,16 +860,28 @@ public class ModuleWebController {
         return (AuthenticatedUser) auth;
     }
 
+    /**
+     * Gives user-management pages an explicit ADMIN guard in addition to the
+     * route-level RBAC interceptor.
+     */
     private void requireAdmin(AuthenticatedUser user) {
         if (user == null || !user.hasRole("ADMIN")) {
             throw new IllegalArgumentException("Only ADMIN can perform this action");
         }
     }
 
+    /**
+     * Lists roles that can be assigned from the user UI. ADMIN is intentionally
+     * omitted because this system has a single administrator account.
+     */
     private List<String> availableRoles() {
         return Arrays.asList("MANGAKA", "ASSISTANT", "TANTOU_EDITOR", "EDITORIAL_BOARD");
     }
 
+    /**
+     * Normalizes role input from either the legacy single-role field or the
+     * checkbox list used on the user table.
+     */
     private List<String> selectedRoles(String role, String[] roles) {
         List<String> selected = new ArrayList<String>();
         if (!isBlank(role)) {
@@ -845,6 +895,9 @@ public class ModuleWebController {
         return selected;
     }
 
+    /**
+     * Converts the create-form roleOption radio value into one or two role names.
+     */
     private List<String> parseRoleOption(String roleOption) {
         List<String> selected = new ArrayList<String>();
         if (isBlank(roleOption)) {
@@ -857,6 +910,9 @@ public class ModuleWebController {
         return selected;
     }
 
+    /**
+     * Adds a normalized role once, keeping duplicate request values harmless.
+     */
     private void addSelectedRole(List<String> selected, String role) {
         if (isBlank(role)) {
             return;
@@ -867,6 +923,11 @@ public class ModuleWebController {
         }
     }
 
+    /**
+     * Performs quick create-form validation before calling the repository.
+     * The repository is still the authoritative layer for uniqueness and ADMIN
+     * singleton checks because those rules must be protected at save time.
+     */
     private void validateCreateUser(String username, String password, String fullName, String email, List<String> roles) {
         if (isBlank(username) || isBlank(password) || isBlank(fullName) || isBlank(email)) {
             throw new IllegalArgumentException("All user fields are required");
@@ -890,6 +951,11 @@ public class ModuleWebController {
         return value == null || value.trim().isEmpty();
     }
 
+    /**
+     * Checks the requested role set before saving. This is an early-exit helper;
+     * UserAdminRepository.addRole and RoleCombinationValidator still enforce the
+     * final role-combination rules.
+     */
     private void validateAssignableRoles(long userId, List<String> roles) {
         if (roles.contains("ADMIN")
                 && !userAdminRepository.hasRole(userId, "ADMIN")

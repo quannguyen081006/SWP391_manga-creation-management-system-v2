@@ -245,17 +245,36 @@
                     </div>
                 </details>
 
-                <a class="profile-avatar-link" href="${ctx}/main/profile" title="Open profile">
-                    <c:choose>
-                        <c:when test="${not empty sessionScope.AUTH_USER.avatarUrl}">
-                            <img class="avatar header-avatar-image" src="${ctx}${sessionScope.AUTH_USER.avatarUrl}" alt="Profile avatar" />
-                        </c:when>
-                        <c:otherwise>
-                            <span class="avatar role-${roleKey}">${avatarText}</span>
-                        </c:otherwise>
-                    </c:choose>
-                    <span class="user-name profile-name-link"><c:out value="${displayName}" default="Yuki Tanaka"/></span>
-                </a>
+                <div class="user-menu-wrapper">
+                    <div class="user-menu" id="userMenuTrigger" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false">
+                        <c:choose>
+                            <c:when test="${not empty sessionScope.AUTH_USER.avatarUrl}">
+                                <img class="avatar header-avatar-image" src="${ctx}${sessionScope.AUTH_USER.avatarUrl}" alt="Profile avatar" />
+                            </c:when>
+                            <c:otherwise>
+                                <span class="avatar role-${roleKey}">${avatarText}</span>
+                            </c:otherwise>
+                        </c:choose>
+                        <span class="user-name profile-name-link"><c:out value="${displayName}" default="Yuki Tanaka"/></span>
+                    </div>
+                    <div class="user-dropdown" id="userDropdown">
+                        <a href="${ctx}/main/profile" class="user-dropdown-item">
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M20 21a8 8 0 0 0-16 0"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                            <span>Profile</span>
+                        </a>
+                        <a href="${ctx}/main/logout" class="user-dropdown-item user-dropdown-logout">
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M10 17l5-5-5-5"></path>
+                                <path d="M15 12H3"></path>
+                                <path d="M21 3v18"></path>
+                            </svg>
+                            <span>Logout</span>
+                        </a>
+                    </div>
+                </div>
             </div>
         </header>
         <main class="page-wrap">

@@ -125,6 +125,7 @@ public class ProposalRepository {
                         throw new IllegalStateException("Cannot get generated proposal id");
                     }
                     long id = rs.getLong(1);
+                    // Append the first ProposalHistory row for the proposal timeline.
                     insertHistory(conn, id, actor, "CREATED", "Draft proposal created.", 0);
                     conn.commit();
                     return id;
@@ -167,6 +168,7 @@ public class ProposalRepository {
                     throw new IllegalArgumentException("Only editable proposal owner can update proposal");
                 }
                 Proposal p = findById(conn, proposalId);
+                // Draft edits are appended to history instead of overwriting old rows.
                 insertHistory(conn, proposalId, actor, "UPDATED", "Proposal content updated.", p.getSubmitAttemptCount());
                 conn.commit();
             } catch (Exception ex) {
@@ -205,6 +207,7 @@ public class ProposalRepository {
                     ps.setLong(3, proposalId);
                     ps.executeUpdate();
                 }
+                // Submission and auto-assignment are separate timeline rows for clarity.
                 insertHistory(conn, proposalId, actor, action, "Submitted to Tantou Editor review.", nextAttempt);
                 insertSystemHistory(conn, proposalId, "ASSIGNED_EDITOR", "Auto-assigned Tantou Editor #" + editorId + ".", nextAttempt);
                 notifyProposalSubmittedToTantou(conn, p, editorId, nextAttempt);
@@ -233,16 +236,19 @@ public class ProposalRepository {
                 }
                 if ("APPROVE".equals(decision)) {
                     updateProposalStatus(conn, proposalId, "BOARD_REVIEW", false);
+                    // Tantou decisions are recorded as immutable proposal timeline entries.
                     insertHistory(conn, proposalId, actor, "APPROVED", note, p.getSubmitAttemptCount());
                     openBoardVotingRound(conn, proposalId, p.getSubmitAttemptCount());
                     notifyBoardReviewOpened(conn, p);
                     notifyProposalMovedToBoardReview(conn, p);
                 } else if ("REJECT".equals(decision)) {
                     updateProposalStatus(conn, proposalId, "REJECTED", true);
+                    // Tantou decisions are recorded as immutable proposal timeline entries.
                     insertHistory(conn, proposalId, actor, "REJECTED", note, p.getSubmitAttemptCount());
                     notifyProposalRejectedByTantou(conn, p, note);
                 } else if ("REVISE".equals(decision)) {
                     updateProposalStatus(conn, proposalId, "REVISION_REQUESTED", false);
+                    // Tantou decisions are recorded as immutable proposal timeline entries.
                     insertHistory(conn, proposalId, actor, "REVISE_REQUESTED", note, p.getSubmitAttemptCount());
                     notifyProposalRevisionRequestedByTantou(conn, p, note);
                 } else {
@@ -290,6 +296,7 @@ public class ProposalRepository {
                 + "WHERE h.proposalId = ? AND h.boardRoundId = ? AND h.actorId = ? "
                 + "AND h.actorRole = 'EDITORIAL_BOARD' AND h.submitAttemptNumber = ? "
                 + "AND h.actionType IN (" + BOARD_VOTE_ACTIONS + ") ORDER BY h.id DESC";
+            // Board votes reuse ProposalHistory so vote undo and the UI read one timeline.
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setLong(1, proposalId);
                 ps.setLong(2, roundId.longValue());
@@ -334,6 +341,7 @@ public class ProposalRepository {
                 if (elapsedMs > 60_000L) {
                     throw new ForbiddenException("Undo window has expired. Vote is final.");
                 }
+                // Narrow exception: a board vote can be removed only inside the short undo window.
                 String deleteSql = "DELETE FROM ProposalHistory WHERE id = ? AND proposalId = ? AND actorId = ?";
                 try (PreparedStatement ps = conn.prepareStatement(deleteSql)) {
                     ps.setLong(1, vote.getId());
@@ -419,6 +427,7 @@ public class ProposalRepository {
                 String action = "APPROVE".equals(decision)
                         ? "APPROVED"
                         : ("REJECT".equals(decision) ? "REJECTED" : "REVISE_REQUESTED");
+                // Board votes are ProposalHistory rows linked to the current board round.
                 insertHistory(conn, proposalId, actor, action, note, p.getSubmitAttemptCount(), roundId);
                 if (allEligibleBoardMembersVoted(conn, roundId.longValue())) {
                     closeBoardRoundAndResolveOrReopen(conn, p, roundId.longValue(), "ALL_VOTED");
@@ -584,6 +593,7 @@ public class ProposalRepository {
             + "h.note, h.createdAt, h.submitAttemptNumber "
             + "FROM ProposalHistory h LEFT JOIN [User] u ON u.id = h.actorId "
             + "WHERE h.proposalId = ? ORDER BY h.createdAt DESC, h.id DESC";
+        // The detail page reads ProposalHistory as an append-only timeline.
         List<ProposalHistory> rows = new ArrayList<ProposalHistory>();
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -1152,6 +1162,7 @@ public class ProposalRepository {
     }
 
     private void insertSystemHistory(Connection conn, long proposalId, String actionType, String note, int attempt) throws SQLException {
+        // System rows explain automatic workflow changes alongside user actions.
         insertHistory(conn, proposalId, null, "SYSTEM", actionType, note, attempt);
     }
 

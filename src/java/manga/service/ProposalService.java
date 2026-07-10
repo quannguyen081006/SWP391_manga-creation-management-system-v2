@@ -111,6 +111,7 @@ public class ProposalService {
         if (isBlank(p.getSampleFilePath()) || p.getApproximateChapter() == null) {
             throw new IllegalArgumentException("Proposal file and approximate chapter are required before submit");
         }
+        // Repository appends ProposalHistory for the submission and auto-assignment.
         proposalRepository.submitForTantouReview(user, proposalId);
     }
 
@@ -123,6 +124,7 @@ public class ProposalService {
         if (("REJECT".equals(normalized) || "REVISE".equals(normalized)) && isBlank(note)) {
             throw new IllegalArgumentException("A note is required for REJECT and REVISE decisions");
         }
+        // Repository appends the Tantou decision to ProposalHistory.
         proposalRepository.reviewByTantou(user, proposalId, normalized, safeTrim(note));
     }
 
@@ -140,11 +142,13 @@ public class ProposalService {
         if (("REVISE".equals(normalized) || "REJECT".equals(normalized)) && isBlank(note)) {
             throw new IllegalArgumentException("A note is required when requesting revisions or rejecting");
         }
+        // Repository records the board vote as a ProposalHistory row.
         proposalRepository.voteByEditorialBoard(user, proposalId, normalized, safeTrim(note));
     }
 
     public void undoBoardVote(AuthenticatedUser user, long proposalId) {
         requireRole(user, "EDITORIAL_BOARD", "Only EDITORIAL_BOARD can undo board votes");
+        // Undo is the narrow exception to append-only history for board votes.
         proposalRepository.undoBoardVote(user, proposalId);
     }
 
@@ -182,6 +186,7 @@ public class ProposalService {
         if (proposal == null || proposal.getBoardRoundId() == null || !"BOARD_REVIEW".equalsIgnoreCase(proposal.getStatus())) {
             return null;
         }
+        // Reads the latest ProposalHistory vote row to calculate the undo window.
         ProposalHistory vote = proposalRepository.findLatestBoardVote(proposalId, user.getId());
         if (vote == null || vote.getCreatedAt() == null) {
             return null;
@@ -226,6 +231,7 @@ public class ProposalService {
         if (!user.hasRole("ADMIN") && !user.hasRole("MANGAKA") && !user.hasRole("TANTOU_EDITOR") && !user.hasRole("EDITORIAL_BOARD")) {
             throw new IllegalArgumentException("You do not have permission to view proposal history");
         }
+        // History is displayed from append-only ProposalHistory rows.
         return proposalRepository.listHistory(proposalId);
     }
 

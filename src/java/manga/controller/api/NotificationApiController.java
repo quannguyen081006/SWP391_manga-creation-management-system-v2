@@ -12,6 +12,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * JSON API for notification list and in-place row actions (read, unread, delete).
+ * Returns hand-built JSON strings instead of {@code ApiResponse<T>} so existing
+ * header.js / list-page fetch() callers keep their legacy {@code success/message/data} shape
+ * and field aliases ({@code body}, {@code recipientId}, etc.) without a frontend rewrite.
+ */
 @RestController
 @RequestMapping("/api/v1/notifications")
 public class NotificationApiController {
@@ -19,34 +25,50 @@ public class NotificationApiController {
     @Autowired
     private NotificationRepository notificationRepository;
 
-        @RequestMapping(method = RequestMethod.GET, produces = "application/json;charset=UTF-8")
+    /**
+     * Returns manual JSON for legacy notification JavaScript compatibility.
+     * This controller does not use ApiResponse so the existing payload shape stays unchanged.
+     */
+    @RequestMapping(method = RequestMethod.GET, produces = "application/json;charset=UTF-8")
     public String list(HttpSession session) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
         return ok(notificationRepository.listByUser(user.getId()), "Notifications");
     }
 
-        @RequestMapping(value = "/{id}/read", method = RequestMethod.PATCH, produces = "application/json;charset=UTF-8")
+    /**
+     * API path used by JavaScript to mark one notification read without reload.
+     */
+    @RequestMapping(value = "/{id}/read", method = RequestMethod.PATCH, produces = "application/json;charset=UTF-8")
     public String markRead(@PathVariable("id") long id, HttpSession session) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
         notificationRepository.markRead(user.getId(), id);
         return okEmpty("Notification marked as read");
     }
 
-        @RequestMapping(value = "/{id}/unread", method = RequestMethod.PATCH, produces = "application/json;charset=UTF-8")
+    /**
+     * API path used by JavaScript to restore unread state without reload.
+     */
+    @RequestMapping(value = "/{id}/unread", method = RequestMethod.PATCH, produces = "application/json;charset=UTF-8")
     public String markUnread(@PathVariable("id") long id, HttpSession session) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
         notificationRepository.markUnread(user.getId(), id);
         return okEmpty("Notification marked as unread");
     }
 
-        @RequestMapping(value = "/{id}", method = RequestMethod.DELETE, produces = "application/json;charset=UTF-8")
+    /**
+     * API-only delete path; there is no equivalent web form route today.
+     */
+    @RequestMapping(value = "/{id}", method = RequestMethod.DELETE, produces = "application/json;charset=UTF-8")
     public String delete(@PathVariable("id") long id, HttpSession session) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
         notificationRepository.delete(user.getId(), id);
         return okEmpty("Notification deleted");
     }
 
-        @RequestMapping(value = "/mark-all-read", method = RequestMethod.POST, produces = "application/json;charset=UTF-8")
+    /**
+     * API path for marking all notifications read while keeping legacy JSON shape.
+     */
+    @RequestMapping(value = "/mark-all-read", method = RequestMethod.POST, produces = "application/json;charset=UTF-8")
     public String markAllRead(HttpSession session) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
         notificationRepository.markAllRead(user.getId());

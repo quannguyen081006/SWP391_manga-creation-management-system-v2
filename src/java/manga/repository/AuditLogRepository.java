@@ -13,6 +13,13 @@ public class AuditLogRepository {
     @Autowired
     private DataSource dataSource;
 
+    /**
+     * Appends one general-purpose audit event.
+     * AuditLog is shared infrastructure for modules such as decisions; unlike
+     * ProposalHistory or ReviewDecision, it is not tied to one domain screen.
+     * No JSP currently displays raw AuditLog rows; DB queries are the accepted
+     * verification path for now.
+     */
     public void insertLog(Long actorId, String action, String entityType, Long entityId, String detail) {
         String sql = "INSERT INTO AuditLog (actorId, action, entityType, entityId, detail, performedAt) VALUES (?, ?, ?, ?, ?, GETDATE())";
         try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {

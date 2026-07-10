@@ -199,7 +199,7 @@ public class DecisionRepository {
                     ps.executeUpdate();
                 }
 
-                // BR-DEC-06: Audit log for vote submitted
+                // AuditLog is append-only evidence that a board member submitted a vote.
                 auditLogRepository.insertLog(voterId, "DECISION_VOTE_SUBMITTED", "DECISION", sessionId,
                         "Voter " + voterId + " submitted decision: " + normalized);
 
@@ -273,7 +273,7 @@ public class DecisionRepository {
             ps.setLong(2, sessionId);
             ps.executeUpdate();
         }
-        // BR-DEC-06: Audit log for session resolved
+        // AuditLog records the automatic resolution once quorum is reached.
         auditLogRepository.insertLog(triggeringVoterId, "DECISION_SESSION_RESOLVED", "DECISION", sessionId,
                 "Decision session " + sessionId + " resolved with result: " + result);
 
@@ -285,7 +285,7 @@ public class DecisionRepository {
                 ps.executeUpdate();
             }
 
-            // BR-DEC-06: Audit log for series cancelled
+            // AuditLog records the resulting series cancellation as a separate event.
             auditLogRepository.insertLog(triggeringVoterId, "SERIES_CANCELLED", "SERIES", seriesId,
                     "Series " + seriesId + " cancelled due to decision session " + sessionId);
         }
@@ -374,7 +374,7 @@ public class DecisionRepository {
                     if (rs.next()) {
                         long sessionId = rs.getLong(1);
                         notifyEligibleBoardMembers(conn, sessionId, seriesId);
-                        // BR-DEC-06: Audit log for session opened
+                        // AuditLog records the creation of a decision session for later DB review.
                         auditLogRepository.insertLog(actorId, "DECISION_SESSION_OPENED", "DECISION", sessionId,
                                 "Decision session " + sessionId + " opened for series " + seriesId);
                         conn.commit();

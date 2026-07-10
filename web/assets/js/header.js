@@ -113,6 +113,46 @@
         }
     }
 
+    function bindUserMenu() {
+        var trigger = document.getElementById('userMenuTrigger');
+        var dropdown = document.getElementById('userDropdown');
+        if (!trigger || !dropdown) {
+            return;
+        }
+
+        function setOpen(isOpen) {
+            dropdown.classList.toggle('open', isOpen);
+            trigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        }
+
+        function toggleMenu() {
+            setOpen(!dropdown.classList.contains('open'));
+        }
+
+        trigger.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleMenu();
+        });
+
+        trigger.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                toggleMenu();
+                return;
+            }
+            if (event.key === 'Escape') {
+                setOpen(false);
+            }
+        });
+
+        document.addEventListener('click', function (event) {
+            if (!trigger.contains(event.target) && !dropdown.contains(event.target)) {
+                setOpen(false);
+            }
+        });
+    }
+
     function timeAgo(dateString) {
         if (!dateString) {
             return '';
@@ -140,6 +180,7 @@
 
     function initialize() {
         bindSidebar();
+        bindUserMenu();
         bindNotificationActions();
         renderNotificationTimes();
     }

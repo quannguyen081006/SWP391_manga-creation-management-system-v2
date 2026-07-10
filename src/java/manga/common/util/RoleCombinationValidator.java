@@ -14,7 +14,12 @@ public final class RoleCombinationValidator {
     private RoleCombinationValidator() {
     }
 
-        public static void validate(List<String> roles) {
+    /**
+     * Validates role assignment business rules before roles are saved.
+     * ADMIN, MANGAKA, and ASSISTANT must stay single-role accounts; the only
+     * allowed dual-role account is TANTOU_EDITOR plus EDITORIAL_BOARD.
+     */
+    public static void validate(List<String> roles) {
         if (roles == null || roles.isEmpty()) {
             throw new IllegalArgumentException("Select at least one role");
         }
@@ -34,16 +39,16 @@ public final class RoleCombinationValidator {
         if (distinct.size() <= 1) {
             return;
         }
-        // BR-SYS: Mangaka and Assistant are single-role account types.
+        // Mangaka and Assistant are single-role account types.
         if (distinct.contains("MANGAKA") || distinct.contains("ASSISTANT")) {
             throw new IllegalArgumentException(
                     "Mangaka and Assistant accounts must have a single role only");
         }
-        // BR-SYS-01: ADMIN is isolated and cannot be mixed with operational roles.
+        // ADMIN is isolated and cannot be mixed with operational roles.
         if (distinct.contains("ADMIN")) {
             throw new IllegalArgumentException("ADMIN cannot be combined with other roles");
         }
-        // BR-SYS: only the editor/board pairing is allowed as a dual role.
+        // Only the editor/board pairing is allowed as a dual role.
         if (distinct.size() > 2) {
             throw new IllegalArgumentException(
                     "Only Tantou Editor and Editorial Board can hold dual roles");

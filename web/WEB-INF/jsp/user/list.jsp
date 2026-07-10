@@ -65,11 +65,13 @@
                     </td>
                     <td class="add-role-cell">
                         <c:set var="canAddRole" value="false" />
+                        <%-- Only editor/board accounts can accept the one valid dual-role pairing. --%>
                         <c:forEach items="${u.roles}" var="existingRole">
                             <c:if test="${existingRole eq 'TANTOU_EDITOR' || existingRole eq 'EDITORIAL_BOARD'}">
                                 <c:set var="canAddRole" value="true" />
                             </c:if>
                         </c:forEach>
+                        <%-- Hide the add-role panel when any new role would violate role-combination rules. --%>
                         <c:if test="${canAddRole}">
                             <details class="add-role-panel">
                                 <summary class="btn small add-role-summary">Add</summary>
@@ -87,6 +89,7 @@
                     <td>
                         <div class="row-actions">
                             <a class="btn small" href="${pageContext.request.contextPath}/main/users/${u.id}/edit">Edit</a>
+                            <%-- The seed admin account is kept visible but not toggled from this table. --%>
                             <c:if test="${u.username ne 'admin'}">
                                 <form method="post" action="${pageContext.request.contextPath}/main/users/${u.id}/status">
                                     <input type="hidden" name="status" value="${u.status == 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'}" />

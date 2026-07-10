@@ -21,13 +21,20 @@ public class UserApiController {
     @Autowired
     private UserAdminRepository userAdminRepository;
 
-        @RequestMapping(method = RequestMethod.GET)
+    /**
+     * Returns the admin user list for API clients after the session user is checked.
+     */
+    @RequestMapping(method = RequestMethod.GET)
     public ApiResponse<List<Map<String, Object>>> list(HttpSession session) {
         requireAdmin(session);
         return ApiResponse.ok(userAdminRepository.listUsers(), "User list");
     }
 
-        @RequestMapping(method = RequestMethod.POST)
+    /**
+     * Creates a basic account through the API. Role assignment is handled by the
+     * dedicated role endpoint so the response shape stays simple.
+     */
+    @RequestMapping(method = RequestMethod.POST)
     public ApiResponse<Map<String, Object>> create(
             HttpSession session,
             @RequestParam("username") String username,
@@ -42,7 +49,10 @@ public class UserApiController {
         return ApiResponse.ok(userAdminRepository.getUser(id), "User created");
     }
 
-        @RequestMapping(value = "/{id}", method = RequestMethod.GET)
+    /**
+     * Loads one user row for admin screens or API clients.
+     */
+    @RequestMapping(value = "/{id}", method = RequestMethod.GET)
     public ApiResponse<Map<String, Object>> detail(@PathVariable("id") long id, HttpSession session) {
         requireAdmin(session);
         Map<String, Object> user = userAdminRepository.getUser(id);
@@ -52,7 +62,10 @@ public class UserApiController {
         return ApiResponse.ok(user, "User detail");
     }
 
-        @RequestMapping(value = "/{id}", method = RequestMethod.PUT)
+    /**
+     * Updates profile fields only; username and roles are managed by separate flows.
+     */
+    @RequestMapping(value = "/{id}", method = RequestMethod.PUT)
     public ApiResponse<Object> update(
             @PathVariable("id") long id,
             HttpSession session,
@@ -63,7 +76,11 @@ public class UserApiController {
         return ApiResponse.ok(null, "User updated");
     }
 
-        @RequestMapping(value = "/{id}/status", method = RequestMethod.PATCH)
+    /**
+     * Changes account status after a small controller check; repository rules still
+     * protect the final active ADMIN account.
+     */
+    @RequestMapping(value = "/{id}/status", method = RequestMethod.PATCH)
     public ApiResponse<Object> patchStatus(
             @PathVariable("id") long id,
             HttpSession session,
@@ -78,7 +95,11 @@ public class UserApiController {
         return ApiResponse.ok(null, "User status updated");
     }
 
-        @RequestMapping(value = "/{id}/roles", method = RequestMethod.POST)
+    /**
+     * Adds a role to a user. UserAdminRepository is the authority for singleton
+     * ADMIN and valid role-combination checks.
+     */
+    @RequestMapping(value = "/{id}/roles", method = RequestMethod.POST)
     public ApiResponse<Object> addRole(
             @PathVariable("id") long id,
             HttpSession session,
@@ -89,7 +110,10 @@ public class UserApiController {
         return ApiResponse.ok(null, "Role assigned");
     }
 
-        @RequestMapping(value = "/{id}/roles", method = RequestMethod.DELETE)
+    /**
+     * Removes a role from a user while preserving the repository's ADMIN guard.
+     */
+    @RequestMapping(value = "/{id}/roles", method = RequestMethod.DELETE)
     public ApiResponse<Object> removeRole(
             @PathVariable("id") long id,
             HttpSession session,
@@ -100,6 +124,9 @@ public class UserApiController {
         return ApiResponse.ok(null, "Role removed");
     }
 
+    /**
+     * Reuses the session helper so every API action requires an ADMIN user.
+     */
     private AuthenticatedUser requireAdmin(HttpSession session) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
         SessionUserUtil.requireRole(user, "ADMIN", "Only ADMIN can manage users");

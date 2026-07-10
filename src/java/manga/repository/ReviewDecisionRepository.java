@@ -13,9 +13,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
 /**
- * Repository for ReviewDecision entity using JDBC pattern.
- * 
- * Provides data access methods for review decision audit trail.
+ * JDBC repository for manuscript review decision history.
+ * It only inserts and reads decisions so review approvals/rejections remain an
+ * immutable timeline for defense/audit purposes.
  */
 @Repository
 public class ReviewDecisionRepository {
@@ -24,7 +24,7 @@ public class ReviewDecisionRepository {
     private DataSource dataSource;
     
     /**
-     * Create new review decision record.
+     * Appends a new review decision record; existing decisions are not updated.
      */
     public long create(ReviewDecision decision) {
         String sql = "INSERT INTO ReviewDecision (manuscriptVersionId, reviewerId, decisionType, comment, decisionAt) " +
@@ -48,7 +48,7 @@ public class ReviewDecisionRepository {
     }
     
     /**
-     * Find all decisions for a manuscript version.
+     * Reads the decision timeline for one manuscript version, newest first.
      */
     public List<ReviewDecision> findByManuscriptVersionId(Long manuscriptVersionId) {
         String sql = "SELECT id, manuscriptVersionId, reviewerId, decisionType, comment, decisionAt " +
@@ -69,7 +69,7 @@ public class ReviewDecisionRepository {
     }
     
     /**
-     * Find latest decision for a manuscript version.
+     * Reads the latest decision when the workflow needs the current review outcome.
      */
     public ReviewDecision findLatestByManuscriptVersionId(Long manuscriptVersionId) {
         String sql = "SELECT TOP 1 id, manuscriptVersionId, reviewerId, decisionType, comment, decisionAt " +
@@ -89,7 +89,7 @@ public class ReviewDecisionRepository {
     }
     
     /**
-     * Find decisions by reviewer.
+     * Reads all decisions made by one reviewer for audit/debugging.
      */
     public List<ReviewDecision> findByReviewerId(Long reviewerId) {
         String sql = "SELECT id, manuscriptVersionId, reviewerId, decisionType, comment, decisionAt " +

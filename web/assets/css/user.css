@@ -1,5 +1,6 @@
 .role-choice-grid,
 .role-check-grid {
+    /* Shared layout for create-form radio choices and list-page role checkboxes. */
     display: flex;
     flex-wrap: wrap;
     gap: var(--spacing-2);

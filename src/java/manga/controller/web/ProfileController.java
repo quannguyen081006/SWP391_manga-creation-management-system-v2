@@ -9,11 +9,14 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Locale;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -23,6 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/main/profile")
 public class ProfileController {
 
+    private static final Logger LOGGER = Logger.getLogger(ProfileController.class.getName());
     private static final long MAX_AVATAR_BYTES = 2L * 1024L * 1024L;
     private static final String FLASH_SUCCESS = "PROFILE_FLASH_SUCCESS";
     private static final String FLASH_ERROR = "PROFILE_FLASH_ERROR";
@@ -41,6 +45,14 @@ public class ProfileController {
         model.addAttribute("user", profile);
         consumeFlash(session, model);
         return "profile/edit";
+    }
+
+    @GetMapping("/change-password")
+    public String changePasswordPage(HttpSession session, Model model) {
+        AuthenticatedUser user = SessionUserUtil.requireUser(session);
+        model.addAttribute("user", user);
+        consumeFlash(session, model);
+        return "profile/change-password";
     }
 
     @RequestMapping(value = "/update", method = RequestMethod.POST)
@@ -167,8 +179,8 @@ public class ProfileController {
         }
         try {
             Files.deleteIfExists(storedAvatar.path);
-        } catch (IOException ignored) {
-            // Keep the original validation/database error as the flash message.
+        } catch (IOException ex) {
+            LOGGER.log(Level.FINE, "Cannot delete uploaded avatar after profile update failed", ex);
         }
     }
 
@@ -185,9 +197,11 @@ public class ProfileController {
         session.removeAttribute(FLASH_ERROR);
         if (success != null) {
             model.addAttribute("success", success);
+            model.addAttribute("flashSuccess", success);
         }
         if (error != null) {
             model.addAttribute("error", error);
+            model.addAttribute("flashError", error);
         }
     }
 

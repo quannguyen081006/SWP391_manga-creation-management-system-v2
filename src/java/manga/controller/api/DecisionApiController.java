@@ -42,6 +42,7 @@ public class DecisionApiController {
             @RequestBody OpenDecisionSessionRequest request) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
         SessionUserUtil.requireRole(user, "ADMIN", "Only ADMIN can open decision session");
+        // Opening the session writes an AuditLog row through DecisionRepository.
         long sessionId = decisionService.openDecisionSession(request, user);
         return ApiResponse.ok(decisionService.getDecisionSession(sessionId, user), "Decision session opened");
     }
@@ -52,6 +53,7 @@ public class DecisionApiController {
             HttpSession session,
             @RequestBody SubmitDecisionVoteRequest request) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
+        // Voting writes AuditLog rows for the vote and any quorum resolution.
         decisionService.submitDecisionVote(id, request, user);
         return ApiResponse.ok(null, "Decision vote submitted");
     }

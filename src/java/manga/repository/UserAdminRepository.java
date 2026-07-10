@@ -19,7 +19,10 @@ public class UserAdminRepository {
     @Autowired
     private DataSource dataSource;
 
-        public List<Map<String, Object>> listUsers() {
+    /**
+     * Lists users with their roles for the admin table.
+     */
+    public List<Map<String, Object>> listUsers() {
         String sql = "SELECT id, username, fullName, email, avatarUrl, status, createdAt, updatedAt FROM [User] ORDER BY id";
         List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
         try (Connection conn = dataSource.getConnection();
@@ -36,7 +39,10 @@ public class UserAdminRepository {
         return rows;
     }
 
-        public Map<String, Object> getUser(long id) {
+    /**
+     * Loads one user and its roles for edit/detail views.
+     */
+    public Map<String, Object> getUser(long id) {
         String sql = "SELECT id, username, fullName, email, avatarUrl, status, createdAt, updatedAt FROM [User] WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -54,7 +60,11 @@ public class UserAdminRepository {
         }
     }
 
-        public long createUser(String username, String passwordHash, String fullName, String email) {
+    /**
+     * Creates the account row after validating required fields and unique username/email.
+     * These checks live here as the authority because this method writes to the database.
+     */
+    public long createUser(String username, String passwordHash, String fullName, String email) {
         validateUserFields(username, passwordHash, fullName, email);
         String sql = "INSERT INTO [User] (username, passwordHash, fullName, email, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, 'ACTIVE', GETDATE(), GETDATE())";
         try (Connection conn = dataSource.getConnection();
@@ -85,7 +95,11 @@ public class UserAdminRepository {
         }
     }
 
-        public void updateUser(long id, String fullName, String email) {
+    /**
+     * Updates editable profile fields only. Username is not changed after creation
+     * because it is treated as the account identity.
+     */
+    public void updateUser(long id, String fullName, String email) {
         if (isBlank(fullName) || isBlank(email) || !email.contains("@")) {
             throw new IllegalArgumentException("Full name and valid email are required");
         }
@@ -108,7 +122,10 @@ public class UserAdminRepository {
         }
     }
 
-        public void updateStatus(long id, String status) {
+    /**
+     * Updates account status while protecting the final active ADMIN account.
+     */
+    public void updateStatus(long id, String status) {
         String normalized = normalizeStatus(status);
         String sql = "UPDATE [User] SET status = ?, updatedAt = GETDATE() WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -129,7 +146,11 @@ public class UserAdminRepository {
         }
     }
 
-        public void addRole(long userId, String roleName) {
+    /**
+     * Adds a role after enforcing ADMIN singleton and valid role combinations.
+     * The repository is the real guard because UI checks can be bypassed.
+     */
+    public void addRole(long userId, String roleName) {
         String normalizedRole = normalizeRole(roleName);
         String roleSql = "SELECT id FROM [Role] WHERE name = ?";
         String existsSql = "SELECT 1 FROM UserRole WHERE userId = ? AND roleId = ?";
@@ -168,7 +189,10 @@ public class UserAdminRepository {
         }
     }
 
-        public void removeRole(long userId, String roleName) {
+    /**
+     * Removes a role while preventing the system from losing its only ADMIN role.
+     */
+    public void removeRole(long userId, String roleName) {
         String normalizedRole = normalizeRole(roleName);
         String sql = "DELETE ur FROM UserRole ur JOIN [Role] r ON ur.roleId = r.id WHERE ur.userId = ? AND r.name = ?";
         try (Connection conn = dataSource.getConnection();
@@ -187,7 +211,10 @@ public class UserAdminRepository {
         }
     }
 
-        public List<String> listRoles(long userId) {
+    /**
+     * Returns role names for one user, used by the list page and role validation.
+     */
+    public List<String> listRoles(long userId) {
         try (Connection conn = dataSource.getConnection()) {
             return listRoles(conn, userId);
         } catch (SQLException ex) {
@@ -195,7 +222,10 @@ public class UserAdminRepository {
         }
     }
 
-        public boolean hasAnyAdmin() {
+    /**
+     * Checks whether any ADMIN role already exists; used for early UI/controller exits.
+     */
+    public boolean hasAnyAdmin() {
         return countUsersWithRole("ADMIN") > 0;
     }
 
@@ -264,7 +294,10 @@ public class UserAdminRepository {
         }
     }
 
-        public boolean hasRole(long userId, String roleName) {
+    /**
+     * Checks whether a user already has a role before role assignment validation.
+     */
+    public boolean hasRole(long userId, String roleName) {
         String normalizedRole = normalizeRole(roleName);
         try (Connection conn = dataSource.getConnection()) {
             return userHasRole(conn, userId, normalizedRole);
@@ -273,7 +306,10 @@ public class UserAdminRepository {
         }
     }
 
-        public int countUsersWithRole(String roleName) {
+    /**
+     * Counts users by role for singleton ADMIN checks.
+     */
+    public int countUsersWithRole(String roleName) {
         String normalizedRole = normalizeRole(roleName);
         try (Connection conn = dataSource.getConnection()) {
             return countUsersWithRole(conn, normalizedRole);
@@ -300,7 +336,7 @@ public class UserAdminRepository {
         if (!"ADMIN".equals(normalizedRole) || userHasRole(conn, userId, "ADMIN")) {
             return;
         }
-        // BR-SYS-01: the admin role is unique in this system.
+        // ADMIN is singleton so there is always one clearly accountable system owner.
         if (countUsersWithRole(conn, "ADMIN") > 0) {
             throw new IllegalArgumentException("Only one ADMIN account is allowed");
         }
@@ -347,7 +383,7 @@ public class UserAdminRepository {
 
     private String normalizeRole(String roleName) {
         String normalized = roleName == null ? "" : roleName.trim().toUpperCase();
-        // BR-SYS role catalog: reject unknown roles before touching UserRole.
+        // Reject unknown roles before touching UserRole.
         if (!"ADMIN".equals(normalized)
                 && !"MANGAKA".equals(normalized)
                 && !"ASSISTANT".equals(normalized)

@@ -1,3 +1,9 @@
+/*
+ * Page-specific overrides for notification/list.jsp.
+ * Base layout and read/unread colors live in assets/styles.css; this file only adds
+ * list-page flex and hover transitions — no overlap with header.css (dropdown styles).
+ */
+
 .notification-main-link {
     min-width: 0;
     flex: 1;

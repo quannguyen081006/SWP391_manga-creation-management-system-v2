@@ -304,6 +304,7 @@ public class MainController {
         AuthenticatedUser user = (AuthenticatedUser) session.getAttribute("AUTH_USER");
         Proposal proposal = proposalService.getDetail(user, id);
         model.addAttribute("proposal", proposal);
+        // ProposalHistory feeds the Revision History table on the detail JSP.
         model.addAttribute("history", proposalService.listHistory(user, id));
         model.addAttribute("user", user);
 

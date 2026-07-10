@@ -30,7 +30,7 @@
                 </div>
             </div>
         </section>
-        <%-- Login form: posts credentials to the web auth endpoint. --%>
+        <%-- Plain HTML login form; AuthController stores the authenticated user in session. --%>
         <section class="login-panel" aria-label="Sign in form">
             <div class="login-brand">
                 <div class="login-brand-mark">M</div>

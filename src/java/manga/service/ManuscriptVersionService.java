@@ -475,6 +475,7 @@ public class ManuscriptVersionService {
         decision.setReviewerId(user.getId());
         decision.setDecisionType(manga.enums.ReviewDecisionType.APPROVE);
         decision.setComment(null);
+        // ReviewDecision is the append-only audit row for this approval.
         reviewDecisionRepository.create(decision);
 
         // Update status
@@ -565,6 +566,7 @@ public class ManuscriptVersionService {
         decision.setReviewerId(user.getId());
         decision.setDecisionType(manga.enums.ReviewDecisionType.REJECT);
         decision.setComment(feedback);
+        // ReviewDecision is the append-only audit row for this rejection.
         reviewDecisionRepository.create(decision);
 
         // Update status
@@ -708,7 +710,7 @@ public class ManuscriptVersionService {
     }
 
     /**
-     * List versions for chapter.
+     * Lists all manuscript versions for the chapter history view.
      */
     public List<ManuscriptVersion> listVersions(Long chapterId) {
         return manuscriptVersionRepository.findByChapterIdOrderByVersionDesc(chapterId);
@@ -722,7 +724,7 @@ public class ManuscriptVersionService {
     }
 
     /**
-     * Get review decision history for manuscript version.
+     * Reads immutable review decision history for one manuscript version.
      */
     public List<manga.model.ReviewDecision> getReviewDecisions(Long manuscriptVersionId) {
         return reviewDecisionRepository.findByManuscriptVersionId(manuscriptVersionId);

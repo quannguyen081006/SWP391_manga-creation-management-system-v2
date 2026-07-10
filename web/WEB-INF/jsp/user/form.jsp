@@ -43,6 +43,7 @@
 <%-- User form: edit mode updates profile fields, create mode collects account and role data. --%>
 <div class="section-card">
 <c:choose>
+<%-- Edit mode intentionally keeps username read-only and leaves roles to the list page. --%>
 <c:when test="${editing}">
     <form class="user-form" method="post" action="${pageContext.request.contextPath}/main/users/${editUser.id}/update">
         <div class="form-row">
@@ -102,6 +103,7 @@
 
         <div class="form-row">
             <label>Roles</label>
+            <%-- One radio group mirrors the allowed role combinations from RoleCombinationValidator. --%>
             <div class="role-choice-grid">
                 <label class="role-choice">
                     <input type="radio" name="roleOption" value="MANGAKA" ${selectedRoleOption eq 'MANGAKA' ? 'checked' : ''} required />
@@ -124,6 +126,7 @@
                     <span>TANTOU_EDITOR + EDITORIAL_BOARD</span>
                 </label>
             </div>
+            <%-- ADMIN is singleton, so create mode explains why it is not offered here. --%>
             <c:if test="${adminRoleLocked}">
                 <p class="form-note">ADMIN is reserved for the single system administrator.</p>
             </c:if>

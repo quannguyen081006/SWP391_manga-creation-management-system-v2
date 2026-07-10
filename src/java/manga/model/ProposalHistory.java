@@ -2,6 +2,12 @@ package manga.model;
 
 import java.sql.Timestamp;
 
+/**
+ * Timeline row for proposal history.
+ * ProposalHistory is intentionally dual-purpose: it records proposal state
+ * transitions and also stores Editorial Board vote rows, so the proposal detail
+ * page can show one chronological timeline.
+ */
 public class ProposalHistory {
     private long id;
     private long proposalId;

@@ -108,6 +108,7 @@
 
                     <div class="sidebar-title">Version History</div>
 
+                    <%-- Server-rendered version chain; links use stored version history rows. --%>
                     <c:forEach var="v" items="${versionHistory}">
 
                         <a href="${pageContext.request.contextPath}/main/manuscript-workspace/${v.id}" class="version-item ${v.id == version.id ? 'current' : ''}">

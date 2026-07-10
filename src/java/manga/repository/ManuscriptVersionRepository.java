@@ -29,6 +29,7 @@ public class ManuscriptVersionRepository {
      * (latest first).
      */
     public List<ManuscriptVersion> findByChapterIdOrderByVersionDesc(Long chapterId) {
+        // Version history needs revisionNotes, previousVersionId, and timestamps.
         String sql = "SELECT id, chapterId, version, previousVersionId, status, createdAt, submittedAt, approvedAt, rejectedAt, publishedAt, createdBy, submittedBy, approvedBy, rejectedBy, feedback, revisionNotes, totalPageCount "
                 + "FROM ManuscriptVersion WHERE chapterId = ? ORDER BY version DESC";
         List<ManuscriptVersion> results = new ArrayList<>();
@@ -68,6 +69,7 @@ public class ManuscriptVersionRepository {
 
     public ManuscriptVersion findLatestByChapterId(long chapterId) {
 
+        // Latest version lookup keeps the same timeline fields used by history views.
         String sql = "SELECT TOP 1 * "
                 + "FROM ManuscriptVersion "
                 + "WHERE chapterId = ? "
@@ -168,6 +170,7 @@ public class ManuscriptVersionRepository {
      * Find a specific manuscript version by chapter and version number.
      */
     public ManuscriptVersion findByChapterIdAndVersion(Long chapterId, Integer version) {
+        // Specific version lookup supports compare/history navigation.
         String sql = "SELECT id, chapterId, version, previousVersionId, status, createdAt, submittedAt, approvedAt, rejectedAt, publishedAt, createdBy, submittedBy, approvedBy, rejectedBy, feedback, revisionNotes, totalPageCount "
                 + "FROM ManuscriptVersion WHERE chapterId = ? AND version = ?";
         try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -363,6 +366,7 @@ public class ManuscriptVersionRepository {
      * Find the latest version for a chapter (no next version exists).
      */
     public ManuscriptVersion findLatestByChapterId(Long chapterId) {
+        // Latest version lookup keeps the same timeline fields used by history views.
         String sql = "SELECT TOP 1 id, chapterId, version, previousVersionId, status, createdAt, submittedAt, approvedAt, rejectedAt, publishedAt, createdBy, submittedBy, approvedBy, rejectedBy, feedback, revisionNotes, totalPageCount "
                 + "FROM ManuscriptVersion WHERE chapterId = ? ORDER BY version DESC";
         try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -416,6 +420,7 @@ public class ManuscriptVersionRepository {
         version.setId(rs.getLong("id"));
         version.setChapterId(rs.getLong("chapterId"));
         version.setVersion(rs.getInt("version"));
+        // These fields make the version chain and status timeline visible in JSPs.
         version.setPreviousVersionId(rs.getObject("previousVersionId") != null ? rs.getLong("previousVersionId") : null);
         version.setStatus(ManuscriptStatus.valueOf(rs.getString("status")));
         version.setCreatedAt(rs.getTimestamp("createdAt") != null ? rs.getTimestamp("createdAt").toLocalDateTime() : null);

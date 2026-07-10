@@ -10,12 +10,21 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ModelAttribute;
 
+/**
+ * Global MVC model provider for the header notification bell.
+ * {@code @ControllerAdvice(annotations = Controller.class)} runs only on page controllers,
+ * not REST API controllers, and injects {@code @ModelAttribute} values into every JSP
+ * without each controller fetching unread count/list manually.
+ */
 @ControllerAdvice(annotations = Controller.class)
 public class NotificationViewAdvice {
 
     @Autowired
     private NotificationRepository notificationRepository;
 
+    /**
+     * Badge count for header.jsp; returns 0 when logged out.
+     */
     @ModelAttribute("headerUnreadNotificationCount")
     public int unreadCount(HttpSession session) {
         AuthenticatedUser user = getUser(session);
@@ -25,7 +34,10 @@ public class NotificationViewAdvice {
         return notificationRepository.unreadCount(user.getId());
     }
 
-        @ModelAttribute("headerNotifications")
+    /**
+     * Recent rows for the header dropdown; full list page loads its own 100-row query.
+     */
+    @ModelAttribute("headerNotifications")
     public List<NotificationItem> latestNotifications(HttpSession session) {
         AuthenticatedUser user = getUser(session);
         if (user == null) {

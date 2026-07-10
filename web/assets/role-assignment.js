@@ -1,6 +1,8 @@
 (function () {
   'use strict';
 
+  // Client-side convenience only. Server-side RoleCombinationValidator is the
+  // actual authority; this script can be deleted without breaking security.
   var SINGLE_ONLY = { MANGAKA: true, ASSISTANT: true };
   var EDITOR_PAIR = { TANTOU_EDITOR: true, EDITORIAL_BOARD: true };
 
