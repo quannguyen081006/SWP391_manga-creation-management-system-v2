@@ -18,5 +18,7 @@ web/WEB-INF/jdbc.properties
 # Uploaded images (keep folder structure)
 web/img/chapter/*
 !web/img/chapter/.gitkeep
+# Demo seed images (checked in so seed_v5.sql has real files to point to)
+!web/img/chapter/seed_*.png
 web/img/task/*
 !web/img/task/.gitkeep
