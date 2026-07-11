@@ -3,6 +3,8 @@ package manga.service;
 import manga.common.exception.BusinessRuleException;
 import manga.dto.RankingCsvRow;
 import manga.model.AuthenticatedUser;
+import manga.model.RankingCsvUpload;
+import manga.repository.RankingCsvUploadRepository;
 import manga.repository.RankingRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -22,6 +24,9 @@ public class RankingCsvImportService {
 
     @Autowired
     private RankingRepository rankingRepository;
+
+    @Autowired
+    private RankingCsvUploadRepository rankingCsvUploadRepository;
 
     @Transactional
     public int importCsv(long periodId, MultipartFile file, AuthenticatedUser user) {
@@ -48,7 +53,26 @@ public class RankingCsvImportService {
         }
         List<RankingCsvRow> rows = parseAndValidate(file);
         rankingRepository.replaceCsvEntries(periodId, user.getId(), rows);
+        
+        // Save CSV metadata for preview feature
+        String csvContent = readFileContent(file);
+        RankingCsvUpload csvUpload = new RankingCsvUpload(periodId, user.getId(), file.getOriginalFilename(), csvContent);
+        rankingCsvUploadRepository.saveOrUpdate(csvUpload);
+        
         return rows.size();
+    }
+
+    private String readFileContent(MultipartFile file) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), "UTF-8"))) {
+            StringBuilder content = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                content.append(line).append("\n");
+            }
+            return content.toString();
+        } catch (Exception ex) {
+            throw new BusinessRuleException("Failed to read CSV file content: " + ex.getMessage());
+        }
     }
 
     private List<RankingCsvRow> parseAndValidate(MultipartFile file) {
