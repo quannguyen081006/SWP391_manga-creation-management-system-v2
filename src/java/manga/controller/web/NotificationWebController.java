@@ -12,8 +12,9 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.servlet.view.RedirectView;
 
 /**
- * Server-rendered notification list and safe click-through redirects.
- * Delete and read/unread toggle have no web form routes here; those stay on the API/JS path.
+ * Server-rendered notification list and safe click-through redirects. Delete
+ * and read/unread toggle have no web form routes here; those stay on the API/JS
+ * path.
  */
 @Controller
 @RequestMapping("/main/notifications")
@@ -45,7 +46,8 @@ public class NotificationWebController {
     }
 
     /**
-     * Marks a notification read and redirects only to approved internal targets.
+     * Marks a notification read and redirects only to approved internal
+     * targets.
      */
     @RequestMapping(value = "/{id}/click", method = RequestMethod.GET)
     public RedirectView click(@PathVariable("id") long id, HttpSession session) {
@@ -75,9 +77,10 @@ public class NotificationWebController {
     }
 
     /**
-     * Open-redirect guard for /{id}/click: only allowlisted internal /main/** paths.
-     * viewUrl is stored at creation time, but we re-validate here in case of stale or
-     * tampered rows; unknown paths fall back to the notification list.
+     * Open-redirect guard for /{id}/click: only allowlisted internal /main/**
+     * paths. viewUrl is stored at creation time, but we re-validate here in
+     * case of stale or tampered rows; unknown paths fall back to the
+     * notification list.
      */
     private boolean isSupportedViewUrl(String viewUrl) {
         if (viewUrl == null) {
@@ -101,6 +104,7 @@ public class NotificationWebController {
                 || path.matches("/main/chapters/\\d+")
                 || path.matches("/main/chapters/detail")
                 || path.startsWith("/main/series/")
+                || path.matches("/main/manuscript-workspace/\\d+")
                 || path.matches("/main/decisions/\\d+")
                 || path.matches("/main/ranking/periods(/\\d+/(results|mangaka))?");
     }
