@@ -19,7 +19,6 @@ web/WEB-INF/jdbc.properties
 web/img/chapter/*
 !web/img/chapter/.gitkeep
 # Demo seed images (checked in so seed_v5.sql has real files to point to)
-!web/img/chapter/seed_*.png
 !web/img/chapter/demo/
 !web/img/chapter/demo/*.jpg
 !web/img/chapter/demo/*.png
