@@ -161,41 +161,37 @@
     <c:if test="${not empty success}"><div class="alert success"><c:out value="${success}" /></div></c:if>
     <c:if test="${not empty error}"><div class="alert error"><c:out value="${error}" /></div></c:if>
 
-    <div class="section-card settings-panel">
-        <h3 class="section-title">Task Type Rates</h3>
-        <p class="section-desc">Base salary per completed page, by task type. Saved individually.</p>
-        <div class="task-rate-table-wrap">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Code</th>
-                        <th>Name</th>
-                        <th>Rate per page</th>
-                    </tr>
-                </thead>
-                <tbody>
-                <c:forEach items="${taskTypes}" var="item">
-                    <tr>
-                        <td><strong><c:out value="${item.code}" /></strong></td>
-                        <td><c:out value="${item.displayName}" /></td>
-                        <td>
-                            <form class="task-rate-form" method="post"
-                                  action="${pageContext.request.contextPath}/main/settings/salary/task-types/${item.code}/update">
-                                <input aria-label="Rate per page" name="ratePerPage" type="number"
-                                       min="1000" step="1000" value="${item.ratePerPage}" required />
-                                <span>VND / page</span>
-                                <button class="btn small" type="submit">Save</button>
-                            </form>
-                        </td>
-                    </tr>
-                </c:forEach>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
     <form class="settings-form" method="post"
           action="${pageContext.request.contextPath}/main/settings/salary">
+
+        <div class="section-card settings-panel">
+            <h3 class="section-title">Task Type Rates</h3>
+            <p class="section-desc">Base salary per completed page, by task type.</p>
+            <div class="task-rate-table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Name</th>
+                            <th>Rate per page</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <c:forEach items="${taskTypes}" var="item">
+                        <tr>
+                            <td><strong><c:out value="${item.code}" /></strong></td>
+                            <td><c:out value="${item.displayName}" /></td>
+                            <td class="task-rate-cell">
+                                <input aria-label="Rate per page for ${item.code}" name="rate_${item.code}"
+                                       type="number" min="1000" step="1000" value="${item.ratePerPage}" required />
+                                <span>VND / page</span>
+                            </td>
+                        </tr>
+                    </c:forEach>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
         <div class="sal-section">
             <p class="sal-section-label">01 — KPI score</p>

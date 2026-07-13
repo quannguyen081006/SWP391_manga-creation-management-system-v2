@@ -37,7 +37,8 @@ public class SalaryPeriodRepository {
             throw new RuntimeException("Cannot create salary period", ex);
         }
     }
-
+    
+    //Dead code
     public boolean existsByName(long mangakaId, String name) {
         String sql = "SELECT COUNT(1) FROM SalaryPeriod WHERE mangakaId = ? AND name = ?";
         try (Connection conn = dataSource.getConnection();

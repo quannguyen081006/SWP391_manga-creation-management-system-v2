@@ -38,7 +38,7 @@ public class SalaryService {
     @Autowired
     private NotificationService notificationService;
 
-    public List<Map<String, Object>> listMyPeriods(AuthenticatedUser user) {
+        public List<Map<String, Object>> listMyPeriods(AuthenticatedUser user) {
         requireMangaka(user, "Only MANGAKA can view salary periods");
         return salaryPeriodRepository.listPeriodsByMangaka(user.getId());
     }
@@ -172,8 +172,8 @@ public class SalaryService {
                 || kpiScore.compareTo(new BigDecimal(settings.getKpiBonusThreshold())) < 0) {
             return BigDecimal.ZERO;
         }
-        return grossSalary.multiply(settings.getBonusPercent())
-                .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+            return grossSalary.multiply(settings.getBonusPercent())
+                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
     }
 
     private void requireMangaka(AuthenticatedUser user, String message) {

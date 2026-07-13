@@ -145,6 +145,7 @@ public class ModuleWebController {
         }
     }
 
+    //Mo trang setting
     @RequestMapping(value = "/settings", method = RequestMethod.GET)
     public String settingsHub(HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
@@ -152,25 +153,7 @@ public class ModuleWebController {
         return "settings/hub";
     }
 
-    @RequestMapping(value = "/settings/salary/task-types/{code}/update", method = RequestMethod.POST)
-    public String taskTypeRateUpdate(
-            @PathVariable("code") String code,
-            HttpSession session,
-            @RequestParam("ratePerPage") java.math.BigDecimal ratePerPage,
-            RedirectAttributes redirectAttributes,
-            Model model) {
-        AuthenticatedUser user = requireUser(session);
-        try {
-            taskTypeRateService.updateRate(code, ratePerPage, user);
-            redirectAttributes.addFlashAttribute("success", "Task type rate updated successfully");
-            return "redirect:/main/settings/salary";
-        } catch (RuntimeException ex) {
-            model.addAttribute("error", ex.getMessage());
-            model.addAttribute("settings", salarySettingsService.getSettings());
-            model.addAttribute("taskTypes", taskTypeRateService.listAll(user));
-            return "settings/salary/index";
-        }
-    }
+        //Mo trang setting cua salary
 
     @RequestMapping(value = "/settings/salary", method = RequestMethod.GET)
     public String salarySettings(HttpSession session, Model model) {
@@ -181,15 +164,26 @@ public class ModuleWebController {
         return "settings/salary/index";
     }
 
+    //Save all trong setting cua salary: KPI/bonus + every task type rate in one submit.
+    //Rate inputs are named "rate_<code>" (task types are dynamic, not a fixed set of fields).
     @RequestMapping(value = "/settings/salary", method = RequestMethod.POST)
     public String salarySettingsSave(
             HttpSession session,
             @RequestParam("kpiBonusThreshold") Integer kpiBonusThreshold,
             @RequestParam("bonusPercent") java.math.BigDecimal bonusPercent,
+            @RequestParam Map<String, String> allParams,
             Model model) {
         AuthenticatedUser user = requireUser(session);
         try {
             requireAdmin(user);
+            Map<String, java.math.BigDecimal> rates = new java.util.LinkedHashMap<>();
+            for (Map.Entry<String, String> entry : allParams.entrySet()) {
+                if (entry.getKey().startsWith("rate_")) {
+                    rates.put(entry.getKey().substring("rate_".length()),
+                            new java.math.BigDecimal(entry.getValue()));
+                }
+            }
+            taskTypeRateService.updateRates(rates, user);
             salarySettingsService.updateSettings(kpiBonusThreshold.intValue(), bonusPercent);
             model.addAttribute("success", "Salary settings updated successfully");
         } catch (RuntimeException ex) {
