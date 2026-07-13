@@ -186,15 +186,11 @@ public class ModuleWebController {
             HttpSession session,
             @RequestParam("kpiBonusThreshold") Integer kpiBonusThreshold,
             @RequestParam("bonusPercent") java.math.BigDecimal bonusPercent,
-            @RequestParam("kpiOnTimeWeight") Integer kpiOnTimeWeight,
-            @RequestParam("kpiQualityWeight") Integer kpiQualityWeight,
             Model model) {
         AuthenticatedUser user = requireUser(session);
         try {
             requireAdmin(user);
-            salarySettingsService.updateSettings(
-                    kpiBonusThreshold.intValue(), bonusPercent,
-                    kpiOnTimeWeight.intValue(), kpiQualityWeight.intValue());
+            salarySettingsService.updateSettings(kpiBonusThreshold.intValue(), bonusPercent);
             model.addAttribute("success", "Salary settings updated successfully");
         } catch (RuntimeException ex) {
             model.addAttribute("error", ex.getMessage());

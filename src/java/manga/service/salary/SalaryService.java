@@ -58,13 +58,13 @@ public class SalaryService {
 
     /**
      * Salary is bonus-only: no late/rejection penalties are applied.
-     * A bonus is granted only when KPI reaches the configured threshold; otherwise bonus is zero.
+     * KPI is the assistant's on-time rate; a bonus is granted only when it reaches
+     * the configured threshold, otherwise bonus is zero.
      */
     private void calculateForPeriod(long periodId, long mangakaId) {
         SalarySettings settings = salarySettingsService.getSettings();
         List<AssistantSalaryRecord> rows = assistantSalaryRecordRepository.calculatePreview(
-                periodId, mangakaId,
-                settings.getKpiOnTimeWeight(), settings.getKpiQualityWeight());
+                periodId, mangakaId);
         for (AssistantSalaryRecord row : rows) {
             BigDecimal suggestedBonus = calculateSuggestedBonus(
                     row.getKpiScore(), row.getGrossSalary(), settings);

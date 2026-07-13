@@ -72,19 +72,17 @@ public class AssistantSalaryRecordRepository {
         return rows;
     }
 
-    public List<AssistantSalaryRecord> calculatePreview(long periodId, long mangakaId,
-            int kpiOnTimeWeight, int kpiQualityWeight) {
+    public List<AssistantSalaryRecord> calculatePreview(long periodId, long mangakaId) {
         String sql = "WITH ApprovedTasks AS ("
                 + "SELECT t.id, t.assistantId, t.pageRangeStart, t.pageRangeEnd, t.dueDate, "
-                + "t.updatedAt, t.rejectionCount FROM PageTask t "
+                + "t.updatedAt FROM PageTask t "
                 + "JOIN Chapter c ON c.id = t.chapterId "
                 + "JOIN Series s ON s.id = c.seriesId "
                 + "WHERE UPPER(t.status) = 'APPROVED' AND t.isSalaried = 0 "
                 + "AND s.mangakaId = ?"
                 + "), TaskMetrics AS ("
                 + "SELECT assistantId, COUNT(id) AS totalTasksApproved, "
-                + "SUM(CASE WHEN updatedAt <= DATEADD(DAY, 1, CAST(dueDate AS DATETIME)) THEN 1 ELSE 0 END) AS onTimeTasks, "
-                + "SUM(CASE WHEN rejectionCount > 0 THEN 1 ELSE 0 END) AS rejectedTasks "
+                + "SUM(CASE WHEN updatedAt <= DATEADD(DAY, 1, CAST(dueDate AS DATETIME)) THEN 1 ELSE 0 END) AS onTimeTasks "
                 + "FROM ApprovedTasks GROUP BY assistantId"
                 + "), PageMetrics AS ("
                 + "SELECT t.assistantId, COUNT(pps.pageNumber) AS totalPagesCompleted "
@@ -101,7 +99,7 @@ public class AssistantSalaryRecordRepository {
                 + "COALESCE(pm.totalPagesCompleted, 0) AS totalPagesCompleted, "
                 + "COALESCE(st.grossSalary, 0) AS grossSalary, "
                 + "CAST(COALESCE(100.0 * tm.onTimeTasks / NULLIF(tm.totalTasksApproved, 0), 0) "
-                + "AS DECIMAL(5,2)) AS onTimeRate, COALESCE(tm.rejectedTasks, 0) AS rejectedTasks "
+                + "AS DECIMAL(5,2)) AS onTimeRate "
                 + "FROM MangakaAssistant ma "
                 + "JOIN TaskMetrics tm ON tm.assistantId = ma.assistantId "
                 + "JOIN PageMetrics pm ON pm.assistantId = ma.assistantId "
@@ -116,21 +114,7 @@ public class AssistantSalaryRecordRepository {
                 while (rs.next()) {
                     int totalTasks = rs.getInt("totalTasksApproved");
                     BigDecimal onTimeRate = totalTasks == 0 ? ZERO : rs.getBigDecimal("onTimeRate");
-                    int rejectedTasks = rs.getInt("rejectedTasks");
-                    BigDecimal rejectionRatio = totalTasks == 0
-                            ? ZERO
-                            : new BigDecimal(rejectedTasks).multiply(new BigDecimal("100"))
-                                    .divide(new BigDecimal(totalTasks), 6, RoundingMode.HALF_UP);
-                    BigDecimal wOnTime = new BigDecimal(kpiOnTimeWeight)
-                            .divide(new BigDecimal("100"));
-                    BigDecimal wQuality = new BigDecimal(kpiQualityWeight)
-                            .divide(new BigDecimal("100"));
-                    BigDecimal kpiScore = totalTasks == 0
-                            ? ZERO
-                            : onTimeRate.multiply(wOnTime)
-                                    .add(new BigDecimal("100").subtract(rejectionRatio)
-                                            .multiply(wQuality))
-                                    .setScale(2, RoundingMode.HALF_UP);
+                    BigDecimal kpiScore = onTimeRate.setScale(2, RoundingMode.HALF_UP);
                     BigDecimal grossSalary = rs.getBigDecimal("grossSalary");
 
                     AssistantSalaryRecord row = new AssistantSalaryRecord();

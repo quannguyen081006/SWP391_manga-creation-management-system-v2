@@ -200,41 +200,9 @@
         <div class="sal-section">
             <p class="sal-section-label">01 — KPI score</p>
             <div class="sal-formula">
-                <div>KPI = onTimeRate × (W₁ / 100) + qualityRate × (W₂ / 100)</div>
+                <div>KPI = onTimeRate</div>
                 <div class="sal-comment">// onTimeRate = tasks on-time / total approved × 100</div>
-                <div class="sal-comment">// qualityRate = tasks never rejected / total approved × 100</div>
-                <div class="sal-comment">// W₁ + W₂ must equal 100</div>
             </div>
-
-            <div class="sal-var-row">
-                <span class="sal-dot sal-dot-kpi" aria-hidden="true"></span>
-                <div class="sal-var-copy">
-                    <p class="sal-var-name">On-time weight (W₁)</p>
-                    <p class="sal-var-desc">Trọng số tỉ lệ đúng hạn</p>
-                </div>
-                <div class="sal-var-control">
-                    <input class="sal-var-input" id="kpiOnTimeWeight" type="number"
-                           name="kpiOnTimeWeight" min="0" max="100" step="1"
-                           value="${settings.kpiOnTimeWeight}" required />
-                    <span class="sal-var-unit">pts</span>
-                </div>
-            </div>
-
-            <div class="sal-var-row">
-                <span class="sal-dot sal-dot-kpi" aria-hidden="true"></span>
-                <div class="sal-var-copy">
-                    <p class="sal-var-name">Quality weight (W₂)</p>
-                    <p class="sal-var-desc">Trọng số tỉ lệ không bị reject</p>
-                </div>
-                <div class="sal-var-control">
-                    <input class="sal-var-input" id="kpiQualityWeight" type="number"
-                           name="kpiQualityWeight" min="0" max="100" step="1"
-                           value="${settings.kpiQualityWeight}" required />
-                    <span class="sal-var-unit">pts</span>
-                </div>
-            </div>
-
-            <div class="sal-hint">W₁ + W₂ phải bằng 100.</div>
         </div>
 
         <div class="sal-section">

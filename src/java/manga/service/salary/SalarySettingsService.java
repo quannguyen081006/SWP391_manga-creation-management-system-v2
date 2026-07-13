@@ -11,8 +11,6 @@ public class SalarySettingsService {
 
     public static final int DEFAULT_KPI_BONUS_THRESHOLD = 90;
     public static final BigDecimal DEFAULT_BONUS_PERCENT = new BigDecimal("5");
-    public static final int DEFAULT_KPI_ON_TIME_WEIGHT = 70;
-    public static final int DEFAULT_KPI_QUALITY_WEIGHT = 30;
 
     @Autowired
     private SystemSettingRepository systemSettingRepository;
@@ -25,21 +23,15 @@ public class SalarySettingsService {
         settings.setBonusPercent(systemSettingRepository.getDecimal(
                 SystemSettingRepository.SALARY_BONUS_PERCENT,
                 DEFAULT_BONUS_PERCENT));
-        settings.setKpiOnTimeWeight(systemSettingRepository.getInt(
-                SystemSettingRepository.SALARY_KPI_ON_TIME_WEIGHT,
-                DEFAULT_KPI_ON_TIME_WEIGHT));
-        settings.setKpiQualityWeight(systemSettingRepository.getInt(
-                SystemSettingRepository.SALARY_KPI_QUALITY_WEIGHT,
-                DEFAULT_KPI_QUALITY_WEIGHT));
         return settings;
     }
 
     /**
      * Salary is bonus-only: no more late/rejection penalties.
-     * Bonus is granted only when KPI reaches kpiBonusThreshold; otherwise bonus is zero.
+     * KPI is the assistant's on-time rate; bonus is granted only when KPI reaches
+     * kpiBonusThreshold, otherwise bonus is zero.
      */
-    public void updateSettings(int kpiBonusThreshold, BigDecimal bonusPercent,
-            int kpiOnTimeWeight, int kpiQualityWeight) {
+    public void updateSettings(int kpiBonusThreshold, BigDecimal bonusPercent) {
         if (kpiBonusThreshold < 0 || kpiBonusThreshold > 100) {
             throw new IllegalArgumentException("KPI bonus threshold must be between 0 and 100");
         }
@@ -47,11 +39,6 @@ public class SalarySettingsService {
                 || bonusPercent.compareTo(new BigDecimal("100")) > 0) {
             throw new IllegalArgumentException("Bonus percent must be between 0 and 100");
         }
-        if (kpiOnTimeWeight < 0 || kpiQualityWeight < 0
-                || kpiOnTimeWeight + kpiQualityWeight != 100) {
-            throw new IllegalArgumentException("KPI weights must sum to 100");
-        }
-        systemSettingRepository.setSalarySettings(
-                kpiBonusThreshold, bonusPercent, kpiOnTimeWeight, kpiQualityWeight);
+        systemSettingRepository.setSalarySettings(kpiBonusThreshold, bonusPercent);
     }
 }
