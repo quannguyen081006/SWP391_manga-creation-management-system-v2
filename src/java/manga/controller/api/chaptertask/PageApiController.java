@@ -170,6 +170,9 @@ public class PageApiController {
     // 3c. ROLLBACK A PAGE TO A HISTORY POINT
     // POST /api/v1/pages/{pageId}/rollback  (param revisionId)
     // - Only the MANGAKA who owns the chapter can roll back (double check: role + ownership)
+    // - Blocked once the chapter has been submitted for editorial review - the manuscript
+    //   workspace snapshots pages off ChapterImage at that point, so quietly rewriting a
+    //   page's image/stage after submission would desync the two out from under review.
     // - Restores both the image + stage; then calls refreshChapterProgress()
     // ============================================================
     @RequestMapping(value = "/pages/{pageId}/rollback", method = RequestMethod.POST)
@@ -185,6 +188,11 @@ public class PageApiController {
         long ownerId = chapterRepository.findOwnerMangakaByChapter(page.getChapterId());
         if (!user.hasRole("MANGAKA") || ownerId != user.getId()) {
             throw new IllegalArgumentException("Only chapter owner can rollback page");
+        }
+        String chapterStatus = chapterRepository.getChapterStatus(page.getChapterId());
+        if (!"PLANNING".equalsIgnoreCase(chapterStatus) && !"IN_PROGRESS".equalsIgnoreCase(chapterStatus)) {
+            throw new IllegalArgumentException(
+                    "Cannot rollback a page after the chapter has been submitted for editorial review");
         }
         pageRepository.rollbackToRevision(pageId, revisionId, user.getId());
         pageTaskRepository.refreshChapterProgress(page.getChapterId());

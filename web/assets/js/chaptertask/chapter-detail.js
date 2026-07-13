@@ -1302,6 +1302,11 @@
         }
 
         var owner = isOwner();
+        // Rollback is only allowed before the chapter is submitted for editorial review -
+        // after that the manuscript workspace has already snapshotted pages off ChapterImage,
+        // so silently rewriting a page here would desync it from what's under review.
+        var chapterStatus = String((chapter && chapter.status) || '').toUpperCase();
+        var canRollback = owner && (chapterStatus === 'PLANNING' || chapterStatus === 'IN_PROGRESS');
         var html = revisions.map(function (rev, index) {
             var stageLabel = rev.completedStage
                     ? '<span class="page-history-stage">' + escapeHtml(formatStatus(rev.completedStage)) + '</span>'
@@ -1311,7 +1316,7 @@
                         + '<img src="' + escapeHtml(imageUrl(rev.imageUrl)) + '" class="page-history-thumb" alt="revision" /></a>'
                     : '<div class="page-history-thumb page-history-thumb-empty">No image</div>';
             // Mốc đầu list (index 0) là trạng thái hiện tại -> không cần rollback
-            var rollbackBtn = (owner && index > 0)
+            var rollbackBtn = (canRollback && index > 0)
                     ? '<button class="btn small" type="button" data-rollback-revision="' + rev.id + '" data-page-id="' + slot.id + '">Rollback to this</button>'
                     : (index === 0 ? '<span class="page-history-current">Current</span>' : '');
             return '<div class="page-history-entry">'
