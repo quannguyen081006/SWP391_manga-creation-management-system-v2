@@ -1,9 +1,11 @@
 package manga.controller.web;
 
 import manga.model.AuthenticatedUser;
+import manga.model.RankingCsvUpload;
 import manga.model.chaptertask.ChapterSummary;
 import manga.model.Proposal;
 import manga.model.SeriesSummary;
+import manga.repository.RankingCsvUploadRepository;
 import manga.repository.chaptertask.ChapterRepository;
 import manga.repository.DecisionRepository;
 import manga.repository.ProductionRepository;
@@ -83,6 +85,9 @@ public class ModuleWebController {
 
     @Autowired
     private RankingCsvImportService rankingCsvImportService;
+
+    @Autowired
+    private RankingCsvUploadRepository rankingCsvUploadRepository;
 
     @Autowired
     private RankingService rankingService;
@@ -515,6 +520,38 @@ public class ModuleWebController {
             return "redirect:/main/ranking/periods/" + id + "/results";
         } catch (RuntimeException ex) {
             rankingPeriods(session, model);
+            model.addAttribute("error", ex.getMessage());
+            return "ranking/period";
+        }
+    }
+
+    @RequestMapping(value = "/ranking/periods/{id}/csv-uploads", method = RequestMethod.GET)
+    public String rankingCsvUploads(@PathVariable("id") long id, HttpSession session, Model model) {
+        AuthenticatedUser user = requireUser(session);
+        try {
+            requireAdmin(user);
+            List<Map<String, Object>> csvUploads = rankingCsvUploadRepository.findByPeriod(id);
+            model.addAttribute("periodId", id);
+            model.addAttribute("csvUploads", csvUploads);
+            return "ranking/csv-uploads";
+        } catch (RuntimeException ex) {
+            model.addAttribute("error", ex.getMessage());
+            return "ranking/period";
+        }
+    }
+
+    @RequestMapping(value = "/ranking/csv-uploads/{uploadId}", method = RequestMethod.GET)
+    public String rankingViewCsvUpload(@PathVariable("uploadId") long uploadId, HttpSession session, Model model) {
+        AuthenticatedUser user = requireUser(session);
+        try {
+            requireAdmin(user);
+            RankingCsvUpload upload = rankingCsvUploadRepository.findById(uploadId);
+            if (upload == null) {
+                throw new IllegalArgumentException("CSV upload not found");
+            }
+            model.addAttribute("csvUpload", upload);
+            return "ranking/csv-view";
+        } catch (RuntimeException ex) {
             model.addAttribute("error", ex.getMessage());
             return "ranking/period";
         }

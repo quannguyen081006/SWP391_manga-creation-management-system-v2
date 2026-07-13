@@ -207,6 +207,88 @@
             .timeline-arrow {
                 color: #bdc3c7;
             }
+
+            .csv-filename {
+                display: none;
+                color: #667eea;
+                font-weight: 600;
+                margin-left: 10px;
+                padding: 4px 8px;
+                background: rgba(102, 126, 234, 0.1);
+                border-radius: 4px;
+            }
+
+            .csv-preview-modal {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                justify-content: center;
+                align-items: center;
+                z-index: 1000;
+            }
+
+            .csv-preview-content {
+                background: white;
+                padding: 30px;
+                border-radius: 12px;
+                max-width: 80%;
+                max-height: 80%;
+                overflow: auto;
+                white-space: pre-wrap;
+                font-family: monospace;
+                font-size: 14px;
+            }
+
+            .csv-preview-close {
+                position: absolute;
+                top: 20px;
+                right: 20px;
+                background: #e74c3c;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-weight: 600;
+            }
+
+            .csv-uploads-section {
+                margin-top: 20px;
+                padding: 20px;
+                background: #f8f9fa;
+                border-radius: 8px;
+            }
+
+            .csv-upload-item {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 12px;
+                background: white;
+                border-radius: 6px;
+                margin-bottom: 10px;
+                border-left: 4px solid #667eea;
+            }
+
+            .csv-upload-info {
+                display: flex;
+                align-items: center;
+                gap: 15px;
+            }
+
+            .csv-upload-filename {
+                font-weight: 600;
+                color: #2c3e50;
+            }
+
+            .csv-upload-meta {
+                font-size: 12px;
+                color: #7f8c8d;
+            }
         </style>
         <script>
             function updateCountdowns() {
@@ -236,6 +318,39 @@
                         el.style.color = '#e74c3c';
                     }
                 });
+            }
+
+            // CSV Preview functionality
+            function handleFileSelect(input) {
+                var file = input.files[0];
+                if (file) {
+                    var filenameDisplay = document.getElementById('csv-filename-' + input.dataset.periodId);
+                    if (filenameDisplay) {
+                        filenameDisplay.innerHTML = '📄 ' + file.name;
+                        filenameDisplay.style.display = 'inline-block';
+                        filenameDisplay.style.cursor = 'pointer';
+                        filenameDisplay.onclick = function() {
+                            previewCsv(file);
+                        };
+                    }
+                }
+            }
+
+            function previewCsv(file) {
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var content = e.target.result;
+                    var modal = document.getElementById('csv-preview-modal');
+                    var modalContent = document.getElementById('csv-preview-content');
+                    modalContent.textContent = content;
+                    modal.style.display = 'flex';
+                };
+                reader.readAsText(file);
+            }
+
+            function closeCsvPreview() {
+                var modal = document.getElementById('csv-preview-modal');
+                modal.style.display = 'none';
             }
 
             // Update countdowns every second
@@ -310,8 +425,9 @@
                                             <div class="upload-zone">
                                                 <label class="upload-label">
                                                     📤 Upload CSV
-                                                    <input type="file" name="csvFile" accept=".csv" required />
+                                                    <input type="file" name="csvFile" accept=".csv" required data-period-id="${p.id}" onchange="handleFileSelect(this)" />
                                                 </label>
+                                                <span id="csv-filename-${p.id}" class="csv-filename"></span>
                                             </div>
                                             <button class="btn small" type="submit" style="margin-left: 10px;">Submit</button>
                                         </form>
@@ -322,6 +438,7 @@
                                 <form method="post" action="${pageContext.request.contextPath}/main/ranking/periods/${p.id}/close" style="display:inline-block;">
                                     <button class="btn small" type="submit" style="background: #e74c3c; color: white;">🔒 Close Period</button>
                                 </form>
+                                <a class="btn small" href="${pageContext.request.contextPath}/main/ranking/periods/${p.id}/csv-uploads" style="margin-left: 10px;">📄 View CSV Uploads</a>
                             </c:if>
                         </c:if>
                     </div>
@@ -336,6 +453,12 @@
                     <div style="font-size: 14px;">Create a period to start the monthly ranking cycle</div>
                 </div>
             </c:if>
+        </div>
+
+        <!-- CSV Preview Modal -->
+        <div id="csv-preview-modal" class="csv-preview-modal">
+            <button class="csv-preview-close" onclick="closeCsvPreview()">Close</button>
+            <div class="csv-preview-content" id="csv-preview-content"></div>
         </div>
 
         <jsp:include page="../common/footer.jsp" />
