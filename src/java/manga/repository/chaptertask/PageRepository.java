@@ -29,7 +29,6 @@ import org.springframework.stereotype.Repository;
  *
  *  2. PAGE LIST QUERIES
  *     - listByChapter(chapterId)    : gets all page slots for a chapter, along with the active task
- *     - listEmptySlots(chapterId, limit) : gets slots without an image (status = EMPTY)
  *     - findById(pageId)            : gets a single page slot by ID
  *
  *  3. CREATE PAGE SLOT
@@ -38,15 +37,11 @@ import org.springframework.stereotype.Repository;
  *     - bulkCreate(conn, chapterId, totalPages) : overload using an existing connection (within a transaction)
  *
  *  4. PAGE COUNTS
- *     - countByChapter(chapterId)   : total number of slots in the chapter
- *     - countUploaded(chapterId)    : number of slots that already have an uploaded image
  *     - nextPageNumber(chapterId)   : the next page number to be created
  *
  *  5. STATUS / IMAGE UPDATES
  *     - markUploaded(...)           : marks IN_PROGRESS when the assistant uploads an image
- *     - markApproved(...)           : marks APPROVED when the tantou approves
  *     - promoteTaskImage(...)       : syncs the image from an approved task into the page slot
- *     - upsertUploadedByPageNumber(): upserts a page by pageNumber (creates a new one if not present)
  *
  *  6. DELETE PAGE
  *     - delete(pageId)              : deletes a slot, blocked if there is an active task
@@ -412,37 +407,6 @@ public class PageRepository {
         }
     }
 
-    /**
-     * Gets slots without an image (status = EMPTY), limited to a number of results.
-     * Used to find pages nobody is working on yet so a new task can be assigned.
-     */
-    public List<PageSlotSummary> listEmptySlots(long chapterId, int limit) {
-        if (!isPageTableReady()) {
-            return new ArrayList<PageSlotSummary>();
-        }
-        String sql = "SELECT TOP (?) id, chapterId, pageNumber, imageUrl, uploadedBy, uploadedAt, status "
-                + "FROM " + TABLE_PAGE + " WHERE chapterId = ? AND status = 'EMPTY' ORDER BY pageNumber";
-        List<PageSlotSummary> rows = new ArrayList<PageSlotSummary>();
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, limit);
-            ps.setLong(2, chapterId);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    PageSlotSummary slot = new PageSlotSummary();
-                    slot.setId(rs.getLong("id"));
-                    slot.setChapterId(rs.getLong("chapterId"));
-                    slot.setPageNumber(rs.getInt("pageNumber"));
-                    slot.setStatus(rs.getString("status"));
-                    rows.add(slot);
-                }
-            }
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot list empty page slots", ex);
-        }
-        return rows;
-    }
-
     // =====================================================================
     // 3. CREATE PAGE SLOT
     // =====================================================================
@@ -504,40 +468,6 @@ public class PageRepository {
     // 4. PAGE COUNTS
     // =====================================================================
 
-    /** Counts the total number of page slots in a chapter. */
-    public int countByChapter(long chapterId) {
-        if (!isPageTableReady()) {
-            return 0;
-        }
-        String sql = "SELECT COUNT(1) FROM " + TABLE_PAGE + " WHERE chapterId = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, chapterId);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getInt(1) : 0;
-            }
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot count pages", ex);
-        }
-    }
-
-    /** Counts the number of slots that already have an uploaded image (imageUrl != null). */
-    public int countUploaded(long chapterId) {
-        if (!isPageTableReady()) {
-            return 0;
-        }
-        String sql = "SELECT COUNT(1) FROM " + TABLE_PAGE + " WHERE chapterId = ? AND imageUrl IS NOT NULL";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, chapterId);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getInt(1) : 0;
-            }
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot count uploaded pages", ex);
-        }
-    }
-
     /** Returns the next page number to be created = MAX(pageNumber) + 1. */
     public int nextPageNumber(long chapterId) {
         requirePageTableReady();
@@ -562,29 +492,9 @@ public class PageRepository {
     // 5. STATUS / IMAGE UPDATES
     // =====================================================================
 
-    /** Marks a page IN_PROGRESS when the assistant uploads an image. */
-    public void markUploaded(long pageId, String imageUrl, long uploadedBy) {
-        markUploaded(pageId, imageUrl, uploadedBy, null, null);
-    }
-
-    /** Overload of markUploaded, including completedStage information. */
-    public void markUploaded(long pageId, String imageUrl, long uploadedBy, String completedStage) {
-        markUploaded(pageId, imageUrl, uploadedBy, completedStage, null);
-    }
-
-    /** Overload of markUploaded, including completedStage + imagePhash (to prevent duplicate images across the whole chapter). */
+    /** Marks a page IN_PROGRESS when the assistant uploads an image, including completedStage + imagePhash (to prevent duplicate images across the whole chapter). */
     public void markUploaded(long pageId, String imageUrl, long uploadedBy, String completedStage, String imagePhash) {
         markImage(pageId, imageUrl, uploadedBy, "IN_PROGRESS", completedStage, imagePhash);
-    }
-
-    /** Marks a page APPROVED (without a stage). */
-    public void markApproved(long pageId, String imageUrl, long uploadedBy) {
-        markApproved(pageId, imageUrl, uploadedBy, null);
-    }
-
-    /** Marks a page APPROVED, including completedStage. */
-    public void markApproved(long pageId, String imageUrl, long uploadedBy, String completedStage) {
-        markImage(pageId, imageUrl, uploadedBy, "APPROVED", completedStage, null);
     }
 
     /** Central function that updates imageUrl, uploadedBy, status, and completedStage for a page. */
@@ -661,38 +571,6 @@ public class PageRepository {
         // imagePhash = null: this image came from a task already uploaded by the assistant via ChapterImageRepository,
         // the hash was already saved there so there's no need to duplicate it here.
         recordRevision(pageId, imageUrl, effectiveStage, uploadedBy, "TASK_APPROVED", null);
-    }
-
-    /**
-     * Upserts a page slot by (chapterId, pageNumber): updates if it exists, creates if not.
-     * Used when syncing an image from a task into a page without knowing the pageId in advance.
-     */
-    public void upsertUploadedByPageNumber(long chapterId, int pageNumber, String imageUrl, long uploadedBy) {
-        upsertUploadedByPageNumber(chapterId, pageNumber, imageUrl, uploadedBy, null);
-    }
-
-    /** Overload of upsertUploadedByPageNumber, including completedStage. */
-    public void upsertUploadedByPageNumber(long chapterId, int pageNumber, String imageUrl, long uploadedBy, String completedStage) {
-        requirePageTableReady();
-        if (imageUrl == null || imageUrl.trim().isEmpty()) {
-            return;
-        }
-        String findSql = "SELECT id FROM " + TABLE_PAGE + " WHERE chapterId = ? AND pageNumber = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement find = conn.prepareStatement(findSql)) {
-            find.setLong(1, chapterId);
-            find.setInt(2, pageNumber);
-            try (ResultSet rs = find.executeQuery()) {
-                if (rs.next()) {
-                    markApproved(rs.getLong("id"), imageUrl.trim(), uploadedBy, completedStage);
-                    return;
-                }
-            }
-            long pageId = create(chapterId, pageNumber);
-            markApproved(pageId, imageUrl.trim(), uploadedBy, completedStage);
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot sync approved task image to chapter page", ex);
-        }
     }
 
     // =====================================================================

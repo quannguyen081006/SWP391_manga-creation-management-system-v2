@@ -19,9 +19,8 @@ import org.springframework.stereotype.Repository;
  * Repository that manages Chapter.
  *
  * Table of contents:
- *  1.  listAll()                          - Gets all chapters (no filter)
- *  2.  listAll(user)                      - Gets chapters by role: ADMIN=all, MANGAKA=own series, TANTOU=assigned series
- *  3.  listBySeries()                     - Gets chapters by seriesId
+ *  1.  listAll(user)                      - Gets chapters by role: ADMIN=all, MANGAKA=own series, TANTOU=assigned series
+ *  2.  listBySeries()                     - Gets chapters by seriesId
  *  4.  findById()                         - Finds a chapter by ID
  *  5.  create()                           - Creates a chapter with a specified chapterNumber (legacy)
  *  6.  createNext()                       - Creates the next chapter, auto-incrementing chapterNumber + creating page slots if the schema is ready
@@ -76,22 +75,6 @@ public class ChapterRepository {
 
     /** Volatile cache: null=not checked yet, TRUE/FALSE=already checked result. */
     private volatile Boolean pageSchemaReady;
-
-    /** Gets all chapters, ordered newest first. */
-    public List<ChapterSummary> listAll() {
-        String sql = "SELECT " + chapterSelectColumns(null) + " FROM Chapter ORDER BY createdAt DESC";
-        List<ChapterSummary> rows = new ArrayList<ChapterSummary>();
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                rows.add(mapChapter(rs));
-            }
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot list chapters", ex);
-        }
-        return rows;
-    }
 
     /**
      * Gets chapters based on the user's role:

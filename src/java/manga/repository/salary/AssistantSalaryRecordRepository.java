@@ -23,19 +23,6 @@ public class AssistantSalaryRecordRepository {
     @Autowired
     private DataSource dataSource;
 
-    public boolean existsForPeriod(long periodId) {
-        String sql = "SELECT COUNT(1) FROM AssistantSalaryRecord WHERE periodId = ?";
-        try (Connection conn = dataSource.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, periodId);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() && rs.getInt(1) > 0;
-            }
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot check salary records", ex);
-        }
-    }
-
     public List<Map<String, Object>> findByPeriodId(long periodId) {
         String sql = "SELECT r.id, r.periodId, r.assistantId, u.fullName AS assistantName, "
                 + "r.totalTasksApproved, r.totalPagesCompleted, r.onTimeRate, r.kpiScore, "

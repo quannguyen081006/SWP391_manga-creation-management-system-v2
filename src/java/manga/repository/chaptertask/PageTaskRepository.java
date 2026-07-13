@@ -39,7 +39,6 @@ import org.springframework.stereotype.Repository;
  *     - findById()          : Tìm task theo ID
  * [4] TẠO & CẬP NHẬT TASK (Mangaka)
  *     - create()            : Tạo task mới
- *     - updateTaskByMangaka(): Cập nhật task
  *     - updateTaskProgress() : Cập nhật due date / priority / notes
  * [5] VÒNG ĐỜI TASK - Nộp / Duyệt / Từ chối
  *     - updateStatusByAssistant(): Assistant nộp task
@@ -569,85 +568,6 @@ public class PageTaskRepository {
         }
     }
 
-    /**
-     * Mangaka cập nhật toàn bộ thông tin task (kể cả đổi assistant).
-     * Task APPROVED không được chỉnh sửa (BR-TSK-06).
-     * Nếu đổi assistant sẽ gửi thông báo TASK_REASSIGNED thay vì TASK_UPDATED.
-     */
-    public void updateTaskByMangaka(long taskId, long mangakaId, long assistantId, int start, int end, List<String> taskTypes, Date dueDate) {
-        String taskInfoSql = "SELECT t.chapterId, t.assistantId, t.status FROM PageTask t WHERE t.id = ?";
-        String updateSql = "UPDATE PageTask SET assistantId = ?, pageRangeStart = ?, pageRangeEnd = ?, dueDate = ?, status = 'IN_PROGRESS', rejectionCount = 0, updatedAt = GETDATE(), assignedAt = GETDATE() WHERE id = ?";
-
-        try (Connection conn = dataSource.getConnection()) {
-            conn.setAutoCommit(false);
-            long chapterId;
-            long currentAssistantId;
-            String currentStatus;
-            try (PreparedStatement ps = conn.prepareStatement(taskInfoSql)) {
-                ps.setLong(1, taskId);
-                try (ResultSet rs = ps.executeQuery()) {
-                    if (!rs.next()) {
-                        throw new IllegalArgumentException("Task not found");
-                    }
-                    chapterId = rs.getLong("chapterId");
-                    currentAssistantId = rs.getLong("assistantId");
-                    currentStatus = rs.getString("status");
-                }
-            }
-            Map<Integer, String> pageStages = derivePageStagesForRange(conn, chapterId, start, end);
-            List<String> normalizedTaskTypes = summarizePageStages(pageStages);
-
-            long ownerId = findChapterOwnerMangaka(chapterId);
-            if (ownerId != mangakaId) {
-                throw new IllegalArgumentException("Only chapter owner can update task");
-            }
-
-            if ("APPROVED".equalsIgnoreCase(currentStatus)) {
-                throw new IllegalArgumentException("Approved task cannot be edited. Create a new task instead (BR-TSK-06)");
-            }
-
-            validateTaskAssignment(
-                    conn,
-                    taskId,
-                    chapterId,
-                    assistantId,
-                    start,
-                    end,
-                    normalizedTaskTypes,
-                    dueDate,
-                    "SELECT COUNT(1) FROM PageTask WHERE chapterId = ? AND id <> ? AND UPPER(status) NOT IN (" + SQL_CLOSED_TASK_STATUSES + ") AND NOT (pageRangeEnd < ? OR pageRangeStart > ?)",
-                    "SELECT c.submissionDeadline, c.seriesId, s.mangakaId FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?",
-                    "SELECT COUNT(1) FROM MangakaAssistant WHERE mangakaId = ? AND assistantId = ?");
-
-            try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
-                ps.setLong(1, assistantId);
-                ps.setInt(2, start);
-                ps.setInt(3, end);
-                ps.setDate(4, dueDate);
-                ps.setLong(5, taskId);
-                if (ps.executeUpdate() == 0) {
-                    throw new IllegalArgumentException("Task not found");
-                }
-            }
-            replaceTaskStages(conn, taskId, normalizedTaskTypes);
-            replaceTaskPageStages(conn, taskId, pageStages);
-            conn.commit();
-
-            refreshChapterProgress(chapterId);
-            boolean reassigned = currentAssistantId != assistantId;
-            createNotification(
-                    assistantId,
-                    reassigned ? "TASK_REASSIGNED" : "TASK_UPDATED",
-                    reassigned
-                            ? "Task #" + taskId + " has been assigned to you."
-                            : "Task #" + taskId + " has been updated.",
-                    taskId,
-                    "TASK");
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot update task", ex);
-        }
-    }
-
     // ============================================================
     // [5] VÒNG ĐỜI TASK - Nộp / Duyệt / Từ chối
     // ============================================================
@@ -782,41 +702,6 @@ public class PageTaskRepository {
         } catch (SQLException ex) {
             throw new RuntimeException("Cannot update reassignment metadata", ex);
         }
-    }
-
-    /**
-     * Validate và chuẩn hóa taskType.
-     * Các loại hợp lệ: SKETCHING, INKING, COLORING, SCREENTONE, LETTERING, MIXED.
-     */
-    private List<String> normalizeTaskTypes(List<String> taskTypes) {
-        if (taskTypes == null || taskTypes.isEmpty()) {
-            throw new IllegalArgumentException("taskTypes is required");
-        }
-        List<String> normalizedTypes = new ArrayList<String>();
-        for (String taskType : taskTypes) {
-            if (taskType == null || taskType.trim().isEmpty()) {
-                continue;
-            }
-            String normalized = taskType.trim().toUpperCase(Locale.ENGLISH);
-            if (!"SKETCHING".equals(normalized)
-                    && !"INKING".equals(normalized)
-                    && !"COLORING".equals(normalized)
-                    && !"LETTERING".equals(normalized)
-                    && !"SCREENTONE".equals(normalized)
-                    && !"MIXED".equals(normalized)) {
-                throw new IllegalArgumentException("Invalid task stage: " + taskType);
-            }
-            if (!normalizedTypes.contains(normalized)) {
-                normalizedTypes.add(normalized);
-            }
-        }
-        if (normalizedTypes.isEmpty()) {
-            throw new IllegalArgumentException("taskTypes is required");
-        }
-        if (normalizedTypes.size() > 1 && normalizedTypes.contains("MIXED")) {
-            throw new IllegalArgumentException("MIXED cannot be combined with specific task stages");
-        }
-        return normalizedTypes;
     }
 
     private void replaceTaskStages(Connection conn, long taskId, List<String> taskTypes) throws SQLException {

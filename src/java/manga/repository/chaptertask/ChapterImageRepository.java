@@ -21,17 +21,15 @@ import org.springframework.stereotype.Repository;
  * Table of contents:
  *  1. upload()                    - Upload a new image (PAGE/COVER/REFERENCE)
  *  2. deactivateActivePageImages() - Soft-delete old PAGE images with the same pageNumber before a new upload
- *  3. listByChapter()             - Get the list of active images for a chapter
- *  4. listByTask()                - Get task images + fallback to the original page when no task image exists yet
- *  5. syncFinalPageUpload()       - Mangaka syncs a finished page image from outside into ChapterImage
- *  6. backfillFinalPageUploads()  - Backfill all LETTERING pages of the chapter that lack a ChapterImage
- *  7. deactivate()                - Soft-delete one image (only the uploader or the series-owning Mangaka)
- *  8. findById()                  - Find an image by ID
- *  9. findChapterOwnerMangaka()   - Get the mangakaId who owns the chapter's series
- * 10. findChapterTantouEditor()   - Get the tantouEditorId assigned to the chapter
- * 11. findTaskChapterId()         - Get the chapterId of a PageTask
- * 12. findTaskAssistantId()       - Get the assigned assistantId of a PageTask
- * 13. hasAssignedTaskInChapter()  - Check whether the assistant has a task in the chapter
+ *  3. listByTask()                - Get task images + fallback to the original page when no task image exists yet
+ *  4. syncFinalPageUpload()       - Mangaka syncs a finished page image from outside into ChapterImage
+ *  5. backfillFinalPageUploads()  - Backfill all LETTERING pages of the chapter that lack a ChapterImage
+ *  6. deactivate()                - Soft-delete one image (only the uploader or the series-owning Mangaka)
+ *  7. findById()                  - Find an image by ID
+ *  8. findChapterOwnerMangaka()   - Get the mangakaId who owns the chapter's series
+ *  9. findChapterTantouEditor()   - Get the tantouEditorId assigned to the chapter
+ * 10. findTaskChapterId()         - Get the chapterId of a PageTask
+ * 11. findTaskAssistantId()       - Get the assigned assistantId of a PageTask
  *
  * Upload rules:
  *  - PAGE: ASSISTANT only, must have pageTaskId + pageNumber, the task must belong to the chapter, and the assistant must be the assignee
@@ -281,17 +279,6 @@ public class ChapterImageRepository {
     }
 
     /**
-     * Gets all active images of the chapter, ordered: rows with pageNumber first, then by pageNumber ASC.
-     */
-    public List<ChapterImageItem> listByChapter(long chapterId) {
-        String sql =
-            "SELECT id, chapterId, pageTaskId, uploadedBy, imageType, pageNumber, fileUrl, originalFileName, fileSizeBytes, uploadedAt, isActive, note "
-            + "FROM ChapterImage WHERE chapterId = ? AND isActive = 1 "
-            + "ORDER BY CASE WHEN pageNumber IS NULL THEN 1 ELSE 0 END, pageNumber ASC, uploadedAt ASC";
-        return list(sql, chapterId, "Cannot list chapter images");
-    }
-
-    /**
      * Gets images for a PageTask.
      * UNION of 2 sources:
      *  - Images already uploaded to the task (ChapterImage.pageTaskId = task)
@@ -536,22 +523,6 @@ public class ChapterImageRepository {
         return queryLong(sql, pageTaskId, "Task not found");
     }
 
-    /** Checks whether the assistant has at least 1 task in the chapter. */
-    public boolean hasAssignedTaskInChapter(long chapterId, long assistantId) {
-        String sql = "SELECT COUNT(1) FROM PageTask WHERE chapterId = ? AND assistantId = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, chapterId);
-            ps.setLong(2, assistantId);
-            try (ResultSet rs = ps.executeQuery()) {
-                rs.next();
-                return rs.getInt(1) > 0;
-            }
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot check assistant task", ex);
-        }
-    }
-
     /**
      * Validates upload permission before inserting.
      * PAGE  -> ASSISTANT, needs pageTaskId + pageNumber, the task must belong to the chapter and be assigned to that person.
@@ -610,23 +581,6 @@ public class ChapterImageRepository {
             throw new IllegalArgumentException("imageType must be PAGE, COVER, or REFERENCE");
         }
         return normalized;
-    }
-
-    /** Helper query with 1 long parameter. */
-    private List<ChapterImageItem> list(String sql, long id, String error) {
-        List<ChapterImageItem> rows = new ArrayList<ChapterImageItem>();
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    rows.add(map(rs));
-                }
-            }
-        } catch (SQLException ex) {
-            throw new RuntimeException(error, ex);
-        }
-        return rows;
     }
 
     /** Maps ResultSet -> ChapterImageItem. pageTaskId and pageNumber are nullable. */

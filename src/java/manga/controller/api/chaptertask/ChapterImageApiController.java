@@ -28,12 +28,10 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * TABLE OF CONTENTS:
  *  1. upload()          - POST   /api/v1/chapters/{chapterId}/images  - Upload a page image for a chapter
- *  2. listByChapter()   - GET    /api/v1/chapters/{chapterId}/images  - List images by chapter
- *  3. listByTask()      - GET    /api/v1/tasks/{taskId}/images        - List images by task
- *  4. deactivate()      - DELETE /api/v1/images/{imageId}             - Soft delete (deactivate) an image
+ *  2. listByTask()      - GET    /api/v1/tasks/{taskId}/images        - List images by task
+ *  3. deactivate()      - DELETE /api/v1/images/{imageId}             - Soft delete (deactivate) an image
  *
  * HELPER METHODS (private):
- *  - requireCanReadChapter() - Check permission to view a chapter's images
  *  - requireCanReadTask()    - Check permission to view a task's images
  *  - saveMultipartFileIfPresent() - Save the uploaded file to the server if present
  *  - findFilePart()          - Find the file Part in the request (tries "file", "image", "upload")
@@ -138,25 +136,7 @@ public class ChapterImageApiController {
     }
 
     // ============================================================
-    // 2. LIST IMAGES BY CHAPTER
-    // GET /api/v1/chapters/{chapterId}/images
-    // - Permission checked via requireCanReadChapter():
-    //     ADMIN: always allowed
-    //     MANGAKA: must be the owner of that chapter
-    //     TANTOU_EDITOR: must be the editor assigned to the series containing that chapter
-    //     ASSISTANT: must have an assigned task in that chapter
-    // ============================================================
-    @RequestMapping(value = "/chapters/{chapterId}/images", method = RequestMethod.GET)
-    public ApiResponse<List<ChapterImageItem>> listByChapter(
-            @PathVariable("chapterId") long chapterId,
-            HttpSession session) {
-        AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        requireCanReadChapter(chapterId, user);
-        return ApiResponse.ok(chapterImageRepository.listByChapter(chapterId), "Chapter images");
-    }
-
-    // ============================================================
-    // 3. LIST IMAGES BY TASK
+    // 2. LIST IMAGES BY TASK
     // GET /api/v1/tasks/{taskId}/images
     // - First get chapterId from the task, then check permission via requireCanReadTask()
     // - ASSISTANT can only view if they themselves are assigned to that task
@@ -192,29 +172,9 @@ public class ChapterImageApiController {
     }
 
     // ============================================================
-    // HELPER: CHECK PERMISSION TO VIEW CHAPTER IMAGES
-    // Priority order: ADMIN -> MANGAKA (chapter owner) -> TANTOU (assigned) -> ASSISTANT (has task in chapter)
-    // Throws IllegalArgumentException if none of the conditions are satisfied
-    // ============================================================
-    private void requireCanReadChapter(long chapterId, AuthenticatedUser user) {
-        if (user.hasRole("ADMIN")) {
-            return;
-        }
-        if (user.hasRole("MANGAKA") && chapterImageRepository.findChapterOwnerMangaka(chapterId) == user.getId()) {
-            return;
-        }
-        if (user.hasRole("TANTOU_EDITOR") && chapterImageRepository.findChapterTantouEditor(chapterId) == user.getId()) {
-            return;
-        }
-        if (user.hasRole("ASSISTANT") && chapterImageRepository.hasAssignedTaskInChapter(chapterId, user.getId())) {
-            return;
-        }
-        throw new IllegalArgumentException("Only assigned users can view chapter images");
-    }
-
     // ============================================================
     // HELPER: CHECK PERMISSION TO VIEW TASK IMAGES
-    // Same as requireCanReadChapter but ASSISTANT must be assigned to that specific task
+    // Same permission tiers as chapter-level access, but ASSISTANT must be assigned to that specific task
     // (having any task in the same chapter is not enough)
     // ============================================================
     private void requireCanReadTask(long chapterId, long taskId, AuthenticatedUser user) {

@@ -37,21 +37,6 @@ public class SalaryPeriodRepository {
             throw new RuntimeException("Cannot create salary period", ex);
         }
     }
-    
-    //Dead code
-    public boolean existsByName(long mangakaId, String name) {
-        String sql = "SELECT COUNT(1) FROM SalaryPeriod WHERE mangakaId = ? AND name = ?";
-        try (Connection conn = dataSource.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, mangakaId);
-            ps.setString(2, name);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() && rs.getInt(1) > 0;
-            }
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot check salary period name", ex);
-        }
-    }
 
     public Long findOpenPeriodId(long mangakaId) {
         String sql = "SELECT TOP 1 id FROM SalaryPeriod "

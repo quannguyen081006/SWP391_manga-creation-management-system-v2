@@ -27,7 +27,6 @@ import java.util.List;
  *     - getDetailView()        : Get details with UI action flags
  * [2] CREATE & UPDATE TASK (Mangaka)
  *     - create()               : Create a new task
- *     - update()               : Update the full task information
  *     - patch()                : Update dueDate / priority / notes
  * [3] TASK LIFECYCLE
  *     - updateStatusByAssistant(): Assistant submits task
@@ -195,30 +194,6 @@ public class PageTaskService {
                 Date.valueOf(dueDate),
                 priority,
                 notes);
-        return pageTaskRepository.findById(taskId);
-    }
-
-    /**
-     * Update the full task information (including assistant, page range, taskType).
-     * Used when the Mangaka wants to change the task's structure.
-     */
-    public TaskSummary update(
-            long taskId,
-            AuthenticatedUser user,
-            long assistantId,
-            int pageRangeStart,
-            int pageRangeEnd,
-            List<String> taskTypes,
-            String dueDate) {
-        SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can update task");
-        pageTaskRepository.updateTaskByMangaka(
-                taskId,
-                user.getId(),
-                assistantId,
-                pageRangeStart,
-                pageRangeEnd,
-                taskTypes,
-                Date.valueOf(dueDate));
         return pageTaskRepository.findById(taskId);
     }
 

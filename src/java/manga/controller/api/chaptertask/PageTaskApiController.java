@@ -27,13 +27,11 @@ import org.springframework.web.bind.annotation.RestController;
  *  3.  create()        - POST  /api/v1/chapters/{chapterId}/tasks       - Create a new task assigned to an assistant
  *  4.  patch()         - PATCH /api/v1/tasks/{id}                       - Partially update task (dueDate/priority/notes)
  *  5.  detail()        - GET   /api/v1/tasks/{id}                       - View task detail
- *  6.  update()        - PUT   /api/v1/tasks/{id}                       - Update the entire task
- *  7.  updateStatus()  - PATCH /api/v1/tasks/{id}/status                - Assistant updates task status
- *  8.  approve()       - POST  /api/v1/tasks/{id}/approve               - Mangaka approves task
- *  9.  reject()        - POST  /api/v1/tasks/{id}/reject                - Mangaka rejects task
- * 10.  deleteTask()    - POST  /api/v1/tasks/{id}/delete                - Delete task (uses POST instead of DELETE)
- * 11.  reassignTask()  - POST  /api/v1/tasks/{id}/reassign              - Reassign task to another assistant
- * 12.  extendTask()    - POST  /api/v1/tasks/{id}/extend                - Extend task deadline
+ *  6.  approve()       - POST  /api/v1/tasks/{id}/approve               - Mangaka approves task
+ *  7.  reject()        - POST  /api/v1/tasks/{id}/reject                - Mangaka rejects task
+ *  8.  deleteTask()    - POST  /api/v1/tasks/{id}/delete                - Delete task (uses POST instead of DELETE)
+ *  9.  reassignTask()  - POST  /api/v1/tasks/{id}/reassign              - Reassign task to another assistant
+ * 10.  extendTask()    - POST  /api/v1/tasks/{id}/extend                - Extend task deadline
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -97,12 +95,27 @@ public class PageTaskApiController {
                 "Task created");
     }
 
+    private List<String> parseTaskTypes(String[] taskTypes, String legacyTaskType) {
+        List<String> values = new ArrayList<String>();
+        if (taskTypes != null) {
+            for (String value : taskTypes) {
+                if (value != null) {
+                    values.addAll(Arrays.asList(value.split(",")));
+                }
+            }
+        }
+        if (values.isEmpty() && legacyTaskType != null) {
+            values.addAll(Arrays.asList(legacyTaskType.split(",")));
+        }
+        return values;
+    }
+
     // ============================================================
     // 4. PARTIAL TASK UPDATE (PATCH)
     // PATCH /api/v1/tasks/{id}
     // - Only these fields can be updated: dueDate, priority, notes — all optional
     // - assistantId and pageRange cannot be changed via this endpoint
-    //   (use reassign() or update() if those fields need to change)
+    //   (use reassign() if those fields need to change)
     // ============================================================
     @RequestMapping(value = "/tasks/{id}", method = RequestMethod.PATCH)
     public ApiResponse<TaskSummary> patch(
@@ -136,61 +149,6 @@ public class PageTaskApiController {
     public ApiResponse<List<TaskReviewHistoryEntry>> submissionHistory(@PathVariable("id") long id, HttpSession session) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
         return ApiResponse.ok(pageTaskService.getSubmissionHistory(id, user), "Submission history");
-    }
-
-    // ============================================================
-    // 6. UPDATE ENTIRE TASK (PUT)
-    // PUT /api/v1/tasks/{id}
-    // - All params are required (unlike PATCH)
-    // - Used when assistantId or pageRange also needs to change
-    // - BR-TSK-03: changing assistantId resets task status to PENDING
-    // ============================================================
-    @RequestMapping(value = "/tasks/{id}", method = RequestMethod.PUT)
-    public ApiResponse<TaskSummary> update(
-            @PathVariable("id") long id,
-            HttpSession session,
-            @RequestParam("assistantId") long assistantId,
-            @RequestParam("pageRangeStart") int pageRangeStart,
-            @RequestParam("pageRangeEnd") int pageRangeEnd,
-            @RequestParam(value = "taskTypes", required = false) String[] taskTypes,
-            @RequestParam(value = "taskType", required = false) String legacyTaskType,
-            @RequestParam("dueDate") String dueDate) {
-        AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        return ApiResponse.ok(
-                pageTaskService.update(id, user, assistantId, pageRangeStart, pageRangeEnd,
-                        parseTaskTypes(taskTypes, legacyTaskType), dueDate),
-                "Task updated");
-    }
-
-    private List<String> parseTaskTypes(String[] taskTypes, String legacyTaskType) {
-        List<String> values = new ArrayList<String>();
-        if (taskTypes != null) {
-            for (String value : taskTypes) {
-                if (value != null) {
-                    values.addAll(Arrays.asList(value.split(",")));
-                }
-            }
-        }
-        if (values.isEmpty() && legacyTaskType != null) {
-            values.addAll(Arrays.asList(legacyTaskType.split(",")));
-        }
-        return values;
-    }
-
-    // ============================================================
-    // 7. ASSISTANT UPDATES TASK STATUS
-    // PATCH /api/v1/tasks/{id}/status
-    // - Valid flow: Pending -> In-Progress -> Submitted (BR-TSK-01)
-    // - Only the assistant assigned to the task can call this endpoint (service enforced)
-    // ============================================================
-    @RequestMapping(value = "/tasks/{id}/status", method = RequestMethod.PATCH)
-    public ApiResponse<Object> updateStatus(
-            @PathVariable("id") long id,
-            HttpSession session,
-            @RequestParam("status") String status) {
-        AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        pageTaskService.updateStatusByAssistant(id, user, status);
-        return ApiResponse.ok(null, "Task submitted for review");
     }
 
     // ============================================================
