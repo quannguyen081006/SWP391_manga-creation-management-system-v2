@@ -79,6 +79,9 @@ public class PageRepository {
     @Autowired
     private DataSource dataSource;
 
+    @Autowired
+    private ChapterImageRepository chapterImageRepository;
+
     // =====================================================================
     // 1. TABLE / COLUMN READINESS CHECKS
     // =====================================================================
@@ -288,8 +291,11 @@ public class PageRepository {
         }
 
         String status = (imageUrl == null || imageUrl.trim().isEmpty()) ? "EMPTY" : "IN_PROGRESS";
+        long chapterId;
+        int pageNumber;
         String updateSql = "UPDATE " + TABLE_PAGE
-                + " SET imageUrl = ?, completedStage = ?, uploadedBy = ?, uploadedAt = GETDATE(), status = ? WHERE id = ?";
+                + " SET imageUrl = ?, completedStage = ?, uploadedBy = ?, uploadedAt = GETDATE(), status = ? "
+                + "OUTPUT INSERTED.chapterId, INSERTED.pageNumber WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(updateSql)) {
             ps.setString(1, imageUrl);
@@ -297,14 +303,27 @@ public class PageRepository {
             ps.setLong(3, changedBy);
             ps.setString(4, status);
             ps.setLong(5, pageId);
-            if (ps.executeUpdate() == 0) {
-                throw new IllegalArgumentException("Page not found");
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalArgumentException("Page not found");
+                }
+                chapterId = rs.getLong("chapterId");
+                pageNumber = rs.getInt("pageNumber");
             }
         } catch (SQLException ex) {
             throw new RuntimeException("Cannot rollback page", ex);
         }
 
         recordRevision(pageId, imageUrl, stage, changedBy, "ROLLBACK", imagePhash);
+
+        // ChapterImage only ever represents a page's finalized (LETTERING) image. Keep it in
+        // sync with the rollback: re-sync if the target is LETTERING, otherwise deactivate the
+        // stale finalized image so ChapterImage stops disagreeing with the page's real state.
+        if ("LETTERING".equalsIgnoreCase(stage) && imageUrl != null && !imageUrl.trim().isEmpty()) {
+            chapterImageRepository.syncFinalPageUpload(chapterId, pageNumber, changedBy, imageUrl, imagePhash);
+        } else {
+            chapterImageRepository.deactivatePageImages(chapterId, pageNumber);
+        }
     }
 
     // =====================================================================

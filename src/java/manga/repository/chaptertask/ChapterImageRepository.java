@@ -268,6 +268,19 @@ public class ChapterImageRepository {
     }
 
     /**
+     * Public entry point for deactivating a page's active ChapterImage rows without
+     * inserting a replacement - used when a rollback lands on a non-LETTERING stage,
+     * since ChapterImage only ever represents the page's finalized (LETTERING) image.
+     */
+    public void deactivatePageImages(long chapterId, int pageNumber) {
+        try (Connection conn = dataSource.getConnection()) {
+            deactivateActivePageImages(conn, chapterId, pageNumber);
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot deactivate page images", ex);
+        }
+    }
+
+    /**
      * Gets all active images of the chapter, ordered: rows with pageNumber first, then by pageNumber ASC.
      */
     public List<ChapterImageItem> listByChapter(long chapterId) {

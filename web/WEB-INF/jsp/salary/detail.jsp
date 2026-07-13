@@ -19,7 +19,7 @@
     <div class="salary-head">
         <div>
             <h3 class="section-title salary-title"><c:out value="${period.name}" /></h3>
-            <div>${period.startDate} &rarr; ${period.endDate}
+            <div>
                 <span class="status-badge salary-status-badge ${period.status}">${period.status}</span>
             </div>
         </div>

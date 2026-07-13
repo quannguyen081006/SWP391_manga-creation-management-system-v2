@@ -1,7 +1,6 @@
 package manga.repository.salary;
 
 import java.sql.Connection;
-import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -89,7 +88,7 @@ public class SalaryPeriodRepository {
     }
 
     public List<Map<String, Object>> listPeriodsByMangaka(long mangakaId) {
-        String sql = "SELECT id, mangakaId, name, startDate, endDate, status, settledAt, createdAt "
+        String sql = "SELECT id, mangakaId, name, status, settledAt, createdAt "
                 + "FROM SalaryPeriod WHERE mangakaId = ? ORDER BY createdAt DESC, id DESC";
         List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
         try (Connection conn = dataSource.getConnection();
@@ -107,7 +106,7 @@ public class SalaryPeriodRepository {
     }
 
     public Map<String, Object> findById(long periodId) {
-        String sql = "SELECT id, mangakaId, name, startDate, endDate, status, settledAt, createdAt "
+        String sql = "SELECT id, mangakaId, name, status, settledAt, createdAt "
                 + "FROM SalaryPeriod WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
                 PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -139,8 +138,6 @@ public class SalaryPeriodRepository {
         row.put("id", rs.getLong("id"));
         row.put("mangakaId", rs.getLong("mangakaId"));
         row.put("name", rs.getString("name"));
-        row.put("startDate", rs.getDate("startDate"));
-        row.put("endDate", rs.getDate("endDate"));
         row.put("status", rs.getString("status"));
         row.put("settledAt", rs.getTimestamp("settledAt"));
         row.put("createdAt", rs.getTimestamp("createdAt"));
