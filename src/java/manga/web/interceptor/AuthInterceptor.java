@@ -9,11 +9,6 @@ import org.springframework.web.servlet.ModelAndView;
 
 public class AuthInterceptor implements HandlerInterceptor {
 
-    /**
-     * Centralizes login and RBAC checks before controllers run.
-     * Keeping this check in one interceptor avoids repeating the same session and
-     * role checks in every Spring MVC controller method.
-     */
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         String uri = request.getRequestURI();

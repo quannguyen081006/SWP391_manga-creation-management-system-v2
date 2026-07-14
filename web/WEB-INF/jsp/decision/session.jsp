@@ -286,9 +286,7 @@
                                 <input type="text" name="justification" placeholder="Explain your reasoning..." style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 14px;" />
                             </div>
                             <div class="vote-buttons">
-                                <button type="submit" class="vote-btn vote-btn-continue">✅ Continue</button>
-                                <button type="submit" class="vote-btn vote-btn-change">🔄 Change Type</button>
-                                <button type="submit" class="vote-btn vote-btn-cancel">❌ Cancel</button>
+                                <button type="submit" class="vote-btn vote-btn-continue">Submit</button>
                             </div>
                         </form>
                     </div>
