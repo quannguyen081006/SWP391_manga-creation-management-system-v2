@@ -10,7 +10,6 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
@@ -19,7 +18,7 @@ import org.springframework.stereotype.Repository;
  * Repository that manages chapter images (ChapterImage).
  *
  * Table of contents:
- *  1. upload()                    - Upload a new image (PAGE/COVER/REFERENCE)
+ *  1. upload()                    - Upload a new PAGE image (submitted by an ASSISTANT for a task)
  *  2. deactivateActivePageImages() - Soft-delete old PAGE images with the same pageNumber before a new upload
  *  3. listByTask()                - Get task images + fallback to the original page when no task image exists yet
  *  4. syncFinalPageUpload()       - Mangaka syncs a finished page image from outside into ChapterImage
@@ -32,10 +31,9 @@ import org.springframework.stereotype.Repository;
  * 11. findTaskAssistantId()       - Get the assigned assistantId of a PageTask
  *
  * Upload rules:
- *  - PAGE: ASSISTANT only, must have pageTaskId + pageNumber, the task must belong to the chapter, and the assistant must be the assignee
- *  - COVER/REFERENCE: only the series-owning MANGAKA, no pageTaskId/pageNumber
- *  - Each new PAGE upload -> soft-deletes the old PAGE with the same pageNumber (only 1 active image per page)
- *  - Uploading a PAGE via a task -> updates the PageTask's lastProgressAt
+ *  - ASSISTANT only, must have pageTaskId + pageNumber, the task must belong to the chapter, and the assistant must be the assignee
+ *  - Each new upload -> soft-deletes the old image with the same pageNumber (only 1 active image per page)
+ *  - Uploading via a task -> updates the PageTask's lastProgressAt
  */
 @Repository
 public class ChapterImageRepository {
@@ -55,7 +53,7 @@ public class ChapterImageRepository {
      * - PAGE: deactivate the old image with the same pageNumber first, then insert the new one
      * - After inserting a PAGE via a task -> touch the PageTask's lastProgressAt
      */
-    public long upload(long chapterId, Long pageTaskId, long uploadedBy, String imageType,
+    public long upload(long chapterId, Long pageTaskId, long uploadedBy,
             Integer pageNumber, String fileUrl, String originalFileName, long fileSizeBytes, String imagePhash) {
         String insertSql =
             "INSERT INTO ChapterImage (chapterId, pageTaskId, uploadedBy, imageType, pageNumber, fileUrl, originalFileName, fileSizeBytes, uploadedAt, isActive, imagePhash) "
@@ -63,14 +61,11 @@ public class ChapterImageRepository {
 
         try (Connection conn = dataSource.getConnection()) {
             ensureImageHashColumnReady(conn);
-            String normalizedType = normalizeImageType(imageType);
-            validateUpload(conn, chapterId, pageTaskId, uploadedBy, normalizedType, pageNumber, fileUrl);
-            if ("PAGE".equals(normalizedType)) {
-                if (imagePhash != null) {
-                    checkDuplicateImage(conn, chapterId, imagePhash);
-                }
-                deactivateActivePageImages(conn, chapterId, pageNumber.intValue());
+            validateUpload(conn, chapterId, pageTaskId, uploadedBy, pageNumber, fileUrl);
+            if (imagePhash != null) {
+                checkDuplicateImage(conn, chapterId, imagePhash);
             }
+            deactivateActivePageImages(conn, chapterId, pageNumber.intValue());
 
             long newId;
             try (PreparedStatement ps = conn.prepareStatement(insertSql, PreparedStatement.RETURN_GENERATED_KEYS)) {
@@ -81,7 +76,7 @@ public class ChapterImageRepository {
                     ps.setLong(2, pageTaskId.longValue());
                 }
                 ps.setLong(3, uploadedBy);
-                ps.setString(4, normalizedType);
+                ps.setString(4, "PAGE");
                 if (pageNumber == null) {
                     ps.setNull(5, java.sql.Types.INTEGER);
                 } else {
@@ -499,7 +494,7 @@ public class ChapterImageRepository {
         return rows;
     }
 
-    /** Gets the mangakaId who owns the chapter's series (used to check COVER/REFERENCE upload permission). */
+    /** Gets the mangakaId who owns the chapter's series. */
     public long findChapterOwnerMangaka(long chapterId) {
         String sql = "SELECT s.mangakaId FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?";
         return queryLong(sql, chapterId, "Chapter not found");
@@ -525,62 +520,32 @@ public class ChapterImageRepository {
 
     /**
      * Validates upload permission before inserting.
-     * PAGE  -> ASSISTANT, needs pageTaskId + pageNumber, the task must belong to the chapter and be assigned to that person.
-     * COVER/REFERENCE -> series-owning MANGAKA, no pageTaskId/pageNumber.
+     * ASSISTANT only, needs pageTaskId + pageNumber, the task must belong to the chapter and be assigned to that person.
      */
     private void validateUpload(Connection conn, long chapterId, Long pageTaskId, long uploadedBy,
-            String imageType, Integer pageNumber, String fileUrl) throws SQLException {
+            Integer pageNumber, String fileUrl) throws SQLException {
         if (fileUrl == null || fileUrl.trim().isEmpty()) {
             throw new IllegalArgumentException("fileUrl is required");
         }
 
         ensureChapterExists(conn, chapterId);
 
-        if ("PAGE".equals(imageType)) {
-            if (!hasRole(conn, uploadedBy, "ASSISTANT")) {
-                throw new IllegalArgumentException("Only ASSISTANT can upload PAGE image");
-            }
-            if (pageTaskId == null) {
-                throw new IllegalArgumentException("pageTaskId is required for PAGE image");
-            }
-            if (pageNumber == null || pageNumber.intValue() <= 0) {
-                throw new IllegalArgumentException("pageNumber is required for PAGE image");
-            }
-            TaskAccess task = readTaskAccess(conn, pageTaskId.longValue());
-            if (task.chapterId != chapterId) {
-                throw new IllegalArgumentException("Task does not belong to this chapter");
-            }
-            if (task.assistantId != uploadedBy) {
-                throw new IllegalArgumentException("ASSISTANT can upload only for assigned task");
-            }
-            return;
+        if (!hasRole(conn, uploadedBy, "ASSISTANT")) {
+            throw new IllegalArgumentException("Only ASSISTANT can upload PAGE image");
         }
-
-        if (pageTaskId != null) {
-            throw new IllegalArgumentException("pageTaskId must be null for COVER/REFERENCE image");
+        if (pageTaskId == null) {
+            throw new IllegalArgumentException("pageTaskId is required for PAGE image");
         }
-        if (pageNumber != null) {
-            throw new IllegalArgumentException("pageNumber must be null for COVER/REFERENCE image");
+        if (pageNumber == null || pageNumber.intValue() <= 0) {
+            throw new IllegalArgumentException("pageNumber is required for PAGE image");
         }
-        if (!hasRole(conn, uploadedBy, "MANGAKA")) {
-            throw new IllegalArgumentException("Only MANGAKA can upload COVER or REFERENCE image");
+        TaskAccess task = readTaskAccess(conn, pageTaskId.longValue());
+        if (task.chapterId != chapterId) {
+            throw new IllegalArgumentException("Task does not belong to this chapter");
         }
-        long ownerId = findChapterOwnerMangaka(conn, chapterId);
-        if (ownerId != uploadedBy) {
-            throw new IllegalArgumentException("Only series owner Mangaka can upload COVER or REFERENCE image");
+        if (task.assistantId != uploadedBy) {
+            throw new IllegalArgumentException("ASSISTANT can upload only for assigned task");
         }
-    }
-
-    /** Normalizes and validates imageType: PAGE / COVER / REFERENCE. */
-    private String normalizeImageType(String imageType) {
-        if (imageType == null || imageType.trim().isEmpty()) {
-            throw new IllegalArgumentException("imageType is required");
-        }
-        String normalized = imageType.trim().toUpperCase(Locale.ENGLISH);
-        if (!"PAGE".equals(normalized) && !"COVER".equals(normalized) && !"REFERENCE".equals(normalized)) {
-            throw new IllegalArgumentException("imageType must be PAGE, COVER, or REFERENCE");
-        }
-        return normalized;
     }
 
     /** Maps ResultSet -> ChapterImageItem. pageTaskId and pageNumber are nullable. */
@@ -643,20 +608,6 @@ public class ChapterImageRepository {
                 task.chapterId = rs.getLong("chapterId");
                 task.assistantId = rs.getLong("assistantId");
                 return task;
-            }
-        }
-    }
-
-    /** Overload using an existing Connection (avoids opening a new connection within the same transaction). */
-    private long findChapterOwnerMangaka(Connection conn, long chapterId) throws SQLException {
-        String sql = "SELECT s.mangakaId FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, chapterId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) {
-                    throw new IllegalArgumentException("Chapter not found");
-                }
-                return rs.getLong(1);
             }
         }
     }

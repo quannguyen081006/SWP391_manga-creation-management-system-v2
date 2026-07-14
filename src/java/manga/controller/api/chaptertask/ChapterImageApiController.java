@@ -33,12 +33,11 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * HELPER METHODS (private):
  *  - requireCanReadTask()    - Check permission to view a task's images
- *  - saveMultipartFileIfPresent() - Save the uploaded file to the server if present
+ *  - saveMultipartFile()     - Save the uploaded file to the server
  *  - findFilePart()          - Find the file Part in the request (tries "file", "image", "upload")
  *  - copy()                  - Write a stream to a file
  *  - extractFileName()       - Get the original file name from the Content-Disposition header
  *  - sanitizeFileName()      - Sanitize a file name (remove special characters)
- *  - originalNameFromUrl()   - Get the file name from a URL when not uploaded directly
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -51,11 +50,8 @@ public class ChapterImageApiController {
     // 1. UPLOAD PAGE IMAGE
     // POST /api/v1/chapters/{chapterId}/images
     // - TANTOU_EDITOR is not allowed to upload (read-only)
-    // - Supports 2 ways to provide the file:
-    //     a) Multipart upload (attached file) -> handled by saveMultipartFileIfPresent()
-    //     b) An existing URL (fileUrl or url param) -> save the URL directly to the DB
-    // - If both are present: multipart takes priority and overwrites fileUrl
-    // - pageTaskId and imageType decide whether to save into the "task" or "chapter" folder
+    // - Always a PAGE image submitted by the assigned ASSISTANT for a task
+    // - The file must be attached as a multipart upload (handled by saveMultipartFile())
     // ============================================================
     @RequestMapping(value = "/chapters/{chapterId}/images", method = RequestMethod.POST)
     public ApiResponse<ChapterImageItem> upload(
@@ -67,42 +63,13 @@ public class ChapterImageApiController {
             throw new IllegalArgumentException("TANTOU_EDITOR can only read chapter images");
         }
 
-        String imageType = request.getParameter("imageType");
         Long pageTaskId = parseLong(request.getParameter("pageTaskId"));
         Integer pageNumber = parseInteger(request.getParameter("pageNumber"));
-        String fileUrl = trimToNull(request.getParameter("fileUrl"));
-        if (fileUrl == null) {
-            // Also support the "url" param name for compatibility with older clients
-            fileUrl = trimToNull(request.getParameter("url"));
-        }
-        String originalFileName = trimToNull(request.getParameter("originalFileName"));
-        Long fileSizeBytes = parseLong(request.getParameter("fileSizeBytes"));
 
-        // If a multipart file is present, overwrite fileUrl/originalFileName/fileSizeBytes from it
-        UploadInfo upload = saveMultipartFileIfPresent(request, pageTaskId, imageType);
-        if (upload != null) {
-            fileUrl = upload.path;
-            originalFileName = upload.originalName;
-            fileSizeBytes = Long.valueOf(upload.size);
-        }
-
-        // Default size to 0 if it cannot be determined
-        if (fileSizeBytes == null) {
-            fileSizeBytes = Long.valueOf(0L);
-        }
-        // If there's no file name, derive it from the URL
-        if (originalFileName == null && fileUrl != null) {
-            originalFileName = originalNameFromUrl(fileUrl);
-        }
-
-        // Compute the pHash for the saved file (only for direct uploads, not applicable when only a URL is provided)
-        String imagePhash = null;
-        File savedFile = null;
-        if (upload != null) {
-            requireImageExtension(originalFileName);
-            savedFile = new File(request.getServletContext().getRealPath(upload.path));
-            imagePhash = ImagePhashUtil.hashOf(savedFile);
-        }
+        UploadInfo upload = saveMultipartFile(request);
+        requireImageExtension(upload.originalName);
+        File savedFile = new File(request.getServletContext().getRealPath(upload.path));
+        String imagePhash = ImagePhashUtil.hashOf(savedFile);
 
         long id;
         try {
@@ -110,17 +77,14 @@ public class ChapterImageApiController {
                     chapterId,
                     pageTaskId,
                     user.getId(),
-                    imageType,
                     pageNumber,
-                    fileUrl,
-                    originalFileName,
-                    fileSizeBytes.longValue(),
+                    upload.path,
+                    upload.originalName,
+                    upload.size,
                     imagePhash);
         } catch (IllegalArgumentException ex) {
             // Upload rejected (e.g. duplicate image) after the file was already saved to disk -> clean up
-            if (savedFile != null) {
-                savedFile.delete();
-            }
+            savedFile.delete();
             throw ex;
         }
         return ApiResponse.ok(chapterImageRepository.findById(id), "Chapter image uploaded");
@@ -195,29 +159,26 @@ public class ChapterImageApiController {
 
     // ============================================================
     // HELPER: SAVE MULTIPART FILE TO THE SERVER
-    // - Returns null if the request is not multipart
+    // - Throws if the request has no attached file (this endpoint always expects one)
     // - Tries fields in order: "file", "image", "upload" (findFilePart)
-    // - Saves to /img/task/ if pageTaskId is present or imageType = "PAGE", otherwise /img/chapter/
+    // - Saves to /img/task/ (PAGE images are always submitted for a task)
     // - File name: {timestamp}_{sanitizedName} to avoid collisions
     // ============================================================
-    private UploadInfo saveMultipartFileIfPresent(HttpServletRequest request, Long pageTaskId, String imageType) {
+    private UploadInfo saveMultipartFile(HttpServletRequest request) {
         String contentType = request.getContentType();
         if (contentType == null || !contentType.toLowerCase().startsWith("multipart/")) {
-            return null;
+            throw new IllegalArgumentException("An image file is required");
         }
 
         try {
             Part part = findFilePart(request);
             if (part == null || part.getSize() <= 0) {
-                return null;
+                throw new IllegalArgumentException("An image file is required");
             }
 
             String originalName = extractFileName(part);
             String storedName = System.currentTimeMillis() + "_" + sanitizeFileName(originalName);
-            boolean taskImage = pageTaskId != null
-                    || "PAGE".equalsIgnoreCase(trimToNull(imageType));
-            String folder = taskImage ? "task" : "chapter";
-            String publicBase = "/img/" + folder;
+            String publicBase = "/img/task";
             String uploadPath = request.getServletContext().getRealPath(publicBase);
             if (uploadPath == null) {
                 throw new IllegalArgumentException("Cannot resolve upload directory");
@@ -300,25 +261,6 @@ public class ChapterImageApiController {
             return "chapter-image";
         }
         return name;
-    }
-
-    // HELPER: Gets the file name from a URL (strips the query string, takes the part after the last /)
-    // Falls back to "external-image" if the file name cannot be determined from the URL
-    private String originalNameFromUrl(String fileUrl) {
-        String value = fileUrl;
-        int query = value.indexOf('?');
-        if (query >= 0) {
-            value = value.substring(0, query);
-        }
-        int slash = Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\'));
-        if (slash >= 0 && slash < value.length() - 1) {
-            value = value.substring(slash + 1);
-        }
-        value = sanitizeFileName(value);
-        if (value.trim().isEmpty()) {
-            return "external-image";
-        }
-        return value;
     }
 
     private Long parseLong(String value) {
