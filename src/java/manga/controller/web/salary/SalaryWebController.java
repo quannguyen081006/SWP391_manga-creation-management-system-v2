@@ -17,21 +17,24 @@ public class SalaryWebController {
 
     @Autowired
     private SalaryService salaryService;
-
+    
+    //Mangaka xem list Ky luong
     @RequestMapping(value = "/periods", method = RequestMethod.GET)
     public String periods(HttpSession session, Model model) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
         model.addAttribute("periods", salaryService.listMyPeriods(user));
         return "salary/period";
     }
-
+    
+    //Assistant coi luong cua minh
     @RequestMapping(value = "/my", method = RequestMethod.GET)
     public String mySalary(HttpSession session, Model model) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
         model.addAttribute("records", salaryService.getMySettledSalaryRecords(user));
         return "salary/assistant-salary";
     }
-
+    
+    //Chi tiet 1 ky luong
     @RequestMapping(value = "/periods/{id}", method = RequestMethod.GET)
     public String detail(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);

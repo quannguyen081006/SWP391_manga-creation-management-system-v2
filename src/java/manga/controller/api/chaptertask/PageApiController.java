@@ -87,8 +87,8 @@ public class PageApiController {
         if (ownerId != user.getId()) {
             throw new IllegalArgumentException("Only series owner can add pages");
         }
-        int next = pageNumber != null && pageNumber > 0 ? pageNumber.intValue() : pageRepository.nextPageNumber(chapterId);
-        long pageId = pageRepository.create(chapterId, next);
+            int next = pageNumber != null && pageNumber > 0 ? pageNumber.intValue() : pageRepository.nextPageNumber(chapterId);
+            long pageId = pageRepository.create(chapterId, next);
         pageTaskRepository.refreshChapterProgress(chapterId);
         return ApiResponse.ok(pageRepository.findById(pageId), "Page slot created");
     }

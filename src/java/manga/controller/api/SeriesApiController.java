@@ -41,20 +41,20 @@ public class SeriesApiController {
         throw new IllegalArgumentException("Series not found");
     }
 
-    @RequestMapping(value = "/{id}/assistants", method = RequestMethod.GET)
-    public ApiResponse<List<Map<String, Object>>> assistants(@PathVariable("id") long id, HttpSession session) {
-        AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        if (!user.hasRole("ADMIN")) {
-            long ownerId = productionRepository.findSeriesOwnerMangaka(id);
-            long tantouId = productionRepository.findSeriesTantou(id);
-            boolean allowed = (user.hasRole("MANGAKA") && ownerId == user.getId())
-                    || (user.hasRole("TANTOU_EDITOR") && tantouId == user.getId());
-            if (!allowed) {
-                throw new IllegalArgumentException("Only series owner/assigned Tantou/Admin can view assistants");
+        @RequestMapping(value = "/{id}/assistants", method = RequestMethod.GET)
+        public ApiResponse<List<Map<String, Object>>> assistants(@PathVariable("id") long id, HttpSession session) {
+            AuthenticatedUser user = SessionUserUtil.requireUser(session);
+            if (!user.hasRole("ADMIN")) {
+                long ownerId = productionRepository.findSeriesOwnerMangaka(id);
+                long tantouId = productionRepository.findSeriesTantou(id);
+                boolean allowed = (user.hasRole("MANGAKA") && ownerId == user.getId())
+                        || (user.hasRole("TANTOU_EDITOR") && tantouId == user.getId());
+                if (!allowed) {
+                    throw new IllegalArgumentException("Only series owner/assigned Tantou/Admin can view assistants");
+                }
             }
+            return ApiResponse.ok(productionRepository.listMangakaAssistantsBySeries(id), "Mangaka assistants");
         }
-        return ApiResponse.ok(productionRepository.listMangakaAssistantsBySeries(id), "Mangaka assistants");
-    }
 
     @RequestMapping(value = "/{id}/deadline", method = RequestMethod.PUT)
     public ApiResponse<SeriesSummary> updateDeadline(
