@@ -6,7 +6,6 @@ import java.sql.Connection;
 import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -23,24 +22,21 @@ import org.springframework.stereotype.Repository;
  *  2.  listBySeries()                     - Gets chapters by seriesId
  *  4.  findById()                         - Finds a chapter by ID
  *  5.  create()                           - Creates a chapter with a specified chapterNumber (legacy)
- *  6.  createNext()                       - Creates the next chapter, auto-incrementing chapterNumber + creating page slots if the schema is ready
- *  7.  createNextWithPageSlots()          - Creates a chapter + bulk creates Page slots in 1 transaction
- *  8.  createNextLegacy()                 - Creates a chapter without Page slots (fallback when the schema isn't ready)
- *  9.  isPageSchemaReady()                - Checks whether the DB has the totalPages column and the Page table (volatile cache)
- * 10.  updateChapterMetadata()            - Updates title + submissionDeadline + recomputes publicationDate
- * 11.  updateChapterTitle()               - Updates only the title
- * 12.  submitForReview()                  - Transitions the chapter to EDITORIAL_REVIEW (only when completionPct = 100%)
- * 13.  deleteChapter()                    - Deletes a PLANNING chapter with no tasks
- * 14.  findChaptersWithDeadlineInDays()   - Finds chapters whose deadline is in N days (used by the warning scheduler)
- * 15.  findMissedSubmissionDeadlineChapters() - Finds chapters past their deadline that aren't complete
- * 16.  findSeriesOwnerMangaka()           - Gets the mangakaId who owns the series
- * 17.  findOwnerMangakaByChapter()        - Gets the mangakaId who owns the series, via chapterId
- * 18.  getChapterStatus()                 - Gets the chapter's status
- * 19.  updateChapterStatus()              - Updates the chapter status (used by ManuscriptVersionService)
- * 20.  getSeriesStatus()                  - Gets the series status via chapterId
- * 21.  findSeriesTantou()                 - Gets the tantouEditorId of the series
- * 22.  getChapterMangaka()                - Gets the mangakaId via chapterId (short alias)
- * 23.  getChapterTantou()                 - Gets the tantouEditorId via chapterId (short alias)
+ *  6.  createNext()                       - Creates the next chapter, auto-incrementing chapterNumber + creating page slots
+ *  7.  updateChapterMetadata()            - Updates title + submissionDeadline + recomputes publicationDate
+ *  8.  updateChapterTitle()               - Updates only the title
+ *  9.  submitForReview()                  - Transitions the chapter to EDITORIAL_REVIEW (only when completionPct = 100%)
+ * 10.  deleteChapter()                    - Deletes a PLANNING chapter with no tasks
+ * 11.  findChaptersWithDeadlineInDays()   - Finds chapters whose deadline is in N days (used by the warning scheduler)
+ * 12.  findMissedSubmissionDeadlineChapters() - Finds chapters past their deadline that aren't complete
+ * 13.  findSeriesOwnerMangaka()           - Gets the mangakaId who owns the series
+ * 14.  findOwnerMangakaByChapter()        - Gets the mangakaId who owns the series, via chapterId
+ * 15.  getChapterStatus()                 - Gets the chapter's status
+ * 16.  updateChapterStatus()              - Updates the chapter status (used by ManuscriptVersionService)
+ * 17.  getSeriesStatus()                  - Gets the series status via chapterId
+ * 18.  findSeriesTantou()                 - Gets the tantouEditorId of the series
+ * 19.  getChapterMangaka()                - Gets the mangakaId via chapterId (short alias)
+ * 20.  getChapterTantou()                 - Gets the tantouEditorId via chapterId (short alias)
  *
  * Deadline rules:
  *  - submissionDeadline must not be a past date
@@ -68,13 +64,8 @@ public class ChapterRepository {
     @Autowired
     private ChapterImageRepository chapterImageRepository;
 
-    private static final String CHAPTER_COLUMNS_LEGACY =
-            "id, seriesId, chapterNumber, title, status, submissionDeadline, publicationDate, completionPct, atRisk";
-    private static final String CHAPTER_COLUMNS_EXTENDED =
-            CHAPTER_COLUMNS_LEGACY + ", totalPages";
-
-    /** Volatile cache: null=not checked yet, TRUE/FALSE=already checked result. */
-    private volatile Boolean pageSchemaReady;
+    private static final String CHAPTER_COLUMNS =
+            "id, seriesId, chapterNumber, title, status, submissionDeadline, publicationDate, completionPct, atRisk, totalPages";
 
     /**
      * Gets chapters based on the user's role:
@@ -182,27 +173,13 @@ public class ChapterRepository {
     }
 
     /**
-     * Creates the next chapter with an auto-incremented chapterNumber.
-     * If the schema is ready (has the Page table + totalPages column) and totalPages > 0 -> creates page slots too.
-     * If the schema isn't ready -> falls back to createNextLegacy().
+     * Creates the next chapter with an auto-incremented chapterNumber, and bulk-creates its Page slots.
      */
     public long createNext(long seriesId, String title, Date submissionDeadline, int totalPages) {
         if (totalPages < 0) {
             throw new IllegalArgumentException("totalPages cannot be negative");
         }
-        int slots = totalPages < 1 ? 0 : totalPages;
-        try {
-            if (isPageSchemaReady() && slots > 0) {
-                return createNextWithPageSlots(seriesId, title, submissionDeadline, slots);
-            }
-            return createNextLegacy(seriesId, title, submissionDeadline);
-        } catch (RuntimeException ex) {
-            if (isMissingPageSchema(ex)) {
-                pageSchemaReady = Boolean.FALSE;
-                return createNextLegacy(seriesId, title, submissionDeadline);
-            }
-            throw ex;
-        }
+        return createNextWithPageSlots(seriesId, title, submissionDeadline, totalPages);
     }
 
     /**
@@ -264,115 +241,13 @@ public class ChapterRepository {
     }
 
     /**
-     * Creates a chapter without Page slots (fallback when the DB lacks the Page table/totalPages column).
-     * Uses UPDLOCK/HOLDLOCK to avoid a race condition when computing chapterNumber.
-     */
-    private long createNextLegacy(long seriesId, String title, Date submissionDeadline) {
-        String nextSql = "SELECT ISNULL(MAX(chapterNumber), 0) + 1 FROM Chapter WITH (UPDLOCK, HOLDLOCK) WHERE seriesId = ?";
-        String insertSql = "INSERT INTO Chapter (seriesId, chapterNumber, title, status, submissionDeadline, publicationDate, completionPct, atRisk, createdAt) VALUES (?, ?, ?, 'PLANNING', ?, ?, 0.00, 0, GETDATE())";
-
-        try (Connection conn = dataSource.getConnection()) {
-            boolean oldAutoCommit = conn.getAutoCommit();
-            conn.setAutoCommit(false);
-            try {
-                validateChapterDeadlineForSeries(conn, seriesId, submissionDeadline);
-
-                int nextChapterNumber;
-                try (PreparedStatement ps = conn.prepareStatement(nextSql)) {
-                    ps.setLong(1, seriesId);
-                    try (ResultSet rs = ps.executeQuery()) {
-                        if (!rs.next()) {
-                            throw new IllegalArgumentException("Series not found");
-                        }
-                        nextChapterNumber = rs.getInt(1);
-                    }
-                }
-
-                long newId;
-                try (PreparedStatement ps = conn.prepareStatement(insertSql, PreparedStatement.RETURN_GENERATED_KEYS)) {
-                    ps.setLong(1, seriesId);
-                    ps.setInt(2, nextChapterNumber);
-                    ps.setString(3, title);
-                    ps.setDate(4, submissionDeadline);
-                    ps.setDate(5, publicationDateFor(submissionDeadline));
-                    ps.executeUpdate();
-                    try (ResultSet rs = ps.getGeneratedKeys()) {
-                        if (!rs.next()) {
-                            throw new IllegalStateException("Cannot create chapter");
-                        }
-                        newId = rs.getLong(1);
-                    }
-                }
-                conn.commit();
-                return newId;
-            } catch (RuntimeException ex) {
-                try { conn.rollback(); } catch (SQLException ignore) {}
-                throw ex;
-            } catch (SQLException ex) {
-                try { conn.rollback(); } catch (SQLException ignore) {}
-                throw new RuntimeException("Cannot create chapter", ex);
-            } finally {
-                conn.setAutoCommit(oldAutoCommit);
-            }
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot create chapter", ex);
-        }
-    }
-
-    /**
-     * Checks whether the DB has the totalPages column in Chapter and the Page table.
-     * The result is cached with a volatile Boolean so it's queried only once, thread-safe.
-     */
-    private boolean isPageSchemaReady() {
-        if (pageSchemaReady != null) {
-            return pageSchemaReady.booleanValue();
-        }
-        synchronized (this) {
-            if (pageSchemaReady != null) {
-                return pageSchemaReady.booleanValue();
-            }
-            boolean ready = false;
-            String sql = "SELECT CASE WHEN COL_LENGTH('dbo.Chapter', 'totalPages') IS NOT NULL "
-                    + "AND OBJECT_ID('dbo.Page', 'U') IS NOT NULL THEN 1 ELSE 0 END";
-            try (Connection conn = dataSource.getConnection();
-                 PreparedStatement ps = conn.prepareStatement(sql);
-                 ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    ready = rs.getInt(1) == 1;
-                }
-            } catch (SQLException ex) {
-                ready = false;
-            }
-            pageSchemaReady = Boolean.valueOf(ready);
-            return ready;
-        }
-    }
-
-    /** Checks whether the exception is caused by a missing Page/totalPages schema (for fallback). */
-    private boolean isMissingPageSchema(Throwable ex) {
-        while (ex != null) {
-            String msg = ex.getMessage();
-            if (msg != null) {
-                String lower = msg.toLowerCase();
-                if (lower.contains("totalpages") || lower.contains("invalid object name 'page'")) {
-                    return true;
-                }
-            }
-            ex = ex.getCause();
-        }
-        return false;
-    }
-
-    /**
-     * Returns the list of SELECT columns appropriate for the current schema.
-     * tablePrefix != null -> prefixes each column (used when JOINing).
+     * Returns the list of SELECT columns, optionally prefixed with the table alias (used when JOINing).
      */
     private String chapterSelectColumns(String tablePrefix) {
-        String cols = isPageSchemaReady() ? CHAPTER_COLUMNS_EXTENDED : CHAPTER_COLUMNS_LEGACY;
         if (tablePrefix == null || tablePrefix.isEmpty()) {
-            return cols;
+            return CHAPTER_COLUMNS;
         }
-        String[] parts = cols.split(", ");
+        String[] parts = CHAPTER_COLUMNS.split(", ");
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < parts.length; i++) {
             if (i > 0) {
@@ -485,11 +360,9 @@ public class ChapterRepository {
                         }
                     }
                 }
-                if (isPageSchemaReady()) {
-                    try (PreparedStatement ps = conn.prepareStatement(deletePagesSql)) {
-                        ps.setLong(1, chapterId);
-                        ps.executeUpdate();
-                    }
+                try (PreparedStatement ps = conn.prepareStatement(deletePagesSql)) {
+                    ps.setLong(1, chapterId);
+                    ps.executeUpdate();
                 }
                 try (PreparedStatement ps = conn.prepareStatement(deleteSql)) {
                     ps.setLong(1, chapterId);
@@ -666,7 +539,6 @@ public class ChapterRepository {
     /**
      * Maps ResultSet -> ChapterSummary.
      * atRisk = true if the DB flags it OR the deadline has passed without reaching 100% (computed in real time).
-     * totalPages is read conditionally (only when the schema is ready).
      */
     private ChapterSummary mapChapter(ResultSet rs) throws SQLException {
         ChapterSummary c = new ChapterSummary();
@@ -684,24 +556,9 @@ public class ChapterRepository {
                 && c.getCompletionPct() < 100.0
                 && ("PLANNING".equalsIgnoreCase(c.getStatus()) || "IN_PROGRESS".equalsIgnoreCase(c.getStatus()));
         c.setAtRisk(storedAtRisk || missedDeadline);
-        if (hasColumn(rs, "totalPages")) {
-            int totalPages = rs.getInt("totalPages");
-            c.setTotalPages(rs.wasNull() ? null : Integer.valueOf(totalPages));
-        } else {
-            c.setTotalPages(null);
-        }
+        int totalPages = rs.getInt("totalPages");
+        c.setTotalPages(rs.wasNull() ? null : Integer.valueOf(totalPages));
         return c;
-    }
-
-    /** Checks whether the ResultSet has a column named label (used to read totalPages safely). */
-    private boolean hasColumn(ResultSet rs, String label) throws SQLException {
-        ResultSetMetaData md = rs.getMetaData();
-        for (int i = 1; i <= md.getColumnCount(); i++) {
-            if (label.equalsIgnoreCase(md.getColumnLabel(i))) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /** Computes publicationDate = submissionDeadline + 14 days. */
