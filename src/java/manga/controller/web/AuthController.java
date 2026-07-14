@@ -17,20 +17,11 @@ public class AuthController {
     @Autowired
     private AuthService authService;
 
-    /**
-     * Shows the login page for users who do not yet have an AUTH_USER in session.
-     */
     @RequestMapping(value = "/login", method = RequestMethod.GET)
     public String loginPage() {
         return "auth/login";
     }
 
-    /**
-     * Checks submitted credentials and stores the authenticated user in HttpSession.
-     * This app uses server-side session auth because JSP pages are rendered by the
-     * server, so controllers and views can read one shared AUTH_USER instead of
-     * passing a JWT through every page request.
-     */
     @RequestMapping(value = "/login", method = RequestMethod.POST)
     public String login(
             @RequestParam("username") String username,
@@ -50,9 +41,6 @@ public class AuthController {
         }
     }
 
-    /**
-     * Ends the login session by invalidating HttpSession, then returns to login.
-     */
     @RequestMapping(value = "/logout", method = RequestMethod.GET)
     public String logout(HttpServletRequest request) {
         HttpSession session = request.getSession(false);

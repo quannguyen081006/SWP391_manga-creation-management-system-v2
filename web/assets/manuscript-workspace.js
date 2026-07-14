@@ -49,6 +49,7 @@ document.addEventListener('DOMContentLoaded', function () {
     initializeWorkspacePage();
 });
 
+//tao link image
 function imageUrl(fileUrl) {
     const url = String(fileUrl || '');
     if (url.indexOf('http://') === 0 || url.indexOf('https://') === 0 || url.indexOf(window.contextPath + '/') === 0) {
@@ -57,6 +58,7 @@ function imageUrl(fileUrl) {
     return window.contextPath + url;
 }
 
+//can giua man hinh
 function scrollToPage(pageId) {
     const pageElement = document.getElementById('page-' + pageId);
     if (pageElement) {

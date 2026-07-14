@@ -10,12 +10,6 @@ public class AuthService {
 
     @Autowired
     private UserRepository userRepository;
-
-    /**
-     * Authenticates an active account and returns the session user model.
-     * Password comparison intentionally keeps the existing plain passwordHash
-     * behavior because changing password storage is outside this cleanup.
-     */
     public AuthenticatedUser login(String username, String password) {
         AuthenticatedUser user = userRepository.findByUsername(username);
         if (user == null) {
