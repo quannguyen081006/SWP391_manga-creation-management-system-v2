@@ -224,14 +224,6 @@ function showAnnotationModal(event, img) {
     const xPercent = ((event.clientX - rect.left) / rect.width) * 100;
     const yPercent = ((event.clientY - rect.top) / rect.height) * 100;
 
-    console.log('Coordinate Debug', {
-        rectWidth: rect.width,
-        rectHeight: rect.height,
-        clientX: event.clientX,
-        clientY: event.clientY,
-        xPercent,
-        yPercent
-    });
 
     // Validate coordinates
     if (isNaN(xPercent) || isNaN(yPercent)) {
