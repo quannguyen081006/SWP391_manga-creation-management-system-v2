@@ -89,4 +89,103 @@ public class MangakaRankingRepository {
             throw new RuntimeException("Cannot check if mangaka ranking exists", ex);
         }
     }
+    
+    public void calculateSeriesRanking(Connection conn, long periodId) throws SQLException {
+        String insertRankingSql = ";WITH agg AS ("
+                + " SELECT ve.seriesId,"
+                + "   SUM(CAST(ve.voteCount AS BIGINT)) AS totalLikes,"
+                + "   SUM(CAST(ve.readerCount AS BIGINT)) AS totalReads,"
+                + "   CAST(("
+                + "     SUM(CAST(ve.voteCount AS DECIMAL(18,6)))"
+                + "     / NULLIF(SUM(CAST(ve.readerCount AS DECIMAL(18,6))), 0)"
+                + "   ) * 100 AS DECIMAL(6,2)) AS rankScore"
+                + " FROM VoteEntry ve"
+                + " WHERE ve.periodId = ?"
+                + "   AND ve.voteCount >= 0"
+                + "   AND ve.readerCount > 0"
+                + "   AND ve.voteCount <= ve.readerCount"
+                + " GROUP BY ve.seriesId"
+                + "), ranked AS ("
+                + " SELECT"
+                + "   a.seriesId,"
+                + "   a.totalLikes,"
+                + "   a.totalReads,"
+                + "   a.rankScore,"
+                + "   s.publicationDate,"
+                + "   ROW_NUMBER() OVER (ORDER BY a.rankScore DESC, a.totalLikes DESC,"
+                + "     CASE WHEN s.publicationDate IS NULL THEN 1 ELSE 0 END ASC,"
+                + "     s.publicationDate ASC, a.seriesId ASC) AS rankPosition,"
+                + "   COUNT(*) OVER () AS totalRows"
+                + " FROM agg a"
+                + " JOIN Series s ON s.id = a.seriesId"
+                + ")"
+                + " INSERT INTO RankingRecord ("
+                + "   periodId,"
+                + "   seriesId,"
+                + "   rankScore,"
+                + "   rankPosition,"
+                + "   isBottomTwenty,"
+                + "   totalLikes,"
+                + "   totalReads,"
+                + "   calculatedAt"
+                + " )"
+                + " SELECT"
+                + "   ?,"
+                + "   r.seriesId,"
+                + "   r.rankScore,"
+                + "   r.rankPosition,"
+                + "   CASE"
+                + "     WHEN r.rankPosition > r.totalRows - CEILING(r.totalRows * 0.2)"
+                + "       THEN 1"
+                + "     ELSE 0"
+                + "   END,"
+                + "   r.totalLikes,"
+                + "   r.totalReads,"
+                + "   GETDATE()"
+                + " FROM ranked r";
+
+        try ( PreparedStatement ps = conn.prepareStatement(insertRankingSql)) {
+            ps.setLong(1, periodId);
+            ps.setLong(2, periodId);
+            ps.executeUpdate();
+        }
+    }
+    
+    public void calculateMangakaRanking(Connection conn, long periodId) throws SQLException {
+        String sql = ";WITH mangaka_agg AS ("
+                + "  SELECT "
+                + "    s.mangakaId,"
+                + "    SUM(CAST(ve.readerCount AS BIGINT)) AS totalReads,"
+                + "    SUM(ve.revenue) AS totalRevenue,"
+                + "    SUM(CAST(ve.voteCount AS BIGINT)) AS totalLikes"
+                + "  FROM VoteEntry ve"
+                + "  JOIN Series s ON s.id = ve.seriesId"
+                + "  WHERE ve.periodId = ?"
+                + "  GROUP BY s.mangakaId"
+                + "), mangaka_ranked AS ("
+                + "  SELECT"
+                + "    mangakaId,"
+                + "    totalReads,"
+                + "    totalRevenue,"
+                + "    totalLikes,"
+                + "    ROW_NUMBER() OVER (ORDER BY totalReads DESC, totalRevenue DESC, totalLikes DESC, mangakaId ASC) AS rankPosition"
+                + "  FROM mangaka_agg"
+                + ")"
+                + "INSERT INTO MangakaRankingRecord (periodId, mangakaId, totalReads, totalRevenue, totalLikes, rankPosition, calculatedAt)"
+                + "SELECT"
+                + "  ?,"
+                + "  mr.mangakaId,"
+                + "  mr.totalReads,"
+                + "  mr.totalRevenue,"
+                + "  mr.totalLikes,"
+                + "  mr.rankPosition,"
+                + "  GETDATE()"
+                + "FROM mangaka_ranked mr";
+
+        try ( PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, periodId);
+            ps.setLong(2, periodId);
+            ps.executeUpdate();
+        }
+    }
 }

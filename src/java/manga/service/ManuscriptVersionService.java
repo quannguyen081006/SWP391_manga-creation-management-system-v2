@@ -341,15 +341,12 @@ public class ManuscriptVersionService {
      * Uses manual transaction handling to ensure atomicity across repository
      * calls.
      */
+    @Transactional
     public void submitForReview(Long manuscriptVersionId, AuthenticatedUser user) {
         validateLatestVersion(manuscriptVersionId);
 
-        ManuscriptVersion version = manuscriptVersionRepository.findById(manuscriptVersionId);
-        if (version == null) {
-            throw new BusinessRuleException("Manuscript version not found");
-        }
-
         // Validate chapterId is not zero (prevents orphaned locks)
+        ManuscriptVersion version = manuscriptVersionRepository.findById(manuscriptVersionId);
         if (version.getChapterId() == null || version.getChapterId() == 0) {
             throw new BusinessRuleException("Manuscript version has invalid chapterId: " + version.getChapterId());
         }
@@ -368,57 +365,18 @@ public class ManuscriptVersionService {
             throw new BusinessRuleException("Only one manuscript can be UNDER_REVIEW per chapter (BR-2)");
         }
 
-        // Manual transaction handling to ensure atomicity
-        // All operations must succeed or all must rollback
-        java.sql.Connection conn = null;
-        boolean oldAutoCommit = false;
-        try {
-            conn = dataSource.getConnection();
-            oldAutoCommit = conn.getAutoCommit();
-            conn.setAutoCommit(false);
+        // Lock production (BR-9)
+        lockProduction(version.getChapterId(), manuscriptVersionId, user.getId());
 
-            // Lock production (BR-9)
-            lockProduction(version.getChapterId(), manuscriptVersionId, user.getId());
+        // Update status to SUBMITTED_FOR_REVIEW first, then UNDER_REVIEW
+        manuscriptVersionRepository.updateStatus(manuscriptVersionId, ManuscriptStatus.SUBMITTED_FOR_REVIEW);
 
-            // Update status to SUBMITTED_FOR_REVIEW first, then UNDER_REVIEW
-            manuscriptVersionRepository.updateStatus(manuscriptVersionId, ManuscriptStatus.SUBMITTED_FOR_REVIEW);
-
-            // Immediately transition to UNDER_REVIEW for reviewer assignment
-            manuscriptVersionRepository.updateSubmit(manuscriptVersionId, user.getId());
-
-            // Create ReviewTask for SLA tracking (BR-51, BR-52)
-            // This is the critical operation that may fail if table doesn't exist
-            reviewTaskService.createReviewTask(manuscriptVersionId, user);
-
-            // Commit transaction - all operations succeeded
-            conn.commit();
-
-        } catch (BusinessRuleException ex) {
-            // Business rule violations should not rollback - they're validation errors
-            throw ex;
-        } catch (Exception ex) {
-            // Rollback transaction on any error
-            try {
-                if (conn != null) {
-                    conn.rollback();
-                }
-            } catch (SQLException rollbackEx) {
-                System.err.println("Error rolling back transaction: " + rollbackEx.getMessage());
-            }
-
-            // Re-throw with context
-            throw new BusinessRuleException("SUBMIT_FOR_REVIEW_FAILED: " + ex.getMessage());
-        } finally {
-            // Restore auto-commit and close connection
-            try {
-                if (conn != null) {
-                    conn.setAutoCommit(oldAutoCommit);
-                    conn.close();
-                }
-            } catch (SQLException ex) {
-                System.err.println("Error closing connection: " + ex.getMessage());
-            }
-        }
+        // Immediately transition to UNDER_REVIEW for reviewer assignment
+        manuscriptVersionRepository.updateSubmit(manuscriptVersionId, user.getId()); 
+        
+        // Create ReviewTask for SLA tracking (BR-51, BR-52)
+        // This is the critical operation that may fail if table doesn't exist
+        reviewTaskService.createReviewTask(manuscriptVersionId, user);
 
         // Notify Tantou (outside transaction - notification failure should not affect submission)
         Long tantouId = chapterRepository.getChapterTantou(version.getChapterId());
@@ -692,8 +650,6 @@ public class ManuscriptVersionService {
         );
 
         page.setSnapshotFileUrl(fileUrl);
-
-        page.setOriginalFileUrl(fileUrl);
 
         page.setSnapshotChecksum(checksum);
 
