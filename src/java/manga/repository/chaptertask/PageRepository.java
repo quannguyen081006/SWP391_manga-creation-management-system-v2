@@ -22,10 +22,9 @@ import org.springframework.stereotype.Repository;
  * A page slot belongs to a chapter and can be assigned to an assistant's PageTask.
  *
  * =====================  TABLE OF CONTENTS  =====================
- *  1. TABLE / COLUMN READINESS CHECKS
+ *  1. TABLE READINESS CHECKS
  *     - isPageTableReady()          : checks whether the Page table exists (lazy + cached)
  *     - requirePageTableReady()     : throws if the table doesn't exist
- *     - ensurePageStageColumnReady(): automatically ALTER TABLE to add the completedStage column if missing
  *
  *  2. PAGE LIST QUERIES
  *     - listByChapter(chapterId)    : gets all page slots for a chapter, along with the active task
@@ -68,7 +67,6 @@ public class PageRepository {
 
     /** Lazy cache: null = not checked yet, true/false = the result. Uses volatile for thread safety. */
     private volatile Boolean pageTableReady;
-    private volatile Boolean pageStageColumnReady;
     private volatile Boolean pageRevisionTableReady;
 
     @Autowired
@@ -78,7 +76,7 @@ public class PageRepository {
     private ChapterImageRepository chapterImageRepository;
 
     // =====================================================================
-    // 1. TABLE / COLUMN READINESS CHECKS
+    // 1. TABLE READINESS CHECKS
     // =====================================================================
 
     /** Throws IllegalArgumentException if the Page table has not been created. */
@@ -115,42 +113,6 @@ public class PageRepository {
             }
             pageTableReady = Boolean.valueOf(ready);
             return ready;
-        }
-    }
-
-    /**
-     * Ensures the completedStage column exists in the Page table.
-     * If it doesn't exist yet, automatically runs ALTER TABLE to add it (a small automatic migration).
-     * Also uses double-checked locking + caching.
-     */
-    public void ensurePageStageColumnReady() {
-        if (!isPageTableReady()) {
-            return;
-        }
-        if (Boolean.TRUE.equals(pageStageColumnReady)) {
-            return;
-        }
-        synchronized (this) {
-            if (Boolean.TRUE.equals(pageStageColumnReady)) {
-                return;
-            }
-            try (Connection conn = dataSource.getConnection()) {
-                boolean exists;
-                try (PreparedStatement ps = conn.prepareStatement(
-                        "SELECT CASE WHEN COL_LENGTH('dbo.Page', 'completedStage') IS NULL THEN 0 ELSE 1 END");
-                     ResultSet rs = ps.executeQuery()) {
-                    exists = rs.next() && rs.getInt(1) == 1;
-                }
-                if (!exists) {
-                    try (PreparedStatement ps = conn.prepareStatement(
-                            "ALTER TABLE " + TABLE_PAGE + " ADD completedStage varchar(30) NULL")) {
-                        ps.executeUpdate();
-                    }
-                }
-                pageStageColumnReady = Boolean.TRUE;
-            } catch (SQLException ex) {
-                throw new RuntimeException("Cannot prepare page stage column", ex);
-            }
         }
     }
 
@@ -262,7 +224,6 @@ public class PageRepository {
      */
     public void rollbackToRevision(long pageId, long revisionId, long changedBy) {
         requirePageTableReady();
-        ensurePageStageColumnReady();
         ensurePageRevisionTableReady();
 
         String readSql = "SELECT imageUrl, completedStage, imagePhash FROM [dbo].[PageRevision] WHERE id = ? AND pageId = ?";
@@ -355,7 +316,6 @@ public class PageRepository {
         if (!isPageTableReady()) {
             return new ArrayList<PageSlotSummary>();
         }
-        ensurePageStageColumnReady();
         List<PageSlotSummary> rows = new ArrayList<PageSlotSummary>();
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(LIST_SQL)) {
@@ -380,7 +340,6 @@ public class PageRepository {
         if (!isPageTableReady()) {
             return null;
         }
-        ensurePageStageColumnReady();
         String sql = "SELECT id, chapterId, pageNumber, imageUrl, uploadedBy, uploadedAt, status, completedStage "
                 + "FROM " + TABLE_PAGE + " WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -414,7 +373,6 @@ public class PageRepository {
     /** Creates a new page slot with status EMPTY. Returns the ID of the newly created slot. */
     public long create(long chapterId, int pageNumber) {
         requirePageTableReady();
-        ensurePageStageColumnReady();
         String sql = "INSERT INTO " + TABLE_PAGE + " (chapterId, pageNumber, status, createdAt) VALUES (?, ?, 'EMPTY', GETDATE())";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
@@ -452,7 +410,6 @@ public class PageRepository {
         if (!isPageTableReady()) {
             return;
         }
-        ensurePageStageColumnReady();
         String sql = "INSERT INTO " + TABLE_PAGE + " (chapterId, pageNumber, status, createdAt) VALUES (?, ?, 'EMPTY', GETDATE())";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             for (int i = 1; i <= totalPages; i++) {
@@ -500,7 +457,6 @@ public class PageRepository {
     /** Central function that updates imageUrl, uploadedBy, status, and completedStage for a page. */
     private void markImage(long pageId, String imageUrl, long uploadedBy, String status, String completedStage, String imagePhash) {
         requirePageTableReady();
-        ensurePageStageColumnReady();
         String stage = resolveNextStage(pageId, completedStage);
         String sql = "UPDATE " + TABLE_PAGE + " SET imageUrl = ?, uploadedBy = ?, uploadedAt = GETDATE(), status = ?, completedStage = COALESCE(?, completedStage) WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -552,7 +508,6 @@ public class PageRepository {
     /** Updates the image and stage for a page when a task is approved, using taskType to derive the stage. */
     private void markTaskApproved(long pageId, String imageUrl, long uploadedBy, String taskType) {
         requirePageTableReady();
-        ensurePageStageColumnReady();
         String stage = resolveTaskCompletionStage(pageId, taskType);
         String sql = "UPDATE " + TABLE_PAGE + " SET imageUrl = ?, uploadedBy = ?, uploadedAt = GETDATE(), status = 'APPROVED', completedStage = COALESCE(?, completedStage) WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -738,7 +693,7 @@ public class PageRepository {
         slot.setUploadedBy(rs.wasNull() ? null : Long.valueOf(uploadedBy));
         slot.setUploadedAt(rs.getTimestamp("uploadedAt"));
         slot.setStatus(rs.getString("status"));
-        slot.setCompletedStage(readOptionalString(rs, "completedStage"));
+        slot.setCompletedStage(rs.getString("completedStage"));
         long taskId = rs.getLong("taskId");
         slot.setTaskId(rs.wasNull() ? null : Long.valueOf(taskId));
         slot.setTaskType(rs.getString("taskType"));
@@ -747,18 +702,6 @@ public class PageRepository {
         slot.setAssistantId(rs.wasNull() ? null : Long.valueOf(assistantId));
         slot.setAssistantName(rs.getString("assistantName"));
         return slot;
-    }
-
-    /**
-     * Reads an optional string column - does not throw if the column doesn't exist in the ResultSet.
-     * Used for compatibility with older DBs that don't have the completedStage column.
-     */
-    private String readOptionalString(ResultSet rs, String column) throws SQLException {
-        try {
-            return rs.getString(column);
-        } catch (SQLException ex) {
-            return null;
-        }
     }
 
     /** Checks whether the exception is caused by the Page table not existing. */

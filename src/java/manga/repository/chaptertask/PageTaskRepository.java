@@ -1639,7 +1639,6 @@ public class PageTaskRepository {
      * Nếu chapter mới trở thành atRisk, gửi thông báo cho Tantou Editor.
      */
     public void refreshChapterProgress(long chapterId) {
-        pageRepository.ensurePageStageColumnReady();
         String readRiskSql = "SELECT atRisk FROM Chapter WHERE id = ?";
         String updateSql =
             "UPDATE c SET "
@@ -1734,7 +1733,6 @@ public class PageTaskRepository {
 
     /** Kiểm tra tất cả trang của chapter đã đạt completedStage = LETTERING (giai đoạn cuối) chưa */
     public boolean areAllPagesFullyCompleted(long chapterId) {
-        pageRepository.ensurePageStageColumnReady();
         String sql = "SELECT "
                 + "COUNT(1) AS totalCount, "
                 + "SUM(CASE WHEN UPPER(ISNULL(p.completedStage, '')) = 'LETTERING' THEN 1 ELSE 0 END) AS completedCount "
