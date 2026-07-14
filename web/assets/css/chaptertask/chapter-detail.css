@@ -1,5 +1,8 @@
 /* Chapter detail page styles: page slots, task table popovers, and upload modals. */
 
+/* Edit tab: explicit Save button for title/deadline (no autosave) */
+.chapter-edit-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+
 /* Page revision history timeline (pageHistoryModal) */
 .page-history-list { display: flex; flex-direction: column; gap: 10px; max-height: 60vh; overflow-y: auto; }
 .page-history-entry { display: flex; gap: 12px; align-items: center; padding: 10px; border: 1px solid #e5e7eb; border-radius: 10px; }

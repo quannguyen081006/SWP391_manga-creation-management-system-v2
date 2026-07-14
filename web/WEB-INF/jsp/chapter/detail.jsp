@@ -180,6 +180,9 @@
                 <label class="field-label" for="updateDeadline">Submission deadline</label>
                 <input id="updateDeadline" name="submissionDeadline" type="date" required />
                 <div id="updateError" class="alert error chapter-detail-inline-29"></div>
+                <div class="chapter-edit-actions">
+                    <button type="button" class="btn primary" id="btnSaveChapterMetadata" disabled>Save</button>
+                </div>
             </form>
         </div>
     </div>

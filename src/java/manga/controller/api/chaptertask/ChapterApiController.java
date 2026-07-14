@@ -91,9 +91,7 @@ public class ChapterApiController {
     // ============================================================
     // 5. UPDATE CHAPTER
     // PUT /api/v1/chapters/{id}
-    // - All params are optional (only pass the ones you want to update)
-    // - Multiple param names for deadline (submissionDeadline / deadline / chapterDeadline)
-    //   -> service handles it, controller just passes everything through
+    // - title and submissionDeadline are both optional (only pass what you want to update)
     // - Update permission is checked by the service (usually only the MANGAKA who owns the chapter)
     // ============================================================
     @RequestMapping(value = "/chapters/{id}", method = RequestMethod.PUT)
@@ -101,13 +99,10 @@ public class ChapterApiController {
             @PathVariable("id") long id,
             HttpSession session,
             @RequestParam(value = "title", required = false) String title,
-            @RequestParam(value = "submissionDeadline", required = false) String submissionDeadline,
-            @RequestParam(value = "publicationDate", required = false) String publicationDate,
-            @RequestParam(value = "deadline", required = false) String deadline,
-            @RequestParam(value = "chapterDeadline", required = false) String chapterDeadline) {
+            @RequestParam(value = "submissionDeadline", required = false) String submissionDeadline) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
         return ApiResponse.ok(
-                chapterService.update(id, user, title, submissionDeadline, publicationDate, deadline, chapterDeadline),
+                chapterService.update(id, user, title, submissionDeadline),
                 "Chapter updated");
     }
 

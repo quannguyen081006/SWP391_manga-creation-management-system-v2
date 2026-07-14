@@ -58,7 +58,6 @@
     var activeOverdueTaskId = null;  // Task ID in the overdue decision modal
     var taskImagesCache = {};        // Image cache by taskId: { taskId: [imgObjects] }
     var taskInlineLoaded = {};       // Marks which tasks have finished loading inline
-    var metadataSaveTimer = null;    // Debounce timer for metadata auto-save
 
     // ============================================================
     // 2. UTILITY
@@ -1014,6 +1013,7 @@
         document.getElementById('updateChapterId').value = chapter.id;
         document.getElementById('updateTitle').value = chapter.title || '';
         document.getElementById('updateDeadline').value = formatDate(chapter.submissionDeadline) || '';
+        updateSaveButtonState();
 
         var owner = isOwner();
         var chapterStatus = String(chapter.status || '').toUpperCase();
@@ -1696,8 +1696,7 @@
     });
 
     /**
-     * Auto-save metadata (title + deadline) sau 700ms debounce.
-     * Chỉ gọi API nếu có thay đổi thực sự so với chapter data.
+     * Saves metadata (title + deadline) khi bấm nút Save. Không còn auto-save real-time.
      */
     async function saveChapterMetadata() {
         var updateError = document.getElementById('updateError');
@@ -1710,10 +1709,7 @@
             }
             var qs = new URLSearchParams({
                 title: title,
-                submissionDeadline: deadline,
-                publicationDate: deadline,
-                deadline: deadline,
-                chapterDeadline: deadline
+                submissionDeadline: deadline
             }).toString();
             await callApi('PUT', '/api/v1/chapters/' + chapterId + '?' + qs);
             chapter.title = title;
@@ -1723,19 +1719,27 @@
         } catch (err) {
             updateError.style.display = 'block';
             updateError.textContent = err.message;
+        } finally {
+            updateSaveButtonState();
         }
     }
 
-    function scheduleMetadataSave() {
-        if (!isOwner()) {
+    /** Enables the Save button only when title/deadline actually differ from the loaded chapter. */
+    function updateSaveButtonState() {
+        var saveBtn = document.getElementById('btnSaveChapterMetadata');
+        if (!chapter || !isOwner()) {
+            saveBtn.disabled = true;
             return;
         }
-        clearTimeout(metadataSaveTimer);
-        metadataSaveTimer = setTimeout(saveChapterMetadata, 700); // debounce 700ms
+        var title = document.getElementById('updateTitle').value;
+        var deadline = document.getElementById('updateDeadline').value;
+        var changed = title !== (chapter.title || '') || deadline !== formatDate(chapter.submissionDeadline);
+        saveBtn.disabled = !changed;
     }
 
-    document.getElementById('updateTitle').addEventListener('input', scheduleMetadataSave);
-    document.getElementById('updateDeadline').addEventListener('change', saveChapterMetadata);
+    document.getElementById('updateTitle').addEventListener('input', updateSaveButtonState);
+    document.getElementById('updateDeadline').addEventListener('change', updateSaveButtonState);
+    document.getElementById('btnSaveChapterMetadata').addEventListener('click', saveChapterMetadata);
 
     // Xóa chapter (chỉ khi PLANNING)
     document.getElementById('btnDelete').addEventListener('click', async function () {

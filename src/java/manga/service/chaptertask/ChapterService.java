@@ -30,8 +30,6 @@ import java.util.List;
  *     - delete()               : Delete chapter
  * [4] DEADLINE REMINDERS (Scheduler)
  *     - remindApproachingDeadlines(): Remind at 7 days, 3 days, and missed deadline
- * [5] HELPER
- *     - firstPresent()         : Get the first non-null/non-empty value
  * ============================================================
  */
 @Service
@@ -93,18 +91,13 @@ public class ChapterService {
 
     /**
      * Update the title and/or submissionDeadline of a chapter.
-     * Supports several different deadline parameter names from clients (submissionDeadline,
-     * publicationDate, deadline, chapterDeadline) — takes the first one present.
      * If no deadline is passed, only the title is updated.
      */
     public ChapterSummary update(
             long chapterId,
             AuthenticatedUser user,
             String title,
-            String submissionDeadline,
-            String publicationDate,
-            String deadline,
-            String chapterDeadline) {
+            String submissionDeadline) {
         SessionUserUtil.requireRole(user, "MANGAKA", "Only MANGAKA can update chapter");
 
         long ownerId = chapterRepository.findOwnerMangakaByChapter(chapterId);
@@ -116,14 +109,13 @@ public class ChapterService {
         // Keep the existing title if no new title is passed
         String nextTitle = (title == null || title.trim().isEmpty()) ? existing.getTitle() : title;
 
-        String deadlineText = firstPresent(submissionDeadline, publicationDate, deadline, chapterDeadline);
-        if (deadlineText == null) {
+        if (submissionDeadline == null || submissionDeadline.trim().isEmpty()) {
             // No deadline provided -> only update title
             chapterRepository.updateChapterTitle(chapterId, nextTitle);
             return getDetail(chapterId);
         }
 
-        chapterRepository.updateChapterMetadata(chapterId, nextTitle, Date.valueOf(deadlineText));
+        chapterRepository.updateChapterMetadata(chapterId, nextTitle, Date.valueOf(submissionDeadline));
         return getDetail(chapterId);
     }
 
@@ -199,17 +191,4 @@ public class ChapterService {
         }
     }
 
-    // ============================================================
-    // [5] HELPER
-    // ============================================================
-
-    /** Returns the first non-null and non-empty value in the list, or null if none */
-    private String firstPresent(String... values) {
-        for (String value : values) {
-            if (value != null && !value.trim().isEmpty()) {
-                return value;
-            }
-        }
-        return null;
-    }
 }
