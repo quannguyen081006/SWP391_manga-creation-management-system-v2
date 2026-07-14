@@ -99,12 +99,6 @@ public class PageTaskRepository {
             + "FOR XML PATH(''), TYPE).value('.', 'nvarchar(max)'), 1, 1, '') AS taskTypes, "
             + "t.dueDate, t.status, t.rejectionCount, ";
 
-    /** Cache: DB có các cột mở rộng (priority, notes, ...) không? */
-    private volatile Boolean taskSchemaExtended;
-
-    /** Cache: DB đã sẵn sàng cho lifecycle schema (actionReason, previousAssistantId, ...) chưa? */
-    private volatile Boolean taskLifecycleSchemaReady;
-
     /** Cache: bảng TaskReviewHistory (lịch sử submit/review) đã tồn tại chưa? */
     private volatile Boolean taskReviewHistoryTableReady;
 
@@ -126,60 +120,11 @@ public class PageTaskRepository {
         return status == null ? "" : status.trim().toUpperCase(Locale.ENGLISH);
     }
 
-    /**
-     * Trả về danh sách cột SELECT tùy thuộc DB có schema mở rộng hay không.
-     * Schema mở rộng: có cột priority, notes, rejectionReason, approvalComment, actionReason, previousAssistantId.
-     */
+    /** Trả về danh sách cột SELECT cho task (bao gồm priority, notes, rejectionReason, approvalComment, actionReason, previousAssistantId). */
     private String taskSelectColumns() {
-        ensureTaskLifecycleSchemaReady();
-        if (isTaskSchemaExtended()) {
-            return SQL_TASK_COLUMNS_BASE
-                    + "ISNULL(t.priority, 'NORMAL') AS priority, t.notes, t.rejectionReason, t.approvalComment, t.actionReason, t.previousAssistantId, "
-                    + SQL_IS_DELAYED;
-        }
         return SQL_TASK_COLUMNS_BASE
-                + "'NORMAL' AS priority, CAST(NULL AS NVARCHAR(500)) AS notes, "
-                + "CAST(NULL AS NVARCHAR(300)) AS rejectionReason, CAST(NULL AS NVARCHAR(300)) AS approvalComment, "
-                + "CAST(NULL AS NVARCHAR(300)) AS actionReason, CAST(NULL AS BIGINT) AS previousAssistantId, "
+                + "ISNULL(t.priority, 'NORMAL') AS priority, t.notes, t.rejectionReason, t.approvalComment, t.actionReason, t.previousAssistantId, "
                 + SQL_IS_DELAYED;
-    }
-
-    /**
-     * Đảm bảo DB có đủ các cột cho task lifecycle (actionReason, previousAssistantId, lastProgressAt)
-     * và constraint status hợp lệ. Chạy một lần, thread-safe.
-     */
-    private void ensureTaskLifecycleSchemaReady() {
-        if (Boolean.TRUE.equals(taskLifecycleSchemaReady)) {
-            return;
-        }
-        synchronized (this) {
-            if (Boolean.TRUE.equals(taskLifecycleSchemaReady)) {
-                return;
-            }
-            try (Connection conn = dataSource.getConnection()) {
-                addColumnIfMissing(conn, "actionReason", "nvarchar(300) NULL");
-                addColumnIfMissing(conn, "previousAssistantId", "bigint NULL");
-                addColumnIfMissing(conn, "lastProgressAt", "datetime NULL");
-
-                // Xoá constraint cũ rồi thêm lại với đầy đủ trạng thái mới
-                String dropConstraint =
-                        "IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_PageTask_status' AND parent_object_id = OBJECT_ID('dbo.PageTask')) "
-                        + "ALTER TABLE [dbo].[PageTask] DROP CONSTRAINT [CK_PageTask_status]";
-                try (PreparedStatement ps = conn.prepareStatement(dropConstraint)) {
-                    ps.executeUpdate();
-                }
-                String addConstraint =
-                        "IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_PageTask_status' AND parent_object_id = OBJECT_ID('dbo.PageTask')) "
-                        + "ALTER TABLE [dbo].[PageTask] WITH CHECK ADD CONSTRAINT [CK_PageTask_status] CHECK "
-                        + "([status] IN ('PENDING','IN_PROGRESS','SUBMITTED','APPROVED','REJECTED','OVERDUE','DELETED','REASSIGNED','CANCELLED'))";
-                try (PreparedStatement ps = conn.prepareStatement(addConstraint)) {
-                    ps.executeUpdate();
-                }
-                taskLifecycleSchemaReady = Boolean.TRUE;
-            } catch (SQLException ex) {
-                throw new RuntimeException("Cannot prepare task lifecycle schema", ex);
-            }
-        }
     }
 
     /**
@@ -222,40 +167,6 @@ public class PageTaskRepository {
             } catch (SQLException ex) {
                 throw new RuntimeException("Cannot prepare task review history schema", ex);
             }
-        }
-    }
-
-    /** Thêm cột vào bảng PageTask nếu chưa tồn tại */
-    private void addColumnIfMissing(Connection conn, String column, String definition) throws SQLException {
-        String sql = "IF COL_LENGTH('dbo.PageTask', '" + column + "') IS NULL ALTER TABLE [dbo].[PageTask] ADD " + column + " " + definition;
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.executeUpdate();
-        }
-    }
-
-    /** Kiểm tra DB có cột mở rộng (priority, notes) không — cache kết quả */
-    private boolean isTaskSchemaExtended() {
-        if (taskSchemaExtended != null) {
-            return taskSchemaExtended.booleanValue();
-        }
-        synchronized (this) {
-            if (taskSchemaExtended != null) {
-                return taskSchemaExtended.booleanValue();
-            }
-            boolean ready = false;
-            String sql = "SELECT CASE WHEN COL_LENGTH('dbo.PageTask', 'priority') IS NOT NULL "
-                    + "AND COL_LENGTH('dbo.PageTask', 'notes') IS NOT NULL THEN 1 ELSE 0 END";
-            try (Connection conn = dataSource.getConnection();
-                 PreparedStatement ps = conn.prepareStatement(sql);
-                 ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    ready = rs.getInt(1) == 1;
-                }
-            } catch (SQLException ex) {
-                ready = false;
-            }
-            taskSchemaExtended = Boolean.valueOf(ready);
-            return ready;
         }
     }
 
@@ -513,13 +424,11 @@ public class PageTaskRepository {
 
     private long create(long chapterId, long assistantId, int start, int end, List<String> taskTypes, Date dueDate,
             String priority, String notes, boolean notifyAssignment) {
-        ensureTaskLifecycleSchemaReady();
         // Chỉ task đang active mới block tái sử dụng page range; task đã đóng thì không
         String overlapSql = "SELECT COUNT(1) FROM PageTask WHERE chapterId = ? AND UPPER(status) NOT IN (" + SQL_CLOSED_TASK_STATUSES + ") AND NOT (pageRangeEnd < ? OR pageRangeStart > ?)";
         String chapterSql = "SELECT c.submissionDeadline, c.seriesId, s.mangakaId FROM Chapter c JOIN Series s ON s.id = c.seriesId WHERE c.id = ?";
         String enrollmentSql = "SELECT COUNT(1) FROM MangakaAssistant WHERE mangakaId = ? AND assistantId = ?";
-        String insertExtendedSql = "INSERT INTO PageTask (chapterId, assistantId, pageRangeStart, pageRangeEnd, dueDate, status, rejectionCount, priority, notes, assignedAt, updatedAt) VALUES (?, ?, ?, ?, ?, 'IN_PROGRESS', 0, ?, ?, GETDATE(), GETDATE())";
-        String insertLegacySql = "INSERT INTO PageTask (chapterId, assistantId, pageRangeStart, pageRangeEnd, dueDate, status, rejectionCount, assignedAt, updatedAt) VALUES (?, ?, ?, ?, ?, 'IN_PROGRESS', 0, GETDATE(), GETDATE())";
+        String insertSql = "INSERT INTO PageTask (chapterId, assistantId, pageRangeStart, pageRangeEnd, dueDate, status, rejectionCount, priority, notes, assignedAt, updatedAt) VALUES (?, ?, ?, ?, ?, 'IN_PROGRESS', 0, ?, ?, GETDATE(), GETDATE())";
 
         try (Connection conn = dataSource.getConnection()) {
             Map<Integer, String> pageStages = derivePageStagesForRange(conn, chapterId, start, end);
@@ -529,18 +438,14 @@ public class PageTaskRepository {
 
             long newId;
             conn.setAutoCommit(false);
-            boolean extended = isTaskSchemaExtended();
-            String insertSql = extended ? insertExtendedSql : insertLegacySql;
             try (PreparedStatement insert = conn.prepareStatement(insertSql, PreparedStatement.RETURN_GENERATED_KEYS)) {
                 insert.setLong(1, chapterId);
                 insert.setLong(2, assistantId);
                 insert.setInt(3, start);
                 insert.setInt(4, end);
                 insert.setDate(5, dueDate);
-                if (extended) {
-                    insert.setString(6, normalizedPriority);
-                    insert.setString(7, notes == null ? null : notes.trim());
-                }
+                insert.setString(6, normalizedPriority);
+                insert.setString(7, notes == null ? null : notes.trim());
                 insert.executeUpdate();
                 try (ResultSet rs = insert.getGeneratedKeys()) {
                     if (!rs.next()) {
@@ -583,7 +488,6 @@ public class PageTaskRepository {
     }
 
     public long reassignByMangaka(long taskId, long mangakaId, long newAssistantId, String reason, Date newDueDate) {
-        ensureTaskLifecycleSchemaReady();
         if (reason == null || reason.trim().length() < 5) {
             throw new IllegalArgumentException("Reassign reason must be at least 5 characters");
         }
@@ -656,7 +560,6 @@ public class PageTaskRepository {
      * Chỉ xoá được task đang IN_PROGRESS hoặc OVERDUE; phải có lý do ≥5 ký tự.
      */
     public void deleteByMangaka(long taskId, long mangakaId, String reason) {
-        ensureTaskLifecycleSchemaReady();
         if (reason == null || reason.trim().length() < 5) {
             throw new IllegalArgumentException("Delete reason must be at least 5 characters");
         }
@@ -976,7 +879,6 @@ public class PageTaskRepository {
      * Bắt buộc phải upload đủ ảnh cho tất cả trang trong range trước khi nộp.
      */
     public void updateStatusByAssistant(long taskId, long assistantId, String status) {
-        ensureTaskLifecycleSchemaReady();
         ensureTaskReviewHistoryTableReady();
         String normalized = status == null ? "" : status.trim().toUpperCase();
         if (!"SUBMITTED".equals(normalized)) {
@@ -1125,8 +1027,7 @@ public class PageTaskRepository {
     public void approveByMangaka(long taskId, long mangakaId, String comment) {
         ensureTaskReviewHistoryTableReady();
         String readSql = "SELECT chapterId, assistantId, status FROM PageTask WHERE id = ?";
-        String updateExtendedSql = "UPDATE PageTask SET status = 'APPROVED', approvalComment = ?, updatedAt = GETDATE() WHERE id = ?";
-        String updateLegacySql = "UPDATE PageTask SET status = 'APPROVED', updatedAt = GETDATE() WHERE id = ?";
+        String updateSql = "UPDATE PageTask SET status = 'APPROVED', approvalComment = ?, updatedAt = GETDATE() WHERE id = ?";
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement read = conn.prepareStatement(readSql)) {
@@ -1154,18 +1055,10 @@ public class PageTaskRepository {
 
             Map<Integer, String> pageStages = findTaskPageStages(conn, taskId);
 
-            boolean extended = isTaskSchemaExtended();
-            if (extended) {
-                try (PreparedStatement ps = conn.prepareStatement(updateExtendedSql)) {
-                    ps.setString(1, comment == null ? null : comment.trim());
-                    ps.setLong(2, taskId);
-                    ps.executeUpdate();
-                }
-            } else {
-                try (PreparedStatement ps = conn.prepareStatement(updateLegacySql)) {
-                    ps.setLong(1, taskId);
-                    ps.executeUpdate();
-                }
+            try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                ps.setString(1, comment == null ? null : comment.trim());
+                ps.setLong(2, taskId);
+                ps.executeUpdate();
             }
 
             closeReviewHistoryRound(conn, taskId, "APPROVED", mangakaId, comment);
@@ -1213,8 +1106,7 @@ public class PageTaskRepository {
                 + "JOIN Chapter c ON c.id = t.chapterId "
                 + "JOIN Series s ON s.id = c.seriesId "
                 + "WHERE t.id = ?";
-        String updateExtendedSql = "UPDATE PageTask SET status = 'IN_PROGRESS', rejectionCount = ?, rejectionReason = ?, dueDate = ?, updatedAt = GETDATE() WHERE id = ?";
-        String updateLegacySql = "UPDATE PageTask SET status = 'IN_PROGRESS', rejectionCount = ?, dueDate = ?, updatedAt = GETDATE() WHERE id = ?";
+        String updateSql = "UPDATE PageTask SET status = 'IN_PROGRESS', rejectionCount = ?, rejectionReason = ?, dueDate = ?, updatedAt = GETDATE() WHERE id = ?";
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement read = conn.prepareStatement(readSql)) {
@@ -1248,22 +1140,12 @@ public class PageTaskRepository {
 
             int next = currentReject + 1;
             Date nextDueDate = extendedRejectDueDate(currentDueDate, seriesDeadline);
-            boolean extended = isTaskSchemaExtended();
-            if (extended) {
-                try (PreparedStatement update = conn.prepareStatement(updateExtendedSql)) {
-                    update.setInt(1, next);
-                    update.setString(2, reason == null ? null : reason.trim());
-                    update.setDate(3, nextDueDate);
-                    update.setLong(4, taskId);
-                    update.executeUpdate();
-                }
-            } else {
-                try (PreparedStatement update = conn.prepareStatement(updateLegacySql)) {
-                    update.setInt(1, next);
-                    update.setDate(2, nextDueDate);
-                    update.setLong(3, taskId);
-                    update.executeUpdate();
-                }
+            try (PreparedStatement update = conn.prepareStatement(updateSql)) {
+                update.setInt(1, next);
+                update.setString(2, reason == null ? null : reason.trim());
+                update.setDate(3, nextDueDate);
+                update.setLong(4, taskId);
+                update.executeUpdate();
             }
 
             closeReviewHistoryRound(conn, taskId, "REJECTED", mangakaId, reason);
@@ -1420,7 +1302,6 @@ public class PageTaskRepository {
      * Trả về số task bị huỷ.
      */
     public int escalatePendingOverdueDecisions() {
-        ensureTaskLifecycleSchemaReady();
         String selectSql =
             "SELECT t.id, t.chapterId, t.assistantId, s.mangakaId "
             + "FROM PageTask t "
@@ -1484,7 +1365,6 @@ public class PageTaskRepository {
      * dueDate mới phải hợp lệ (không quá khứ, đủ buffer trước submissionDeadline).
      */
     public void extendOverdueTask(long taskId, long mangakaId, java.sql.Date newDueDate, String reason) {
-        ensureTaskLifecycleSchemaReady();
         if (newDueDate == null) {
             throw new IllegalArgumentException("newDueDate is required");
         }
@@ -1999,8 +1879,7 @@ public class PageTaskRepository {
      */
     public void updateTaskProgress(long taskId, long mangakaId, Date dueDate, String priority, String notes) {
         String readSql = "SELECT chapterId, status FROM PageTask WHERE id = ?";
-        String updateExtendedSql = "UPDATE PageTask SET dueDate = ?, priority = ?, notes = ?, updatedAt = GETDATE() WHERE id = ?";
-        String updateLegacySql = "UPDATE PageTask SET dueDate = ?, updatedAt = GETDATE() WHERE id = ?";
+        String updateSql = "UPDATE PageTask SET dueDate = ?, priority = ?, notes = ?, updatedAt = GETDATE() WHERE id = ?";
         try (Connection conn = dataSource.getConnection()) {
             long chapterId;
             String status;
@@ -2021,21 +1900,13 @@ public class PageTaskRepository {
             if ("APPROVED".equalsIgnoreCase(status)) {
                 throw new IllegalArgumentException("Approved task cannot be edited. Create a new task instead (BR-TSK-06)");
             }
-            if (isTaskSchemaExtended()) {
-                String normalizedPriority = normalizePriority(priority);
-                try (PreparedStatement ps = conn.prepareStatement(updateExtendedSql)) {
-                    ps.setDate(1, dueDate);
-                    ps.setString(2, normalizedPriority);
-                    ps.setString(3, notes == null ? null : notes.trim());
-                    ps.setLong(4, taskId);
-                    ps.executeUpdate();
-                }
-            } else {
-                try (PreparedStatement ps = conn.prepareStatement(updateLegacySql)) {
-                    ps.setDate(1, dueDate);
-                    ps.setLong(2, taskId);
-                    ps.executeUpdate();
-                }
+            String normalizedPriority = normalizePriority(priority);
+            try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                ps.setDate(1, dueDate);
+                ps.setString(2, normalizedPriority);
+                ps.setString(3, notes == null ? null : notes.trim());
+                ps.setLong(4, taskId);
+                ps.executeUpdate();
             }
         } catch (SQLException ex) {
             throw new RuntimeException("Cannot update task progress", ex);

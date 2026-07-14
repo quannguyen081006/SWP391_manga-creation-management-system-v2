@@ -74,7 +74,7 @@ public class PageTaskApiController {
     // - pageRangeStart/End: page range, must not overlap (BR-CHP-07)
     // - dueDate: must not exceed the chapter deadline (BR-CHP-08)
     // - priority defaults to NORMAL if not provided
-    // - taskType and notes are optional
+    // - taskTypes and notes are optional
     // ============================================================
     @RequestMapping(value = "/chapters/{chapterId}/tasks", method = RequestMethod.POST)
     public ApiResponse<TaskSummary> create(
@@ -84,18 +84,17 @@ public class PageTaskApiController {
             @RequestParam("pageRangeStart") int pageRangeStart,
             @RequestParam("pageRangeEnd") int pageRangeEnd,
             @RequestParam(value = "taskTypes", required = false) String[] taskTypes,
-            @RequestParam(value = "taskType", required = false) String legacyTaskType,
             @RequestParam("dueDate") String dueDate,
             @RequestParam(value = "priority", defaultValue = "NORMAL") String priority,
             @RequestParam(value = "notes", required = false) String notes) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
         return ApiResponse.ok(
                 pageTaskService.create(chapterId, user, assistantId, pageRangeStart, pageRangeEnd,
-                        parseTaskTypes(taskTypes, legacyTaskType), dueDate, priority, notes),
+                        parseTaskTypes(taskTypes), dueDate, priority, notes),
                 "Task created");
     }
 
-    private List<String> parseTaskTypes(String[] taskTypes, String legacyTaskType) {
+    private List<String> parseTaskTypes(String[] taskTypes) {
         List<String> values = new ArrayList<String>();
         if (taskTypes != null) {
             for (String value : taskTypes) {
@@ -103,9 +102,6 @@ public class PageTaskApiController {
                     values.addAll(Arrays.asList(value.split(",")));
                 }
             }
-        }
-        if (values.isEmpty() && legacyTaskType != null) {
-            values.addAll(Arrays.asList(legacyTaskType.split(",")));
         }
         return values;
     }
