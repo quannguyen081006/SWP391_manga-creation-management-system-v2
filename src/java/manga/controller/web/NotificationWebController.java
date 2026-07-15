@@ -1,7 +1,7 @@
 package manga.controller.web;
 
 import manga.model.AuthenticatedUser;
-import manga.repository.NotificationRepository;
+import manga.service.NotificationService;
 import javax.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
@@ -21,39 +21,28 @@ import org.springframework.web.servlet.view.RedirectView;
 public class NotificationWebController {
 
     @Autowired
-    private NotificationRepository notificationRepository;
+    private NotificationService notificationService;
 
-    /**
-     * Shows the full notification list. The page is server-rendered, while row
-     * delete and read/unread toggles still use the existing API/JS behavior.
-     */
     @RequestMapping(method = RequestMethod.GET)
     public String list(HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
-        model.addAttribute("notifications", notificationRepository.listByUser(user.getId(), 100));
-        model.addAttribute("unreadCount", notificationRepository.unreadCount(user.getId()));
+        model.addAttribute("notifications", notificationService.listByUser(user.getId(), 100));
+        model.addAttribute("unreadCount", notificationService.unreadCount(user.getId()));
         return "notification/list";
     }
 
-    /**
-     * Web fallback for marking one notification read from a form submit.
-     */
     @RequestMapping(value = "/{id}/read", method = RequestMethod.POST)
     public String markRead(@PathVariable("id") long id, HttpSession session) {
         AuthenticatedUser user = requireUser(session);
-        notificationRepository.markRead(user.getId(), id);
+        notificationService.markRead(user.getId(), id);
         return "redirect:/main/notifications";
     }
 
-    /**
-     * Marks a notification read and redirects only to approved internal
-     * targets.
-     */
     @RequestMapping(value = "/{id}/click", method = RequestMethod.GET)
     public RedirectView click(@PathVariable("id") long id, HttpSession session) {
         AuthenticatedUser user = requireUser(session);
-        notificationRepository.markRead(user.getId(), id);
-        String viewUrl = notificationRepository.viewUrlByUser(user.getId(), id);
+        notificationService.markRead(user.getId(), id);
+        String viewUrl = notificationService.viewUrlByUser(user.getId(), id);
         if (isSupportedViewUrl(viewUrl)) {
             return redirectTo(viewUrl);
         }
@@ -63,7 +52,7 @@ public class NotificationWebController {
     @RequestMapping(value = "/mark-all-read", method = RequestMethod.POST)
     public String markAllRead(HttpSession session) {
         AuthenticatedUser user = requireUser(session);
-        notificationRepository.markAllRead(user.getId());
+        notificationService.markAllRead(user.getId());
         return "redirect:/main/notifications";
     }
 
