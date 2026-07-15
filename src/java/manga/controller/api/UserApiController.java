@@ -3,7 +3,7 @@ package manga.controller.api;
 import manga.common.ApiResponse;
 import manga.common.util.SessionUserUtil;
 import manga.model.AuthenticatedUser;
-import manga.repository.UserAdminRepository;
+import manga.service.UserService;
 import java.util.List;
 import java.util.Map;
 import javax.servlet.http.HttpSession;
@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserApiController {
 
     @Autowired
-    private UserAdminRepository userAdminRepository;
+    private UserService userService;
 
     /**
      * Returns the admin user list for API clients after the session user is checked.
@@ -27,12 +27,12 @@ public class UserApiController {
     @RequestMapping(method = RequestMethod.GET)
     public ApiResponse<List<Map<String, Object>>> list(HttpSession session) {
         requireAdmin(session);
-        return ApiResponse.ok(userAdminRepository.listUsers(), "User list");
+        return ApiResponse.ok(userService.listUsers(), "User list");
     }
 
     /**
-     * Creates a basic account through the API. Role assignment is handled by the
-     * dedicated role endpoint so the response shape stays simple.
+     * Creates a basic account through the API via UserService. Role assignment
+     * is handled by the dedicated role endpoint so the response shape stays simple.
      */
     @RequestMapping(method = RequestMethod.POST)
     public ApiResponse<Map<String, Object>> create(
@@ -42,11 +42,8 @@ public class UserApiController {
             @RequestParam("fullName") String fullName,
             @RequestParam("email") String email) {
         requireAdmin(session);
-        if (password == null || password.trim().isEmpty()) {
-            password = "12345";
-        }
-        long id = userAdminRepository.createUser(username, password, fullName, email);
-        return ApiResponse.ok(userAdminRepository.getUser(id), "User created");
+        long id = userService.createUser(username, password, fullName, email);
+        return ApiResponse.ok(userService.getUser(id), "User created");
     }
 
     /**
@@ -55,7 +52,7 @@ public class UserApiController {
     @RequestMapping(value = "/{id}", method = RequestMethod.GET)
     public ApiResponse<Map<String, Object>> detail(@PathVariable("id") long id, HttpSession session) {
         requireAdmin(session);
-        Map<String, Object> user = userAdminRepository.getUser(id);
+        Map<String, Object> user = userService.getUser(id);
         if (user == null) {
             throw new IllegalArgumentException("User not found");
         }
@@ -72,13 +69,14 @@ public class UserApiController {
             @RequestParam("fullName") String fullName,
             @RequestParam("email") String email) {
         requireAdmin(session);
-        userAdminRepository.updateUser(id, fullName, email);
+        userService.updateUser(id, fullName, email);
         return ApiResponse.ok(null, "User updated");
     }
 
     /**
-     * Changes account status after a small controller check; repository rules still
-     * protect the final active ADMIN account.
+     * Changes account status via UserService, which sends the
+     * status-changed notification; UserAdminRepository still protects the
+     * final active ADMIN account.
      */
     @RequestMapping(value = "/{id}/status", method = RequestMethod.PATCH)
     public ApiResponse<Object> patchStatus(
@@ -91,13 +89,14 @@ public class UserApiController {
         if (!"ACTIVE".equals(normalized) && !"INACTIVE".equals(normalized)) {
             throw new IllegalArgumentException("Status must be ACTIVE or INACTIVE");
         }
-        userAdminRepository.updateStatus(id, normalized);
+        userService.changeStatus(id, normalized);
         return ApiResponse.ok(null, "User status updated");
     }
 
     /**
-     * Adds a role to a user. UserAdminRepository is the authority for singleton
-     * ADMIN and valid role-combination checks.
+     * Adds a role to a user via UserService, which notifies the user only if
+     * the role is newly assigned. UserAdminRepository remains the authority
+     * for singleton ADMIN and valid role-combination checks.
      */
     @RequestMapping(value = "/{id}/roles", method = RequestMethod.POST)
     public ApiResponse<Object> addRole(
@@ -105,13 +104,14 @@ public class UserApiController {
             HttpSession session,
             @RequestParam("role") String role) {
         requireAdmin(session);
-        String normalized = role == null ? "" : role.trim().toUpperCase();
-        userAdminRepository.addRole(id, normalized);
+        userService.addRole(id, role);
         return ApiResponse.ok(null, "Role assigned");
     }
 
     /**
-     * Removes a role from a user while preserving the repository's ADMIN guard.
+     * Removes a role from a user via UserService, which notifies the user
+     * only if the role actually existed, while preserving the repository's
+     * ADMIN guard.
      */
     @RequestMapping(value = "/{id}/roles", method = RequestMethod.DELETE)
     public ApiResponse<Object> removeRole(
@@ -119,8 +119,7 @@ public class UserApiController {
             HttpSession session,
             @RequestParam("role") String role) {
         requireAdmin(session);
-        String normalized = role == null ? "" : role.trim().toUpperCase();
-        userAdminRepository.removeRole(id, normalized);
+        userService.removeRole(id, role);
         return ApiResponse.ok(null, "Role removed");
     }
 
@@ -133,4 +132,3 @@ public class UserApiController {
         return user;
     }
 }
-

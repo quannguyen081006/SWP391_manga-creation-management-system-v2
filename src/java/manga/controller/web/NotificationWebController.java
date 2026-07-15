@@ -11,11 +11,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.servlet.view.RedirectView;
 
-/**
- * Server-rendered notification list and safe click-through redirects. Delete
- * and read/unread toggle have no web form routes here; those stay on the API/JS
- * path.
- */
 @Controller
 @RequestMapping("/main/notifications")
 public class NotificationWebController {
@@ -45,10 +40,6 @@ public class NotificationWebController {
         return "redirect:/main/notifications";
     }
 
-    /**
-     * Marks a notification read and redirects only to approved internal
-     * targets.
-     */
     @RequestMapping(value = "/{id}/click", method = RequestMethod.GET)
     public RedirectView click(@PathVariable("id") long id, HttpSession session) {
         AuthenticatedUser user = requireUser(session);
