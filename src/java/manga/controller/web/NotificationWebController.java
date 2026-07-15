@@ -23,6 +23,10 @@ public class NotificationWebController {
     @Autowired
     private NotificationService notificationService;
 
+    /**
+     * Shows the full notification list. The page is server-rendered, while row
+     * delete and read/unread toggles still use the existing API/JS behavior.
+     */
     @RequestMapping(method = RequestMethod.GET)
     public String list(HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
@@ -31,6 +35,9 @@ public class NotificationWebController {
         return "notification/list";
     }
 
+    /**
+     * Web fallback for marking one notification read from a form submit.
+     */
     @RequestMapping(value = "/{id}/read", method = RequestMethod.POST)
     public String markRead(@PathVariable("id") long id, HttpSession session) {
         AuthenticatedUser user = requireUser(session);
@@ -38,6 +45,10 @@ public class NotificationWebController {
         return "redirect:/main/notifications";
     }
 
+    /**
+     * Marks a notification read and redirects only to approved internal
+     * targets.
+     */
     @RequestMapping(value = "/{id}/click", method = RequestMethod.GET)
     public RedirectView click(@PathVariable("id") long id, HttpSession session) {
         AuthenticatedUser user = requireUser(session);

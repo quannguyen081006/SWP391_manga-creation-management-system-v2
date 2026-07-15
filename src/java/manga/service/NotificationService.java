@@ -39,10 +39,16 @@ public class NotificationService {
         return notificationRepository.listByUser(userId);
     }
 
+    /**
+     * Lists notifications newest first, capped at the given limit.
+     */
     public List<NotificationItem> listByUser(long userId, int limit) {
         return notificationRepository.listByUser(userId, limit);
     }
 
+    /**
+     * Counts unread rows for the header badge.
+     */
     public int unreadCount(long userId) {
         return notificationRepository.unreadCount(userId);
     }
