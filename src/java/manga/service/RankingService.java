@@ -129,7 +129,7 @@ public class RankingService {
         throw new BusinessRuleException("Use close period to trigger pipeline");
     }
 
-    public List<Map<String, Object>> getRankingResults(long periodId, AuthenticatedUser user) {
+    public List<Map<String, Object>> getRankingResults(long periodId) {
         // Any authenticated user can view results
         return rankingRepository.results(periodId);
     }
@@ -154,5 +154,9 @@ public class RankingService {
         }
 
         return rankingRepository.listEntries(periodId);
+    }
+    
+    public boolean hasSubmittedEntries(long periodId, long userId){
+        return rankingRepository.hasSubmittedEntries(periodId, userId);
     }
 }

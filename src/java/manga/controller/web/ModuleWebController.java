@@ -5,10 +5,7 @@ import manga.model.RankingCsvUpload;
 import manga.model.chaptertask.ChapterSummary;
 import manga.model.Proposal;
 import manga.model.SeriesSummary;
-import manga.repository.chaptertask.ChapterRepository;
-import manga.repository.DecisionRepository;
 import manga.repository.ProductionRepository;
-import manga.repository.RankingRepository;
 import manga.repository.UserAdminRepository;
 import manga.service.AnnotationServiceV2;
 import manga.service.ManuscriptVersionService;
@@ -34,7 +31,9 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 import javax.servlet.http.Part;
 import manga.dto.CreateRankingPeriodRequestDTO;
+import manga.dto.SubmitDecisionVoteRequest;
 import manga.enums.ManuscriptStatus;
+import manga.service.DecisionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -57,9 +56,6 @@ public class ModuleWebController {
     private ProductionRepository productionRepository;
 
     @Autowired
-    private ChapterRepository chapterRepository;
-
-    @Autowired
     private ChapterService chapterService;
 
     @Autowired
@@ -72,10 +68,7 @@ public class ModuleWebController {
     private ManuscriptVersionService manuscriptVersionService;
 
     @Autowired
-    private RankingRepository rankingRepository;
-
-    @Autowired
-    private DecisionRepository decisionRepository;
+    private DecisionService decisionService;
 
     @Autowired
     private UserAdminRepository userAdminRepository;
@@ -150,8 +143,7 @@ public class ModuleWebController {
         return "settings/hub";
     }
 
-        //Mo trang setting cua salary
-
+    //Mo trang setting cua salary
     @RequestMapping(value = "/settings/salary", method = RequestMethod.GET)
     public String salarySettings(HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
@@ -437,15 +429,15 @@ public class ModuleWebController {
     @RequestMapping(value = "/ranking/periods", method = RequestMethod.GET)
     public String rankingPeriods(HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
-        model.addAttribute("periods", rankingRepository.listPeriods());
+        model.addAttribute("periods", rankingService.listPeriods());
         model.addAttribute("seriesList", productionRepository.listSeries());
-        
+
         // BR-RNK-06: Track which periods the current board member has already submitted for
         if (user.hasRole("EDITORIAL_BOARD")) {
             java.util.Set<Long> submittedPeriodIds = new java.util.HashSet<Long>();
-            for (Map<String, Object> period : rankingRepository.listPeriods()) {
+            for (Map<String, Object> period : rankingService.listPeriods()) {
                 long periodId = (Long) period.get("id");
-                if (rankingRepository.hasSubmittedEntries(periodId, user.getId())) {
+                if (rankingService.hasSubmittedEntries(periodId, user.getId())) {
                     submittedPeriodIds.add(periodId);
                 }
             }
@@ -453,7 +445,7 @@ public class ModuleWebController {
         } else {
             model.addAttribute("submittedRankingPeriodIds", new java.util.HashSet<Long>());
         }
-        
+
         return "ranking/period";
     }
 
@@ -487,7 +479,7 @@ public class ModuleWebController {
             Model model) {
         AuthenticatedUser user = requireUser(session);
         try {
-            if ( !user.hasRole("EDITORIAL_BOARD")) {
+            if (!user.hasRole("EDITORIAL_BOARD")) {
                 throw new IllegalArgumentException("Only EDITORIAL_BOARD can upload ranking CSV");
             }
             int count = rankingCsvImportService.importCsv(id, csvFile, user);
@@ -577,17 +569,17 @@ public class ModuleWebController {
 
     @RequestMapping(value = "/ranking/periods/{id}/results", method = RequestMethod.GET)
     public String rankingResults(@PathVariable("id") long id, HttpSession session, Model model) {
-        requireUser(session);
-        model.addAttribute("period", rankingRepository.findPeriodById(id));
-        model.addAttribute("results", rankingRepository.results(id));
-        model.addAttribute("entries", rankingRepository.listEntries(id));
+        AuthenticatedUser user = requireUser(session);
+        model.addAttribute("period", rankingService.getPeriodById(id));
+        model.addAttribute("results", rankingService.getRankingResults(id));
+        model.addAttribute("entries", rankingService.listVoteEntries(id, user));
         return "ranking/results";
     }
 
     @RequestMapping(value = "/ranking/periods/{id}/mangaka", method = RequestMethod.GET)
     public String rankingMangaka(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
-        model.addAttribute("period", rankingRepository.findPeriodById(id));
+        model.addAttribute("period", rankingService.getPeriodById(id));
         model.addAttribute("mangakaRanking", rankingService.getMangakaRanking(id, user));
         return "ranking/mangaka-ranking";
     }
@@ -598,7 +590,7 @@ public class ModuleWebController {
         if (!user.hasRole("ADMIN") && !user.hasRole("EDITORIAL_BOARD")) {
             throw new IllegalArgumentException("Only ADMIN/EDITORIAL_BOARD can view decision sessions");
         }
-        model.addAttribute("sessions", decisionRepository.listSessions());
+        model.addAttribute("sessions", decisionService.listDecisionSessions(user));
         return "decision/session";
     }
 
@@ -609,7 +601,7 @@ public class ModuleWebController {
             throw new IllegalArgumentException("Only ADMIN/EDITORIAL_BOARD can view decision detail");
         }
 
-        Map<String, Object> sessionDetail = decisionRepository.getSessionDetail(id);
+        Map<String, Object> sessionDetail = decisionService.getDecisionSession(id, user);
         model.addAttribute("sessionDetail", sessionDetail);
 
         if (sessionDetail != null) {
@@ -652,7 +644,10 @@ public class ModuleWebController {
             if (!user.hasRole("EDITORIAL_BOARD")) {
                 throw new IllegalArgumentException("Only EDITORIAL_BOARD can vote");
             }
-            decisionRepository.castVote(id, user.getId(), decision, justification);
+            SubmitDecisionVoteRequest request = new SubmitDecisionVoteRequest();
+            request.setDecision(decision);
+            request.setJustification(justification);
+            decisionService.submitDecisionVote(id, request, user);
             return "redirect:/main/decisions/" + id;
         } catch (RuntimeException ex) {
             decisionDetail(id, session, model);
@@ -662,7 +657,8 @@ public class ModuleWebController {
     }
 
     /**
-     * Shows the admin user-management table with current roles and status actions.
+     * Shows the admin user-management table with current roles and status
+     * actions.
      */
     @RequestMapping(value = "/users", method = RequestMethod.GET)
     public String users(
@@ -687,9 +683,9 @@ public class ModuleWebController {
     }
 
     /**
-     * Opens the create-user form. The form uses one roleOption radio group so the
-     * UI mirrors the allowed role combinations instead of letting admins build an
-     * invalid checkbox combination.
+     * Opens the create-user form. The form uses one roleOption radio group so
+     * the UI mirrors the allowed role combinations instead of letting admins
+     * build an invalid checkbox combination.
      */
     @RequestMapping(value = "/users/new", method = RequestMethod.GET)
     public String userNew(HttpSession session, Model model) {
@@ -703,8 +699,9 @@ public class ModuleWebController {
     }
 
     /**
-     * Opens edit mode for profile fields only. Username is immutable identity, and
-     * roles are managed from the list page so role changes stay visible/auditable.
+     * Opens edit mode for profile fields only. Username is immutable identity,
+     * and roles are managed from the list page so role changes stay
+     * visible/auditable.
      */
     @RequestMapping(value = "/users/{id}/edit", method = RequestMethod.GET)
     public String userEdit(@PathVariable("id") long id, HttpSession session, Model model) {
@@ -722,9 +719,10 @@ public class ModuleWebController {
     }
 
     /**
-     * Creates a user after early controller validation, then assigns the selected
-     * role option. Repository checks remain the authority for uniqueness and ADMIN
-     * singleton rules because they run next to the database write.
+     * Creates a user after early controller validation, then assigns the
+     * selected role option. Repository checks remain the authority for
+     * uniqueness and ADMIN singleton rules because they run next to the
+     * database write.
      */
     @RequestMapping(value = "/users/create", method = RequestMethod.POST)
     public String userCreate(
@@ -764,9 +762,9 @@ public class ModuleWebController {
     }
 
     /**
-     * Updates only full name and email. Username and roles are intentionally not
-     * accepted here because username identifies the account and roles have their
-     * own list-page workflow.
+     * Updates only full name and email. Username and roles are intentionally
+     * not accepted here because username identifies the account and roles have
+     * their own list-page workflow.
      */
     @RequestMapping(value = "/users/{id}/update", method = RequestMethod.POST)
     public String userUpdate(
@@ -791,8 +789,8 @@ public class ModuleWebController {
     }
 
     /**
-     * Changes ACTIVE/INACTIVE status; the repository blocks deactivating the only
-     * active ADMIN so the system is never left without an administrator.
+     * Changes ACTIVE/INACTIVE status; the repository blocks deactivating the
+     * only active ADMIN so the system is never left without an administrator.
      */
     @RequestMapping(value = "/users/{id}/status", method = RequestMethod.POST)
     public String userStatus(
@@ -816,8 +814,8 @@ public class ModuleWebController {
 
     /**
      * Adds one or more roles from the list page. Controller validation gives a
-     * quick error, while UserAdminRepository and RoleCombinationValidator enforce
-     * the same rules before saving.
+     * quick error, while UserAdminRepository and RoleCombinationValidator
+     * enforce the same rules before saving.
      */
     @RequestMapping(value = "/users/{id}/roles", method = RequestMethod.POST)
     public String userRole(
@@ -923,7 +921,8 @@ public class ModuleWebController {
     }
 
     /**
-     * Converts the create-form roleOption radio value into one or two role names.
+     * Converts the create-form roleOption radio value into one or two role
+     * names.
      */
     private List<String> parseRoleOption(String roleOption) {
         List<String> selected = new ArrayList<String>();
@@ -951,8 +950,8 @@ public class ModuleWebController {
     }
 
     /**
-     * Performs quick create-form validation before calling the repository.
-     * The repository is still the authoritative layer for uniqueness and ADMIN
+     * Performs quick create-form validation before calling the repository. The
+     * repository is still the authoritative layer for uniqueness and ADMIN
      * singleton checks because those rules must be protected at save time.
      */
     private void validateCreateUser(String username, String password, String fullName, String email, List<String> roles) {
@@ -979,9 +978,9 @@ public class ModuleWebController {
     }
 
     /**
-     * Checks the requested role set before saving. This is an early-exit helper;
-     * UserAdminRepository.addRole and RoleCombinationValidator still enforce the
-     * final role-combination rules.
+     * Checks the requested role set before saving. This is an early-exit
+     * helper; UserAdminRepository.addRole and RoleCombinationValidator still
+     * enforce the final role-combination rules.
      */
     private void validateAssignableRoles(long userId, List<String> roles) {
         if (roles.contains("ADMIN")
@@ -999,7 +998,6 @@ public class ModuleWebController {
     // ============================================================
     // MANUSCRIPT WORKSPACE (lien quan Chapter)
     // ============================================================
-
     // ============================================================
     // 9a. TAO MANUSCRIPT WORKSPACE
     // GET  /main/chapters/{chapterId}/manuscript-workspace/create -> hien form xac nhan
@@ -1011,7 +1009,7 @@ public class ModuleWebController {
     @RequestMapping(value = "/chapters/{chapterId}/manuscript-workspace/create", method = RequestMethod.GET)
     public String manuscriptWorkspaceCreate(@PathVariable("chapterId") long chapterId, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
-        ChapterSummary chapter = chapterRepository.findById(chapterId);
+        ChapterSummary chapter = chapterService.getDetail(chapterId);
         if (chapter == null) {
             throw new IllegalArgumentException("Chapter not found");
         }
@@ -1026,14 +1024,14 @@ public class ModuleWebController {
             manga.model.ManuscriptVersion version = manuscriptVersionService.createWorkspace(chapterId, user);
             return "redirect:/main/manuscript-workspace/" + version.getId();
         } catch (RuntimeException ex) {
-            ChapterSummary chapter = chapterRepository.findById(chapterId);
+            ChapterSummary chapter = chapterService.getDetail(chapterId);
             model.addAttribute("chapter", chapter);
             model.addAttribute("error", ex.getMessage());
             return "manuscript-version/create";
         }
     }
 
-        @RequestMapping(value = "/manuscript-workspace/{id}", method = RequestMethod.GET)
+    @RequestMapping(value = "/manuscript-workspace/{id}", method = RequestMethod.GET)
     public String manuscriptWorkspaceView(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
         manga.model.ManuscriptVersion version = manuscriptVersionService.getVersion(id);
@@ -1041,7 +1039,7 @@ public class ModuleWebController {
             throw new IllegalArgumentException("Manuscript version not found");
         }
 
-        ChapterSummary chapter = chapterRepository.findById(version.getChapterId());
+        ChapterSummary chapter = chapterService.getDetail(version.getChapterId());
         if (chapter == null) {
             throw new IllegalArgumentException("Chapter not found");
         }
@@ -1076,8 +1074,8 @@ public class ModuleWebController {
         }
 
         // Permission checks
-        long mangakaId = chapterRepository.findOwnerMangakaByChapter(version.getChapterId());
-        long tantouId = chapterRepository.findSeriesTantou(chapter.getSeriesId());
+        long mangakaId = chapterService.findOwnerMangakaByChapter(version.getChapterId());
+        long tantouId = chapterService.findSeriesTantou(chapter.getSeriesId());
         boolean isMangakaOwner = user.getId() == mangakaId;
         boolean isAssignedTantou = user.getId() == tantouId;
         boolean isAdmin = user.hasRole("ADMIN");
@@ -1139,7 +1137,7 @@ public class ModuleWebController {
         }
     }
 
-        @RequestMapping(value = "/manuscript-workspace/{id}/submit", method = RequestMethod.POST)
+    @RequestMapping(value = "/manuscript-workspace/{id}/submit", method = RequestMethod.POST)
     public String manuscriptWorkspaceSubmit(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
         try {
@@ -1151,7 +1149,7 @@ public class ModuleWebController {
         }
     }
 
-        @RequestMapping(value = "/manuscript-workspace/{id}/approve", method = RequestMethod.POST)
+    @RequestMapping(value = "/manuscript-workspace/{id}/approve", method = RequestMethod.POST)
     public String manuscriptWorkspaceApprove(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
         try {
@@ -1163,7 +1161,7 @@ public class ModuleWebController {
         }
     }
 
-        @RequestMapping(value = "/manuscript-workspace/{id}/reject", method = RequestMethod.POST)
+    @RequestMapping(value = "/manuscript-workspace/{id}/reject", method = RequestMethod.POST)
     public String manuscriptWorkspaceReject(@PathVariable("id") long id, HttpSession session,
             @RequestParam("feedback") String feedback, Model model) {
         AuthenticatedUser user = requireUser(session);
@@ -1176,7 +1174,7 @@ public class ModuleWebController {
         }
     }
 
-        @RequestMapping(value = "/manuscript-workspace/{id}/publish", method = RequestMethod.POST)
+    @RequestMapping(value = "/manuscript-workspace/{id}/publish", method = RequestMethod.POST)
     public String manuscriptWorkspacePublish(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
         try {
@@ -1203,14 +1201,14 @@ public class ModuleWebController {
             manga.model.ManuscriptVersion version = manuscriptVersionService.createNewVersion(chapterId, user);
             return "redirect:/main/manuscript-workspace/" + version.getId();
         } catch (RuntimeException ex) {
-            ChapterSummary chapter = chapterRepository.findById(chapterId);
+            ChapterSummary chapter = chapterService.getDetail(chapterId);
             model.addAttribute("chapter", chapter);
             model.addAttribute("error", ex.getMessage());
             return "redirect:/main/chapters/" + chapterId;
         }
     }
 
-        @RequestMapping(value = "/manuscript-workspace/{id}/dashboard", method = RequestMethod.GET)
+    @RequestMapping(value = "/manuscript-workspace/{id}/dashboard", method = RequestMethod.GET)
     public String manuscriptWorkspaceDashboard(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
         manga.dto.ReviewDashboardDTO dashboard = manuscriptVersionService.getReviewDashboard(id);
@@ -1239,7 +1237,7 @@ public class ModuleWebController {
         return "redirect:/main/manuscript-workspace/" + latestVersion.getId();
     }
 
-        @RequestMapping(value = "/manuscript-workspace/compare", method = RequestMethod.GET)
+    @RequestMapping(value = "/manuscript-workspace/compare", method = RequestMethod.GET)
     public String manuscriptWorkspaceCompare(
             @RequestParam("versionId1") long versionId1,
             @RequestParam("versionId2") long versionId2,
@@ -1301,7 +1299,7 @@ public class ModuleWebController {
         return "manuscript-version/compare";
     }
 
-        @RequestMapping(value = "/manuscript-review", method = RequestMethod.GET)
+    @RequestMapping(value = "/manuscript-review", method = RequestMethod.GET)
     public String manuscriptReviewInbox(HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
 
@@ -1325,12 +1323,12 @@ public class ModuleWebController {
         java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
         for (manga.model.ManuscriptVersion version : underReviewVersions) {
-            ChapterSummary chapter = chapterRepository.findById(version.getChapterId());
+            ChapterSummary chapter = chapterService.getDetail(version.getChapterId());
             if (chapter != null) {
                 chapterMap.put(version.getId(), chapter);
 
                 // Get mangaka name using UserAdminRepository
-                long mangakaId = chapterRepository.findOwnerMangakaByChapter(version.getChapterId());
+                long mangakaId = chapterService.findOwnerMangakaByChapter(version.getChapterId());
                 String mangakaName = userAdminRepository.getFullNameById(mangakaId);
                 if (mangakaName == null) {
                     mangakaName = "Unknown";
