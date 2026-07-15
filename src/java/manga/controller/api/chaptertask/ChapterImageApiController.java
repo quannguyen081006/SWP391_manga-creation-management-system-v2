@@ -6,7 +6,7 @@ import manga.common.util.ImagePhashUtil;
 import manga.common.util.SessionUserUtil;
 import manga.model.AuthenticatedUser;
 import manga.model.chaptertask.ChapterImageItem;
-import manga.repository.chaptertask.ChapterImageRepository;
+import manga.service.chaptertask.ChapterImageService;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -32,7 +32,6 @@ import org.springframework.web.bind.annotation.RestController;
  *  3. deactivate()      - DELETE /api/v1/images/{imageId}             - Soft delete (deactivate) an image
  *
  * HELPER METHODS (private):
- *  - requireCanReadTask()    - Check permission to view a task's images
  *  - saveMultipartFile()     - Save the uploaded file to the server
  *  - findFilePart()          - Find the file Part in the request (tries "file", "image", "upload")
  *  - copy()                  - Write a stream to a file
@@ -44,12 +43,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class ChapterImageApiController {
 
     @Autowired
-    private ChapterImageRepository chapterImageRepository;
+    private ChapterImageService chapterImageService;
 
     // ============================================================
     // 1. UPLOAD PAGE IMAGE
     // POST /api/v1/chapters/{chapterId}/images
-    // - TANTOU_EDITOR is not allowed to upload (read-only)
+    // - TANTOU_EDITOR is not allowed to upload (read-only) - enforced by ChapterImageService
     // - Always a PAGE image submitted by the assigned ASSISTANT for a task
     // - The file must be attached as a multipart upload (handled by saveMultipartFile())
     // ============================================================
@@ -59,9 +58,6 @@ public class ChapterImageApiController {
             HttpSession session,
             HttpServletRequest request) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        if (user.hasRole("TANTOU_EDITOR")) {
-            throw new IllegalArgumentException("TANTOU_EDITOR can only read chapter images");
-        }
 
         Long pageTaskId = parseLong(request.getParameter("pageTaskId"));
         Integer pageNumber = parseInteger(request.getParameter("pageNumber"));
@@ -73,10 +69,10 @@ public class ChapterImageApiController {
 
         long id;
         try {
-            id = chapterImageRepository.upload(
+            id = chapterImageService.upload(
+                    user,
                     chapterId,
                     pageTaskId,
-                    user.getId(),
                     pageNumber,
                     upload.path,
                     upload.originalName,
@@ -87,7 +83,7 @@ public class ChapterImageApiController {
             savedFile.delete();
             throw ex;
         }
-        return ApiResponse.ok(chapterImageRepository.findById(id), "Chapter image uploaded");
+        return ApiResponse.ok(chapterImageService.findById(id), "Chapter image uploaded");
     }
 
     // HELPER: Only allow JPG/PNG/WEBP before computing the hash, to avoid a 500 error when a non-image file is uploaded by mistake
@@ -102,24 +98,22 @@ public class ChapterImageApiController {
     // ============================================================
     // 2. LIST IMAGES BY TASK
     // GET /api/v1/tasks/{taskId}/images
-    // - First get chapterId from the task, then check permission via requireCanReadTask()
-    // - ASSISTANT can only view if they themselves are assigned to that task
-    //   (unlike listByChapter, where the assistant only needs ANY task in the chapter)
+    // - Permission check (ChapterImageService.listByTask()): ASSISTANT can only view if they
+    //   themselves are assigned to that task (unlike listByChapter, where the assistant only
+    //   needs ANY task in the chapter)
     // ============================================================
     @RequestMapping(value = "/tasks/{taskId}/images", method = RequestMethod.GET)
     public ApiResponse<List<ChapterImageItem>> listByTask(
             @PathVariable("taskId") long taskId,
             HttpSession session) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        long chapterId = chapterImageRepository.findTaskChapterId(taskId);
-        requireCanReadTask(chapterId, taskId, user);
-        return ApiResponse.ok(chapterImageRepository.listByTask(taskId), "Task images");
+        return ApiResponse.ok(chapterImageService.listByTask(taskId, user), "Task images");
     }
 
     // ============================================================
     // 4. DEACTIVATE IMAGE (SOFT DELETE)
     // DELETE /api/v1/images/{imageId}
-    // - TANTOU_EDITOR is not allowed to delete
+    // - TANTOU_EDITOR is not allowed to delete (enforced by ChapterImageService)
     // - Does not hard delete from the DB, only marks it inactive (soft delete)
     // - Delete permission only checks role, no additional specific ownership check
     // ============================================================
@@ -128,33 +122,8 @@ public class ChapterImageApiController {
             @PathVariable("imageId") long imageId,
             HttpSession session) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        if (user.hasRole("TANTOU_EDITOR")) {
-            throw new IllegalArgumentException("TANTOU_EDITOR cannot delete chapter images");
-        }
-        chapterImageRepository.deactivate(imageId, user.getId());
+        chapterImageService.deactivate(imageId, user);
         return ApiResponse.ok(null, "Chapter image deactivated");
-    }
-
-    // ============================================================
-    // ============================================================
-    // HELPER: CHECK PERMISSION TO VIEW TASK IMAGES
-    // Same permission tiers as chapter-level access, but ASSISTANT must be assigned to that specific task
-    // (having any task in the same chapter is not enough)
-    // ============================================================
-    private void requireCanReadTask(long chapterId, long taskId, AuthenticatedUser user) {
-        if (user.hasRole("ADMIN")) {
-            return;
-        }
-        if (user.hasRole("MANGAKA") && chapterImageRepository.findChapterOwnerMangaka(chapterId) == user.getId()) {
-            return;
-        }
-        if (user.hasRole("TANTOU_EDITOR") && chapterImageRepository.findChapterTantouEditor(chapterId) == user.getId()) {
-            return;
-        }
-        if (user.hasRole("ASSISTANT") && chapterImageRepository.findTaskAssistantId(taskId) == user.getId()) {
-            return;
-        }
-        throw new IllegalArgumentException("Only assigned users can view task images");
     }
 
     // ============================================================

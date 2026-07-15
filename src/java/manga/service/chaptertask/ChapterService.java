@@ -194,8 +194,13 @@ public class ChapterService {
     public long findOwnerMangakaByChapter(long chapterId){
         return chapterRepository.findOwnerMangakaByChapter(chapterId);
     }
-    
+
     public long findSeriesTantou(long chapterId){
         return chapterRepository.findSeriesTantou(chapterId);
+    }
+
+    /** Gets the chapter's current status (e.g. PLANNING, IN_PROGRESS, EDITORIAL_REVIEW). */
+    public String getChapterStatus(long chapterId) {
+        return chapterRepository.getChapterStatus(chapterId);
     }
 }
