@@ -2,7 +2,7 @@ package manga.dto;
 
 import java.sql.Date;
 
-public class CreateRankingPeriodRequest {
+public class CreateRankingPeriodRequestDTO {
     private String name;
     private Date startDate;
     private Date endDate;

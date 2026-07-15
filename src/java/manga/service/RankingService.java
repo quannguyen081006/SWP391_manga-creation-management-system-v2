@@ -1,7 +1,7 @@
 package manga.service;
 
 import manga.common.exception.BusinessRuleException;
-import manga.dto.CreateRankingPeriodRequest;
+import manga.dto.CreateRankingPeriodRequestDTO;
 import manga.dto.SubmitVoteEntryRequest;
 import manga.enums.RankingPeriodStatus;
 import manga.model.AuthenticatedUser;
@@ -15,6 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.sql.Date;
 import java.util.List;
 import java.util.Map;
+import manga.model.RankingCsvUpload;
+import manga.repository.RankingCsvUploadRepository;
 
 @Service
 public class RankingService {
@@ -30,6 +32,9 @@ public class RankingService {
 
     @Autowired
     private NotificationService notificationService;
+    
+    @Autowired
+    private RankingCsvUploadRepository rankingCsvUploadRepository;
 
     public List<Map<String, Object>> listPeriods() {
         return rankingRepository.listPeriods();
@@ -39,7 +44,7 @@ public class RankingService {
         return rankingRepository.findPeriodById(periodId);
     }
 
-    public long createRankingPeriod(CreateRankingPeriodRequest request, AuthenticatedUser user) {
+    public long createRankingPeriod(CreateRankingPeriodRequestDTO request, AuthenticatedUser user) {
         // ADMIN only
         if (!user.hasRole("ADMIN")) {
             throw new BusinessRuleException("Only ADMIN can create ranking period");
@@ -55,7 +60,7 @@ public class RankingService {
             throw new BusinessRuleException("End date must be today or later");
         }
 
-        long periodId = rankingRepository.createPeriod(request.getName(), startDate, request.getEndDate());
+        long periodId = rankingRepository.createPeriod(request.getName(), startDate, request.getEndDate(),"OPEN");
 
         // Notify Editorial Board
         notificationService.notifyUser(
@@ -129,6 +134,15 @@ public class RankingService {
         return rankingRepository.results(periodId);
     }
 
+    public List<Map<String,Object>> findCsvByPeriod(long periodId){
+        //Find csv content based on period id
+        return rankingCsvUploadRepository.findByPeriod(periodId);
+    }
+    
+    public RankingCsvUpload findCsvById(long uploadId){
+        //Find csv content based on period id
+        return rankingCsvUploadRepository.findById(uploadId);
+    }
     public List<Map<String, Object>> getMangakaRanking(long periodId, AuthenticatedUser user) {
         return mangakaRankingRepository.findByPeriodId(periodId);
     }

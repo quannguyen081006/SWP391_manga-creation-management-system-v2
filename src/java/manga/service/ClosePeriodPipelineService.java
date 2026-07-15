@@ -1,17 +1,12 @@
 package manga.service;
 
-import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
 import manga.common.exception.BusinessRuleException;
-import manga.dto.RevenueDataPoint;
 import manga.model.AuthenticatedUser;
 import manga.repository.AuditLogRepository;
 import manga.repository.DecisionRepository;

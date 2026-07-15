@@ -357,9 +357,9 @@ public class ProductionRepository {
 
     public List<ManuscriptSummary> listManuscripts(AuthenticatedUser user, Long seriesId) {
         String sql =
-            "SELECT m.id, m.chapterId, m.version, m.status, m.submittedAt, m.reviewDeadline, m.fileUrl, m.revisionDeadline, "
+            "SELECT m.id, m.chapterId, m.version, m.status, m.submittedAt, "
             + "c.title AS chapterTitle, c.chapterNumber, s.title AS seriesTitle, mangaka.fullName AS mangakaName "
-            + "FROM Manuscript m "
+            + "FROM ManuscriptVersion m "
             + "JOIN Chapter c ON c.id = m.chapterId "
             + "JOIN Series s ON s.id = c.seriesId "
             + "LEFT JOIN [User] mangaka ON mangaka.id = s.mangakaId ";
@@ -397,9 +397,6 @@ public class ProductionRepository {
                     m.setVersion(rs.getInt("version"));
                     m.setStatus(rs.getString("status"));
                     m.setSubmittedAt(rs.getTimestamp("submittedAt"));
-                    m.setReviewDeadline(rs.getTimestamp("reviewDeadline"));
-                    m.setFileUrl(rs.getString("fileUrl"));
-                    m.setRevisionDeadline(rs.getTimestamp("revisionDeadline"));
                     m.setChapterTitle(rs.getString("chapterTitle"));
                     m.setChapterNumber(rs.getInt("chapterNumber"));
                     m.setSeriesTitle(rs.getString("seriesTitle"));

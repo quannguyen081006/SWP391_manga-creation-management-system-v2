@@ -41,10 +41,19 @@ public class RankingCsvImportService {
         // BR-RNK-01: Validate current date is within period date range
         java.sql.Date startDate = (java.sql.Date) period.get("startDate");
         java.sql.Date endDate = (java.sql.Date) period.get("endDate");
-        java.sql.Date currentDate = new java.sql.Date(System.currentTimeMillis());
 
-        if (currentDate.before(startDate) || currentDate.after(endDate)) {
-            throw new BusinessRuleException("CSV upload only allowed during active period dates (BR-RNK-01)");
+        long now = System.currentTimeMillis();
+
+// 00:00:00.000 của ngày bắt đầu
+        long startMillis = startDate.getTime();
+
+// 23:59:59.999 của ngày kết thúc
+        long endMillis = endDate.getTime() + (24 * 60 * 60 * 1000L) - 1;
+
+        if (now < startMillis || now > endMillis) {
+            throw new BusinessRuleException(
+                    "CSV upload only allowed during active period dates (BR-RNK-01)"
+            );
         }
 
         // BR-RNK-06: Reject if board member already submitted entries for this period
@@ -53,17 +62,17 @@ public class RankingCsvImportService {
         }
         List<RankingCsvRow> rows = parseAndValidate(file);
         rankingRepository.replaceCsvEntries(periodId, user.getId(), rows);
-        
+
         // Save CSV metadata for preview feature
         String csvContent = readFileContent(file);
         RankingCsvUpload csvUpload = new RankingCsvUpload(periodId, user.getId(), file.getOriginalFilename(), csvContent);
         rankingCsvUploadRepository.saveOrUpdate(csvUpload);
-        
+
         return rows.size();
     }
 
     private String readFileContent(MultipartFile file) {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), "UTF-8"))) {
+        try ( BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), "UTF-8"))) {
             StringBuilder content = new StringBuilder();
             String line;
             while ((line = reader.readLine()) != null) {

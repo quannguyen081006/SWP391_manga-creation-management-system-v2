@@ -191,4 +191,11 @@ public class ChapterService {
         }
     }
 
+    public long findOwnerMangakaByChapter(long chapterId){
+        return chapterRepository.findOwnerMangakaByChapter(chapterId);
+    }
+    
+    public long findSeriesTantou(long chapterId){
+        return chapterRepository.findSeriesTantou(chapterId);
+    }
 }

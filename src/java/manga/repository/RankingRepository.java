@@ -57,13 +57,6 @@ public class RankingRepository {
     }
 
     // ------------------------------------------------------------------ //
-    //  createPeriod — không thay đổi                                      //
-    // ------------------------------------------------------------------ //
-    public long createPeriod(String name, Date startDate, Date endDate) {
-        return createPeriod(name, startDate, endDate, "OPEN");
-    }
-
-    // ------------------------------------------------------------------ //
     //  createPeriodWithStatus — new method for lifecycle refactor         //
     // ------------------------------------------------------------------ //
     public long createPeriod(String name, Date startDate, Date endDate, String status) {

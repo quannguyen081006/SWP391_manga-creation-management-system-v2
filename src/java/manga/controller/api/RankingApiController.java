@@ -2,7 +2,7 @@ package manga.controller.api;
 
 import manga.common.ApiResponse;
 import manga.common.util.SessionUserUtil;
-import manga.dto.CreateRankingPeriodRequest;
+import manga.dto.CreateRankingPeriodRequestDTO;
 import manga.dto.SubmitVoteEntryRequest;
 import manga.model.AuthenticatedUser;
 import manga.service.RankingService;
@@ -33,7 +33,7 @@ public class RankingApiController {
     @RequestMapping(value = "/periods", method = RequestMethod.POST)
     public ApiResponse<Map<String, Object>> createPeriod(
             HttpSession session,
-            @RequestBody CreateRankingPeriodRequest request) {
+            @RequestBody CreateRankingPeriodRequestDTO request) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
         SessionUserUtil.requireRole(user, "ADMIN", "Only ADMIN can create ranking period");
         long id = rankingService.createRankingPeriod(request, user);

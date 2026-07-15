@@ -5,7 +5,6 @@ import manga.model.RankingCsvUpload;
 import manga.model.chaptertask.ChapterSummary;
 import manga.model.Proposal;
 import manga.model.SeriesSummary;
-import manga.repository.RankingCsvUploadRepository;
 import manga.repository.chaptertask.ChapterRepository;
 import manga.repository.DecisionRepository;
 import manga.repository.ProductionRepository;
@@ -34,6 +33,7 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 import javax.servlet.http.Part;
+import manga.dto.CreateRankingPeriodRequestDTO;
 import manga.enums.ManuscriptStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
@@ -85,9 +85,6 @@ public class ModuleWebController {
 
     @Autowired
     private RankingCsvImportService rankingCsvImportService;
-
-    @Autowired
-    private RankingCsvUploadRepository rankingCsvUploadRepository;
 
     @Autowired
     private RankingService rankingService;
@@ -469,8 +466,11 @@ public class ModuleWebController {
         AuthenticatedUser user = requireUser(session);
         try {
             requireAdmin(user);
-            Date startDate = new Date(System.currentTimeMillis());
-            rankingRepository.createPeriod(name, startDate, Date.valueOf(endDate));
+            CreateRankingPeriodRequestDTO dto = new CreateRankingPeriodRequestDTO();
+            dto.setName(name);
+            dto.setEndDate(Date.valueOf(endDate));
+            rankingService.createRankingPeriod(dto, user);
+            //rankingRepository.createPeriod(name, startDate, Date.valueOf(endDate));
             return "redirect:/main/ranking/periods";
         } catch (RuntimeException ex) {
             rankingPeriods(session, model);
@@ -520,7 +520,7 @@ public class ModuleWebController {
         AuthenticatedUser user = requireUser(session);
         try {
             requireAdmin(user);
-            List<Map<String, Object>> csvUploads = rankingCsvUploadRepository.findByPeriod(id);
+            List<Map<String, Object>> csvUploads = rankingService.findCsvByPeriod(id);
             model.addAttribute("periodId", id);
             model.addAttribute("csvUploads", csvUploads);
             return "ranking/csv-uploads";
@@ -535,7 +535,7 @@ public class ModuleWebController {
         AuthenticatedUser user = requireUser(session);
         try {
             requireAdmin(user);
-            RankingCsvUpload upload = rankingCsvUploadRepository.findById(uploadId);
+            RankingCsvUpload upload = rankingService.findCsvById(uploadId);
             if (upload == null) {
                 throw new IllegalArgumentException("CSV upload not found");
             }
@@ -1061,11 +1061,6 @@ public class ModuleWebController {
         if (!annotations.isEmpty()) {
             manga.model.AnnotationSummary a = annotations.get(0);
 
-            System.out.println("=================================");
-            System.out.println("CLASS = " + a.getClass().getName());
-            System.out.println("DEBUG = " + a.debugVersion());
-            System.out.println("X = " + a.getXPercent());
-            System.out.println("=================================");
         }
 
         // Get review dashboard data - ensure never null
