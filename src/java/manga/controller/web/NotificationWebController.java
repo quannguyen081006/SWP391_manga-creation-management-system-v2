@@ -11,11 +11,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.servlet.view.RedirectView;
 
-/**
- * Server-rendered notification list and safe click-through redirects. Delete
- * and read/unread toggle have no web form routes here; those stay on the API/JS
- * path.
- */
 @Controller
 @RequestMapping("/main/notifications")
 public class NotificationWebController {
@@ -23,6 +18,10 @@ public class NotificationWebController {
     @Autowired
     private NotificationService notificationService;
 
+    /**
+     * Shows the full notification list. The page is server-rendered, while row
+     * delete and read/unread toggles still use the existing API/JS behavior.
+     */
     @RequestMapping(method = RequestMethod.GET)
     public String list(HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
@@ -31,6 +30,9 @@ public class NotificationWebController {
         return "notification/list";
     }
 
+    /**
+     * Web fallback for marking one notification read from a form submit.
+     */
     @RequestMapping(value = "/{id}/read", method = RequestMethod.POST)
     public String markRead(@PathVariable("id") long id, HttpSession session) {
         AuthenticatedUser user = requireUser(session);

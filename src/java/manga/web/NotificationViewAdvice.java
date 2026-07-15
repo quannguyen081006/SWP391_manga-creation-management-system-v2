@@ -2,7 +2,7 @@ package manga.web;
 
 import manga.model.AuthenticatedUser;
 import manga.model.NotificationItem;
-import manga.repository.NotificationRepository;
+import manga.service.NotificationService;
 import java.util.List;
 import javax.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 public class NotificationViewAdvice {
 
     @Autowired
-    private NotificationRepository notificationRepository;
+    private NotificationService notificationService;
 
     /**
      * Badge count for header.jsp; returns 0 when logged out.
@@ -31,7 +31,7 @@ public class NotificationViewAdvice {
         if (user == null) {
             return 0;
         }
-        return notificationRepository.unreadCount(user.getId());
+        return notificationService.unreadCount(user.getId());
     }
 
     /**
@@ -43,7 +43,7 @@ public class NotificationViewAdvice {
         if (user == null) {
             return java.util.Collections.emptyList();
         }
-        return notificationRepository.listByUser(user.getId());
+        return notificationService.listByUser(user.getId());
     }
 
     private AuthenticatedUser getUser(HttpSession session) {

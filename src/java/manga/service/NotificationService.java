@@ -51,6 +51,9 @@ public class NotificationService {
         notificationRepository.markUnread(userId, id);
     }
 
+    /**
+     * Deletes a single user-owned notification.
+     */
     public void delete(long userId, long id) {
         notificationRepository.delete(userId, id);
     }

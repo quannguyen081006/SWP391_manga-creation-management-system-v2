@@ -25,6 +25,9 @@ public class NotificationApiController {
         return ok(notificationService.listByUser(user.getId()), "Notifications");
     }
 
+    /**
+     * API path used by JavaScript to mark one notification read without reload.
+     */
     @RequestMapping(value = "/{id}/read", method = RequestMethod.PATCH, produces = "application/json;charset=UTF-8")
     public String markRead(@PathVariable("id") long id, HttpSession session) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
@@ -32,6 +35,9 @@ public class NotificationApiController {
         return okEmpty("Notification marked as read");
     }
 
+    /**
+     * API path used by JavaScript to restore unread state without reload.
+     */
     @RequestMapping(value = "/{id}/unread", method = RequestMethod.PATCH, produces = "application/json;charset=UTF-8")
     public String markUnread(@PathVariable("id") long id, HttpSession session) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
@@ -39,6 +45,9 @@ public class NotificationApiController {
         return okEmpty("Notification marked as unread");
     }
 
+    /**
+     * API-only delete path; there is no equivalent web form route today.
+     */
     @RequestMapping(value = "/{id}", method = RequestMethod.DELETE, produces = "application/json;charset=UTF-8")
     public String delete(@PathVariable("id") long id, HttpSession session) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
@@ -46,6 +55,10 @@ public class NotificationApiController {
         return okEmpty("Notification deleted");
     }
 
+    /**
+     * API path for marking all notifications read while keeping legacy JSON
+     * shape.
+     */
     @RequestMapping(value = "/mark-all-read", method = RequestMethod.POST, produces = "application/json;charset=UTF-8")
     public String markAllRead(HttpSession session) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);

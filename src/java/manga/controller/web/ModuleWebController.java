@@ -6,10 +6,9 @@ import manga.model.chaptertask.ChapterSummary;
 import manga.model.Proposal;
 import manga.model.SeriesSummary;
 import manga.repository.ProductionRepository;
-import manga.repository.UserAdminRepository;
 import manga.service.AnnotationServiceV2;
 import manga.service.ManuscriptVersionService;
-import manga.service.NotificationService;
+import manga.service.UserService;
 import manga.service.ProposalSettingsService;
 import manga.service.salary.SalarySettingsService;
 import manga.service.salary.TaskTypeRateService;
@@ -71,10 +70,7 @@ public class ModuleWebController {
     private DecisionService decisionService;
 
     @Autowired
-    private UserAdminRepository userAdminRepository;
-
-    @Autowired
-    private NotificationService notificationService;
+    private UserService userService;
 
     @Autowired
     private RankingCsvImportService rankingCsvImportService;
@@ -668,9 +664,9 @@ public class ModuleWebController {
             Model model) {
         AuthenticatedUser user = requireUser(session);
         requireAdmin(user);
-        model.addAttribute("users", userAdminRepository.listUsers());
+        model.addAttribute("users", userService.listUsers());
         model.addAttribute("availableRoles", availableRoles());
-        model.addAttribute("adminRoleLocked", userAdminRepository.hasAnyAdmin());
+        model.addAttribute("adminRoleLocked", userService.hasAnyAdmin());
         if (created != null) {
             model.addAttribute("success", "User " + createdUsername + " created successfully");
             model.addAttribute("createdUserId", created);
@@ -693,7 +689,7 @@ public class ModuleWebController {
         requireAdmin(user);
         model.addAttribute("editing", false);
         model.addAttribute("availableRoles", availableRoles());
-        model.addAttribute("adminRoleLocked", userAdminRepository.hasAnyAdmin());
+        model.addAttribute("adminRoleLocked", userService.hasAnyAdmin());
         model.addAttribute("selectedRoleOption", "");
         return "user/form";
     }
@@ -707,22 +703,22 @@ public class ModuleWebController {
     public String userEdit(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
         requireAdmin(user);
-        Map<String, Object> row = userAdminRepository.getUser(id);
+        Map<String, Object> row = userService.getUser(id);
         if (row == null) {
             throw new IllegalArgumentException("User not found");
         }
         model.addAttribute("editing", true);
         model.addAttribute("editUser", row);
         model.addAttribute("availableRoles", availableRoles());
-        model.addAttribute("adminRoleLocked", userAdminRepository.hasAnyAdmin());
+        model.addAttribute("adminRoleLocked", userService.hasAnyAdmin());
         return "user/form";
     }
 
     /**
-     * Creates a user after early controller validation, then assigns the
-     * selected role option. Repository checks remain the authority for
-     * uniqueness and ADMIN singleton rules because they run next to the
-     * database write.
+     * Creates a user via UserService, which validates the form, assigns the
+     * selected role option, and sends the account-created notification.
+     * UserAdminRepository checks remain the authority for uniqueness and
+     * ADMIN singleton rules because they run next to the database write.
      */
     @RequestMapping(value = "/users/create", method = RequestMethod.POST)
     public String userCreate(
@@ -737,15 +733,7 @@ public class ModuleWebController {
         List<String> roles = parseRoleOption(roleOption);
         try {
             requireAdmin(user);
-            if (password == null || password.trim().isEmpty()) {
-                password = "12345";
-            }
-            validateCreateUser(username, password, fullName, email, roles);
-            long id = userAdminRepository.createUser(username, password, fullName, email);
-            for (String role : roles) {
-                userAdminRepository.addRole(id, role);
-            }
-            notificationService.notifyUser(id, "ACCOUNT_CREATED", "Your MangaFlow account has been created.", 0, null);
+            long id = userService.createUserWithRoles(username, password, fullName, email, roles);
             return "redirect:/main/users?created=" + id + "&username=" + username.trim();
         } catch (RuntimeException ex) {
             model.addAttribute("editing", false);
@@ -756,7 +744,7 @@ public class ModuleWebController {
             model.addAttribute("formPassword", password);
             model.addAttribute("selectedRoleOption", roleOption == null ? "" : roleOption.trim().toUpperCase());
             model.addAttribute("availableRoles", availableRoles());
-            model.addAttribute("adminRoleLocked", userAdminRepository.hasAnyAdmin());
+            model.addAttribute("adminRoleLocked", userService.hasAnyAdmin());
             return "user/form";
         }
     }
@@ -776,21 +764,22 @@ public class ModuleWebController {
         AuthenticatedUser user = requireUser(session);
         try {
             requireAdmin(user);
-            userAdminRepository.updateUser(id, fullName, email);
+            userService.updateUser(id, fullName, email);
             return "redirect:/main/users";
         } catch (RuntimeException ex) {
             model.addAttribute("editing", true);
-            model.addAttribute("editUser", userAdminRepository.getUser(id));
+            model.addAttribute("editUser", userService.getUser(id));
             model.addAttribute("availableRoles", availableRoles());
-            model.addAttribute("adminRoleLocked", userAdminRepository.hasAnyAdmin());
+            model.addAttribute("adminRoleLocked", userService.hasAnyAdmin());
             model.addAttribute("error", ex.getMessage());
             return "user/form";
         }
     }
 
     /**
-     * Changes ACTIVE/INACTIVE status; the repository blocks deactivating the
-     * only active ADMIN so the system is never left without an administrator.
+     * Changes ACTIVE/INACTIVE status via UserService, which sends the
+     * status-changed notification; UserAdminRepository still blocks
+     * deactivating the only active ADMIN so the system always keeps one.
      */
     @RequestMapping(value = "/users/{id}/status", method = RequestMethod.POST)
     public String userStatus(
@@ -801,9 +790,7 @@ public class ModuleWebController {
         AuthenticatedUser user = requireUser(session);
         try {
             requireAdmin(user);
-            String normalizedStatus = status.trim().toUpperCase();
-            userAdminRepository.updateStatus(id, normalizedStatus);
-            notificationService.notifyUser(id, "ACCOUNT_STATUS_CHANGED", "Your account status changed to " + normalizedStatus + ".", 0, null);
+            userService.changeStatus(id, status);
             return "redirect:/main/users";
         } catch (RuntimeException ex) {
             users(session, model);
@@ -813,9 +800,10 @@ public class ModuleWebController {
     }
 
     /**
-     * Adds one or more roles from the list page. Controller validation gives a
-     * quick error, while UserAdminRepository and RoleCombinationValidator
-     * enforce the same rules before saving.
+     * Adds one or more roles from the list page via UserService, which
+     * validates the combined role set and notifies the user for any newly
+     * assigned role; UserAdminRepository and RoleCombinationValidator still
+     * enforce the same rules at save time.
      */
     @RequestMapping(value = "/users/{id}/roles", method = RequestMethod.POST)
     public String userRole(
@@ -831,14 +819,7 @@ public class ModuleWebController {
             if (requestedRoles.isEmpty()) {
                 throw new IllegalArgumentException("Select at least one role");
             }
-            validateAssignableRoles(id, requestedRoles);
-            List<String> currentRoles = userAdminRepository.listRoles(id);
-            for (String normalizedRole : requestedRoles) {
-                userAdminRepository.addRole(id, normalizedRole);
-                if (!currentRoles.contains(normalizedRole)) {
-                    notificationService.notifyUser(id, "ROLE_ASSIGNED", "Role " + normalizedRole + " was assigned to your account.", 0, null);
-                }
-            }
+            userService.assignRoles(id, requestedRoles);
             return "redirect:/main/users";
         } catch (RuntimeException ex) {
             users(session, model);
@@ -848,8 +829,9 @@ public class ModuleWebController {
     }
 
     /**
-     * Removes one role from a user. Removing the final ADMIN role is blocked in
-     * the repository, which is the authoritative database-side guard.
+     * Removes one role via UserService, which notifies the user only if the
+     * role actually existed; removing the final ADMIN role is still blocked
+     * in UserAdminRepository, the authoritative database-side guard.
      */
     @RequestMapping(value = "/users/{id}/roles/remove", method = RequestMethod.POST)
     public String userRoleRemove(
@@ -861,11 +843,7 @@ public class ModuleWebController {
         try {
             requireAdmin(user);
             String normalizedRole = role.trim().toUpperCase();
-            List<String> currentRoles = userAdminRepository.listRoles(id);
-            userAdminRepository.removeRole(id, normalizedRole);
-            if (currentRoles.contains(normalizedRole)) {
-                notificationService.notifyUser(id, "ROLE_REMOVED", "Role " + normalizedRole + " was removed from your account.", 0, null);
-            }
+            userService.removeRole(id, normalizedRole);
             return "redirect:/main/users";
         } catch (RuntimeException ex) {
             users(session, model);
@@ -949,50 +927,8 @@ public class ModuleWebController {
         }
     }
 
-    /**
-     * Performs quick create-form validation before calling the repository. The
-     * repository is still the authoritative layer for uniqueness and ADMIN
-     * singleton checks because those rules must be protected at save time.
-     */
-    private void validateCreateUser(String username, String password, String fullName, String email, List<String> roles) {
-        if (isBlank(username) || isBlank(password) || isBlank(fullName) || isBlank(email)) {
-            throw new IllegalArgumentException("All user fields are required");
-        }
-        if (password.length() < 5) {
-            throw new IllegalArgumentException("Password must be at least 5 characters");
-        }
-        if (!email.contains("@")) {
-            throw new IllegalArgumentException("Email is invalid");
-        }
-        if (roles == null || roles.isEmpty()) {
-            throw new IllegalArgumentException("Select at least one role");
-        }
-        if (containsRole(roles, "ADMIN") && userAdminRepository.hasAnyAdmin()) {
-            throw new IllegalArgumentException("Only one ADMIN account is allowed");
-        }
-        manga.common.util.RoleCombinationValidator.validate(roles);
-    }
-
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
-    }
-
-    /**
-     * Checks the requested role set before saving. This is an early-exit
-     * helper; UserAdminRepository.addRole and RoleCombinationValidator still
-     * enforce the final role-combination rules.
-     */
-    private void validateAssignableRoles(long userId, List<String> roles) {
-        if (roles.contains("ADMIN")
-                && !userAdminRepository.hasRole(userId, "ADMIN")
-                && userAdminRepository.hasAnyAdmin()) {
-            throw new IllegalArgumentException("Only one ADMIN account is allowed");
-        }
-        List<String> merged = new ArrayList<String>(userAdminRepository.listRoles(userId));
-        for (String role : roles) {
-            addSelectedRole(merged, role);
-        }
-        manga.common.util.RoleCombinationValidator.validate(merged);
     }
 
     // ============================================================
@@ -1327,9 +1263,9 @@ public class ModuleWebController {
             if (chapter != null) {
                 chapterMap.put(version.getId(), chapter);
 
-                // Get mangaka name using UserAdminRepository
+                // Get mangaka name using UserService
                 long mangakaId = chapterService.findOwnerMangakaByChapter(version.getChapterId());
-                String mangakaName = userAdminRepository.getFullNameById(mangakaId);
+                String mangakaName = userService.getFullNameById(mangakaId);
                 if (mangakaName == null) {
                     mangakaName = "Unknown";
                 }
@@ -1422,15 +1358,5 @@ public class ModuleWebController {
     // ============================================================
     // Private Helper Methods
     // ============================================================
-    private boolean containsRole(List<String> roles, String roleName) {
-        if (roles == null) {
-            return false;
-        }
-        for (String role : roles) {
-            if (roleName.equalsIgnoreCase(role == null ? "" : role.trim())) {
-                return true;
-            }
-        }
-        return false;
-    }
 }
+

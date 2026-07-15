@@ -2,7 +2,7 @@ package manga.controller.web;
 
 import manga.common.util.SessionUserUtil;
 import manga.model.AuthenticatedUser;
-import manga.repository.UserAdminRepository;
+import manga.service.UserService;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,12 +32,12 @@ public class ProfileController {
     private static final String FLASH_ERROR = "PROFILE_FLASH_ERROR";
 
     @Autowired
-    private UserAdminRepository userAdminRepository;
+    private UserService userService;
 
     @RequestMapping(method = RequestMethod.GET)
     public String edit(HttpSession session, Model model) {
         AuthenticatedUser authUser = SessionUserUtil.requireUser(session);
-        Map<String, Object> profile = userAdminRepository.getUser(authUser.getId());
+        Map<String, Object> profile = userService.getUser(authUser.getId());
         if (profile == null) {
             throw new IllegalArgumentException("User not found");
         }
@@ -66,11 +66,11 @@ public class ProfileController {
         StoredAvatar storedAvatar = null;
         try {
             validateProfile(fullName, email);
-            if (userAdminRepository.emailExistsExcludingUser(email, authUser.getId())) {
+            if (userService.emailExistsExcludingUser(email, authUser.getId())) {
                 throw new IllegalArgumentException("Email already exists");
             }
 
-            Map<String, Object> currentProfile = userAdminRepository.getUser(authUser.getId());
+            Map<String, Object> currentProfile = userService.getUser(authUser.getId());
             if (currentProfile == null) {
                 throw new IllegalArgumentException("User not found");
             }
@@ -80,7 +80,7 @@ public class ProfileController {
                 avatarUrl = storedAvatar.url;
             }
 
-            userAdminRepository.updateProfile(authUser.getId(), fullName, email, avatarUrl);
+            userService.updateProfile(authUser.getId(), fullName, email, avatarUrl);
             authUser.setFullName(fullName.trim());
             authUser.setEmail(email.trim());
             authUser.setAvatarUrl(avatarUrl);
@@ -100,18 +100,7 @@ public class ProfileController {
             @RequestParam("confirmNewPassword") String confirmNewPassword) {
         AuthenticatedUser authUser = SessionUserUtil.requireUser(session);
         try {
-            String currentPasswordHash = userAdminRepository.getPasswordHash(authUser.getId());
-            if (currentPasswordHash == null || currentPassword == null || !currentPassword.equals(currentPasswordHash)) {
-                throw new IllegalArgumentException("Current password is incorrect");
-            }
-            if (newPassword == null || !newPassword.equals(confirmNewPassword)) {
-                throw new IllegalArgumentException("New password confirmation does not match");
-            }
-            if (newPassword.length() < 5) {
-                throw new IllegalArgumentException("Password must be at least 5 characters");
-            }
-
-            userAdminRepository.updatePassword(authUser.getId(), newPassword);
+            userService.changePassword(authUser.getId(), currentPassword, newPassword, confirmNewPassword);
             authUser.setPasswordHash(newPassword);
             setFlashSuccess(session, "Password changed successfully");
         } catch (RuntimeException ex) {
