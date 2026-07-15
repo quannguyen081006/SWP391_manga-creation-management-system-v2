@@ -50,8 +50,8 @@ public class RankingApiController {
 
     @RequestMapping(value = "/periods/{id}/results", method = RequestMethod.GET)
     public ApiResponse<List<Map<String, Object>>> results(@PathVariable("id") long id, HttpSession session) {
-        AuthenticatedUser user = SessionUserUtil.requireUser(session);
-        return ApiResponse.ok(rankingService.getRankingResults(id, user), "Ranking results");
+        SessionUserUtil.requireUser(session);
+        return ApiResponse.ok(rankingService.getRankingResults(id), "Ranking results");
     }
 
     @RequestMapping(value = "/periods/{id}/calculate", method = RequestMethod.POST)

@@ -1,0 +1,7 @@
+.git
+build
+dist
+nbproject/private
+*.docx
+*.md
+docs
