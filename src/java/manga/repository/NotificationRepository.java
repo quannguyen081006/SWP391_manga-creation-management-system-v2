@@ -38,20 +38,10 @@ public class NotificationRepository {
     @Autowired
     private DataSource dataSource;
 
-    /**
-     * Creates a notification using the central type-to-title and type-to-URL
-     * mapping below. Prefer
-     * {@link manga.service.NotificationService#notifyUser} from workflow code;
-     * task schedulers may insert through PageTaskRepository when SQL batching
-     * requires it.
-     */
     public void create(long userId, String type, String message, long referenceId, String referenceType) {
         create(userId, type, defaultTitle(type), message, defaultViewUrl(type, referenceId, referenceType), referenceId, referenceType);
     }
 
-    /**
-     * Inserts the final row after title and viewUrl are already known.
-     */
     public void create(long userId, String type, String title, String message, String viewUrl, long referenceId, String referenceType) {
         String sql = "INSERT INTO Notification (userId, type, title, message, viewUrl, referenceId, referenceType, isRead, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, 0, GETDATE())";
         try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -73,17 +63,10 @@ public class NotificationRepository {
         }
     }
 
-    /**
-     * Lists the default notification page/header amount for one user.
-     */
     public List<NotificationItem> listByUser(long userId) {
         return listByUser(userId, 100);
     }
 
-    /**
-     * Lists notifications newest first; callers choose a limit for page/header
-     * use.
-     */
     public List<NotificationItem> listByUser(long userId, int limit) {
         // SQL Server TOP is parameterized so the header can request many rows safely.
         String sql = "SELECT TOP (?) id, userId, type, title, message, viewUrl, referenceId, referenceType, isRead, createdAt FROM Notification WHERE userId = ? ORDER BY createdAt DESC";
@@ -102,9 +85,6 @@ public class NotificationRepository {
         return rows;
     }
 
-    /**
-     * Counts unread rows for the header badge.
-     */
     public int unreadCount(long userId) {
         String sql = "SELECT COUNT(*) FROM Notification WHERE userId = ? AND isRead = 0";
         try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -117,35 +97,21 @@ public class NotificationRepository {
         }
     }
 
-    /**
-     * Marks a single user-owned notification as read.
-     */
     public void markRead(long userId, long id) {
         String sql = "UPDATE Notification SET isRead = 1 WHERE id = ? AND userId = ?";
         update(sql, id, userId);
     }
 
-    /**
-     * Marks a single user-owned notification as unread; used by the JS/API
-     * path.
-     */
     public void markUnread(long userId, long id) {
         String sql = "UPDATE Notification SET isRead = 0 WHERE id = ? AND userId = ?";
         update(sql, id, userId);
     }
 
-    /**
-     * Deletes a single user-owned notification; there is only an API/JS route
-     * for this.
-     */
     public void delete(long userId, long id) {
         String sql = "DELETE FROM Notification WHERE id = ? AND userId = ?";
         update(sql, id, userId);
     }
 
-    /**
-     * Marks every unread notification as read for the current user.
-     */
     public void markAllRead(long userId) {
         String sql = "UPDATE Notification SET isRead = 1 WHERE userId = ? AND isRead = 0";
         try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -156,14 +122,6 @@ public class NotificationRepository {
         }
     }
 
-    /**
-     * Once-ever dedup check: true when any row already exists for (user, type,
-     * referenceId). Used by NotificationService.existsNotification and by
-     * callers that guard before create(). Task schedulers use equivalent logic
-     * inside PageTaskRepository.createNotificationIfAbsent (e.g. one
-     * TASK_OVERDUE per task) or createNotificationIfAbsentToday (e.g. one
-     * TASK_DUE_SOON or TASK_DELAYED reminder per calendar day).
-     */
     public boolean exists(long userId, String type, long referenceId) {
         String sql = "SELECT COUNT(*) FROM Notification WHERE userId = ? AND type = ? AND referenceId = ?";
         try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -186,9 +144,6 @@ public class NotificationRepository {
         return false;
     }
 
-    /**
-     * Loads the stored click target for one user-owned notification.
-     */
     public String viewUrlByUser(long userId, long id) {
         String sql = "SELECT type, viewUrl, referenceId FROM Notification WHERE id = ? AND userId = ?";
         try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -243,13 +198,6 @@ public class NotificationRepository {
         return n;
     }
 
-    /**
-     * Single source of truth for display titles from notification type. Keep
-     * this repository as the easy-to-explain source for type -> title mapping.
-     * PageTaskRepository's scheduler bypass is documented here because it must
-     * stay aligned with this mapping when it creates task reminders in batch
-     * SQL.
-     */
     private String defaultTitle(String type) {
         if (type == null) {
             return "Notification";
@@ -277,11 +225,6 @@ public class NotificationRepository {
         return "Notification";
     }
 
-    /**
-     * Single source of truth for click targets stored at insert time.
-     * NotificationWebController validates these paths again on /click
-     * (open-redirect guard).
-     */
     private String defaultViewUrl(String type, long referenceId, String referenceType) {
         if (referenceId <= 0 || type == null) {
             return null;
