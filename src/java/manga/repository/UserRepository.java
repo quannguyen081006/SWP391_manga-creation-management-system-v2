@@ -19,12 +19,11 @@ public class UserRepository {
     @Autowired
     private DataSource dataSource;
 
-        public AuthenticatedUser findByUsername(String username) {
+    public AuthenticatedUser findByUsername(String username) {
         String sql = "SELECT id, username, passwordHash, fullName, email, avatarUrl, status FROM [User] WHERE username = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, username);
-            try (ResultSet rs = ps.executeQuery()) {
+            try ( ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) {
                     return null;
                 }
@@ -47,9 +46,9 @@ public class UserRepository {
     private void loadRoles(Connection conn, AuthenticatedUser user) throws SQLException {
         // Roles are loaded with the user so session checks can use user.hasRole(...).
         String sql = "SELECT r.name FROM UserRole ur JOIN [Role] r ON ur.roleId = r.id WHERE ur.userId = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, user.getId());
-            try (ResultSet rs = ps.executeQuery()) {
+            try ( ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     user.addRole(rs.getString("name"));
                 }
@@ -57,16 +56,15 @@ public class UserRepository {
         }
     }
 
-        public List<Map<String, Object>> findByRole(String roleName) {
-        String sql = "SELECT u.id, u.username, u.fullName FROM [User] u " +
-                     "JOIN UserRole ur ON u.id = ur.userId " +
-                     "JOIN [Role] r ON ur.roleId = r.id " +
-                     "WHERE r.name = ?";
+    public List<Map<String, Object>> findByRole(String roleName) {
+        String sql = "SELECT u.id, u.username, u.fullName FROM [User] u "
+                + "JOIN UserRole ur ON u.id = ur.userId "
+                + "JOIN [Role] r ON ur.roleId = r.id "
+                + "WHERE r.name = ?";
         List<Map<String, Object>> users = new ArrayList<>();
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, roleName);
-            try (ResultSet rs = ps.executeQuery()) {
+            try ( ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     Map<String, Object> user = new HashMap<>();
                     user.put("id", rs.getLong("id"));
@@ -79,5 +77,29 @@ public class UserRepository {
             throw new RuntimeException("Cannot find users by role", ex);
         }
         return users;
+    }
+
+    public int countUsersByRole(String roleName) {
+        String sql = "SELECT COUNT(*) "
+                + "FROM [User] u "
+                + "JOIN UserRole ur ON u.id = ur.userId "
+                + "JOIN [Role] r ON ur.roleId = r.id "
+                + "WHERE r.name = ?";
+
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setString(1, roleName);
+
+            try ( ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot count users by role", ex);
+        }
+
+        return 0;
     }
 }

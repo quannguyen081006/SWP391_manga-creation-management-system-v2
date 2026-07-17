@@ -4,18 +4,17 @@ import manga.common.exception.BusinessRuleException;
 import manga.dto.OpenDecisionSessionRequest;
 import manga.dto.SubmitDecisionVoteRequest;
 import manga.enums.DecisionResult;
-import manga.enums.DecisionSessionStatus;
 import manga.model.AuthenticatedUser;
 import manga.model.SeriesSummary;
 import manga.repository.DecisionRepository;
 import manga.repository.ProductionRepository;
-import manga.repository.RankingRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import manga.repository.UserRepository;
 
 @Service
 public class DecisionService {
@@ -24,10 +23,12 @@ public class DecisionService {
     private DecisionRepository decisionRepository;
 
     @Autowired
-    private RankingRepository rankingRepository;
+    private UserRepository userRepository;
 
     @Autowired
     private ProductionRepository productionRepository;
+
+    public static final String board = "EDITORIAL_BOARD";
 
     public List<Map<String, Object>> listDecisionSessions(AuthenticatedUser user) {
         // Only ADMIN and EDITORIAL_BOARD can view decisions
@@ -104,11 +105,20 @@ public class DecisionService {
                 throw new BusinessRuleException("justification is required when decision is CANCEL (BR-68)");
             }
         }
+        int requiredMajority = calculateQuorum();
 
         // Submit vote (repository handles BR-60, BR-61, BR-64, BR-62, BR-69)
         decisionRepository.castVote(sessionId, user.getId(), normalized,
-                request.getJustification() == null ? null : request.getJustification().trim());
+                request.getJustification() == null ? null : request.getJustification().trim(), requiredMajority);
     }
 
+    public int getTotalBoardMembers() {
+        return userRepository.countUsersByRole(board);
+    }
+
+    public int calculateQuorum() {
+        int totalBoard = getTotalBoardMembers();
+        return totalBoard / 2 + 1;
+    }
     // finalizeDecision removed - quorum-based finalization in resolveIfQuorum handles this automatically
 }

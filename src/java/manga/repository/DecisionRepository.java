@@ -112,7 +112,7 @@ public class DecisionRepository {
     //   - Step 6: resolveIfQuorum — finalize session nếu đủ 3 vote       //
     //  Toàn bộ trong 1 transaction                                        //
     // ------------------------------------------------------------------ //
-    public void castVote(long sessionId, long voterId, String decision, String justification) {
+    public void castVote(long sessionId, long voterId, String decision, String justification, int requiredMajority) {
 
         // Check 1: Validate decision value
         String normalized = decision == null ? "" : decision.trim().toUpperCase();
@@ -207,7 +207,7 @@ public class DecisionRepository {
                         "Voter " + voterId + " submitted decision: " + normalized);
 
                 // Step 6: Kiểm tra quorum và finalize nếu đủ (BR-62)
-                resolveIfQuorum(conn, sessionId, seriesId, voterId);
+                resolveIfQuorum(conn, sessionId, seriesId, voterId, requiredMajority);
 
                 conn.commit();
 
@@ -230,7 +230,7 @@ public class DecisionRepository {
     //  Nếu CANCEL → update Series.status = CANCELLED (BR-69)             //
     //  Gửi DECISION_RESOLVED notification cho tất cả Board members        //
     // ------------------------------------------------------------------ //
-    private void resolveIfQuorum(Connection conn, long sessionId, long seriesId, Long triggeringVoterId) throws SQLException {
+    private void resolveIfQuorum(Connection conn, long sessionId, long seriesId, Long triggeringVoterId, int requiredM) throws SQLException {
 
         String countSql
                 = "SELECT"
@@ -253,7 +253,7 @@ public class DecisionRepository {
         }
 
         // Chưa đủ quorum → chờ thêm vote (BR-62: min 3)
-        if (total < 3) {
+        if (total < requiredM) {
             return;
         }
 
@@ -268,57 +268,59 @@ public class DecisionRepository {
             result = "CANCEL";
         }
 
-        // Đóng session
-        String closeSessionSql
-                = "UPDATE DecisionSession SET status = 'CLOSED', result = ?, closedAt = GETDATE() WHERE id = ?";
-        try ( PreparedStatement ps = conn.prepareStatement(closeSessionSql)) {
-            ps.setString(1, result);
-            ps.setLong(2, sessionId);
-            ps.executeUpdate();
-        }
-        // AuditLog records the automatic resolution once quorum is reached.
-        auditLogRepository.insertLog(triggeringVoterId, "DECISION_SESSION_RESOLVED", "DECISION", sessionId,
-                "Decision session " + sessionId + " resolved with result: " + result);
-
-        // Nếu CANCEL → update Series.status = CANCELLED (BR-69)
-        if ("CANCEL".equals(result)) {
-            String cancelSeriesSql = "UPDATE Series SET status = 'CANCELLED' WHERE id = ?";
-            try ( PreparedStatement ps = conn.prepareStatement(cancelSeriesSql)) {
-                ps.setLong(1, seriesId);
+        // Tự động đóng session nếu đạt majority
+        if ((continueV + changeV) >= requiredM || cancelV >= requiredM) {
+            String closeSessionSql
+                    = "UPDATE DecisionSession SET status = 'CLOSED', result = ?, closedAt = GETDATE() WHERE id = ?";
+            try ( PreparedStatement ps = conn.prepareStatement(closeSessionSql)) {
+                ps.setString(1, result);
+                ps.setLong(2, sessionId);
                 ps.executeUpdate();
             }
+            // AuditLog records the automatic resolution once quorum is reached.
+            auditLogRepository.insertLog(triggeringVoterId, "DECISION_SESSION_RESOLVED", "DECISION", sessionId,
+                    "Decision session " + sessionId + " resolved with result: " + result);
+            // Nếu CANCEL → update Series.status = CANCELLED (BR-69)
+            if ("CANCEL".equals(result)) {
+                String cancelSeriesSql = "UPDATE Series SET status = 'CANCELLED' WHERE id = ?";
+                try ( PreparedStatement ps = conn.prepareStatement(cancelSeriesSql)) {
+                    ps.setLong(1, seriesId);
+                    ps.executeUpdate();
+                }
 
-            // AuditLog records the resulting series cancellation as a separate event.
-            auditLogRepository.insertLog(triggeringVoterId, "SERIES_CANCELLED", "SERIES", seriesId,
-                    "Series " + seriesId + " cancelled due to decision session " + sessionId);
+                // AuditLog records the resulting series cancellation as a separate event.
+                auditLogRepository.insertLog(triggeringVoterId, "SERIES_CANCELLED", "SERIES", seriesId,
+                        "Series " + seriesId + " cancelled due to decision session " + sessionId);
+            }
+
+            // Gửi DECISION_RESOLVED notification cho tất cả Board members active (BR-65)
+            // BR-DEC-08: Exclude Tantou Editor from notification
+            String notifySql
+                    = "INSERT INTO Notification (userId, type, title, message, viewUrl, referenceId, referenceType, isRead, createdAt)"
+                    + " SELECT u.id,"
+                    + "   'DECISION_RESOLVED',"
+                    + "   'Decision finalized',"
+                    + "   'A decision session has been finalized with result: " + result + ".',"
+                    + "   '/main/decisions/' + CAST(? AS VARCHAR(30)),"
+                    + "   ?,"
+                    + "   'DECISION',"
+                    + "   0,"
+                    + "   GETDATE()"
+                    + " FROM [User] u"
+                    + " JOIN UserRole ur ON ur.userId = u.id"
+                    + " JOIN [Role] ro ON ro.id = ur.roleId"
+                    + " JOIN Series s ON s.id = ?"
+                    + " WHERE u.status = 'ACTIVE'"
+                    + "   AND ro.name = 'EDITORIAL_BOARD'"
+                    + "   AND u.id <> s.tantouEditorId";
+            try ( PreparedStatement ps = conn.prepareStatement(notifySql)) {
+                ps.setLong(1, sessionId);
+                ps.setLong(2, sessionId);
+                ps.setLong(3, seriesId);
+                ps.executeUpdate();
+            }
         }
 
-        // Gửi DECISION_RESOLVED notification cho tất cả Board members active (BR-65)
-        // BR-DEC-08: Exclude Tantou Editor from notification
-        String notifySql
-                = "INSERT INTO Notification (userId, type, title, message, viewUrl, referenceId, referenceType, isRead, createdAt)"
-                + " SELECT u.id,"
-                + "   'DECISION_RESOLVED',"
-                + "   'Decision finalized',"
-                + "   'A decision session has been finalized with result: " + result + ".',"
-                + "   '/main/decisions/' + CAST(? AS VARCHAR(30)),"
-                + "   ?,"
-                + "   'DECISION',"
-                + "   0,"
-                + "   GETDATE()"
-                + " FROM [User] u"
-                + " JOIN UserRole ur ON ur.userId = u.id"
-                + " JOIN [Role] ro ON ro.id = ur.roleId"
-                + " JOIN Series s ON s.id = ?"
-                + " WHERE u.status = 'ACTIVE'"
-                + "   AND ro.name = 'EDITORIAL_BOARD'"
-                + "   AND u.id <> s.tantouEditorId";
-        try ( PreparedStatement ps = conn.prepareStatement(notifySql)) {
-            ps.setLong(1, sessionId);
-            ps.setLong(2, sessionId);
-            ps.setLong(3, seriesId);
-            ps.executeUpdate();
-        }
     }
 
     // ------------------------------------------------------------------ //
@@ -455,8 +457,7 @@ public class DecisionRepository {
             return rs.next() && rs.getObject(1) != null;
         }
     }
-    
-    
+
     public void runDecisionEngine(Connection conn, long periodId, AuthenticatedUser user) throws SQLException {
         // Batch fetch all bottom 20% series with their status and session existence check
         String fetchBottomSeriesDataSql
@@ -587,7 +588,7 @@ public class DecisionRepository {
             createSession(seriesId, rankingRecordId, suggestion, revenueTrendJson, actorId);
         }
     }
-    
+
     private String escapeJson(String value) {
         if (value == null) {
             return "";
