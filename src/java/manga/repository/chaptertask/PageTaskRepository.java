@@ -111,6 +111,9 @@ public class PageTaskRepository {
     @Autowired
     private PageRepository pageRepository;
 
+    @Autowired
+    private manga.repository.NotificationRepository notificationRepository;
+
     // ============================================================
     // [2] SCHEMA GUARD - Kiểm tra & tự cập nhật cấu trúc DB
     // ============================================================
@@ -1637,45 +1640,19 @@ public class PageTaskRepository {
     // [10] THÔNG BÁO (Notification)
     // ============================================================
 
-    /** Tạo thông báo cho người dùng */
+    /**
+     * Creates a notification for a user. Delegates SQL insert and title/URL
+     * mapping to NotificationRepository so this logic lives in exactly one
+     * place, regardless of whether the caller is PageTaskRepository or
+     * NotificationService.
+     */
     public void createNotification(long userId, String type, String message, long referenceId, String referenceType) {
-        String sql = "INSERT INTO Notification (userId, type, title, message, viewUrl, referenceId, referenceType, isRead, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, 0, GETDATE())";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, userId);
-            ps.setString(2, type);
-            ps.setString(3, notificationTitle(type));
-            ps.setString(4, message);
-            ps.setString(5, notificationViewUrl(type, referenceId, referenceType));
-            ps.setLong(6, referenceId);
-            ps.setString(7, referenceType);
-            ps.executeUpdate();
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot create notification", ex);
-        }
+        notificationRepository.create(userId, type, message, referenceId, referenceType);
     }
 
     /** Creates one notification per user/type/reference across scheduler runs. */
     public boolean createNotificationIfAbsent(long userId, String type, String message, long referenceId, String referenceType) {
-        String checkSql =
-            "SELECT COUNT(1) FROM Notification "
-            + "WHERE userId = ? AND type = ? AND referenceId = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement check = conn.prepareStatement(checkSql)) {
-            check.setLong(1, userId);
-            check.setString(2, type);
-            check.setLong(3, referenceId);
-            try (ResultSet rs = check.executeQuery()) {
-                if (rs.next() && rs.getInt(1) > 0) {
-                    return false;
-                }
-            }
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot check notification duplication", ex);
-        }
-
-        createNotification(userId, type, message, referenceId, referenceType);
-        return true;
+        return notificationRepository.createIfAbsent(userId, type, message, referenceId, referenceType);
     }
 
     /**
@@ -1683,78 +1660,12 @@ public class PageTaskRepository {
      * Trả về true nếu thông báo được tạo, false nếu đã tồn tại.
      */
     public boolean createNotificationIfAbsentToday(long userId, String type, String message, long referenceId, String referenceType) {
-        String checkSql =
-            "SELECT COUNT(1) FROM Notification "
-            + "WHERE userId = ? AND type = ? AND referenceId = ? "
-            + "AND CAST(createdAt AS DATE) = CAST(GETDATE() AS DATE)";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement check = conn.prepareStatement(checkSql)) {
-            check.setLong(1, userId);
-            check.setString(2, type);
-            check.setLong(3, referenceId);
-            try (ResultSet rs = check.executeQuery()) {
-                rs.next();
-                if (rs.getInt(1) > 0) {
-                    return false;
-                }
-            }
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot check notification duplication", ex);
-        }
-
-        createNotification(userId, type, message, referenceId, referenceType);
-        return true;
+        return notificationRepository.createIfAbsentToday(userId, type, message, referenceId, referenceType);
     }
 
     // ============================================================
     // [11] HELPER / UTILITY
     // ============================================================
-
-    /** Map notification type sang tiêu đề hiển thị */
-    private String notificationTitle(String type) {
-        if (type == null) {
-            return "Notification";
-        }
-        String normalized = type.trim().toUpperCase(Locale.ENGLISH);
-        if ("TASK_ASSIGNED".equals(normalized)) { return "New page task assigned"; }
-        if ("TASK_SUBMITTED".equals(normalized)) { return "Task submitted for review"; }
-        if ("TASK_APPROVED".equals(normalized)) { return "Task approved"; }
-        if ("TASK_REJECTED".equals(normalized)) { return "Task rejected - rework needed"; }
-        if ("TASK_DELETED".equals(normalized)) { return "Task deleted"; }
-        if ("TASK_REASSIGNED".equals(normalized)) { return "Task reassigned"; }
-        if ("TASK_DUE_SOON".equals(normalized)) { return "Task due in 24 hours"; }
-        if ("TASK_DELAYED".equals(normalized)) { return "Task delayed"; }
-        if ("TASK_OVERDUE".equals(normalized)) { return "Task overdue"; }
-        if ("TASK_OVERDUE_ACTION_REQUIRED".equals(normalized)) { return "Task overdue - action required"; }
-        if ("TASK_EXTENDED".equals(normalized)) { return "Task deadline extended"; }
-        if ("TASK_CANCELLED".equals(normalized)) { return "Task cancelled"; }
-        if ("TASK_ESCALATED".equals(normalized)) { return "Task escalated"; }
-        if ("CHAPTER_AT_RISK".equals(normalized)) { return "Chapter at risk"; }
-        if (normalized.startsWith("MANUSCRIPT")) { return "Manuscript update"; }
-        if (normalized.startsWith("CHAPTER")) { return "Chapter update"; }
-        return "Notification";
-    }
-
-    /** Tạo URL điều hướng cho thông báo dựa vào referenceType và type */
-    private String notificationViewUrl(String type, long referenceId, String referenceType) {
-        if (referenceId <= 0 || referenceType == null) {
-            return null;
-        }
-        String normalizedType = type == null ? "" : type.trim().toUpperCase(Locale.ENGLISH);
-        String normalizedRef = referenceType.trim().toUpperCase(Locale.ENGLISH);
-        if ("TASK".equals(normalizedRef) || "PAGETASK".equals(normalizedRef)) {
-            if ("TASK_ESCALATED".equals(normalizedType)) {
-                return "/main/tasks/" + referenceId + "?tab=history";
-            }
-            return "/main/tasks/" + referenceId;
-        }
-        if ("CHAPTER".equals(normalizedRef)) { return "/main/chapters/" + referenceId; }
-        if ("MANUSCRIPT".equals(normalizedRef)) { return "/main/notifications"; }
-        if ("DECISION".equals(normalizedRef) || "DECISION_SESSION".equals(normalizedRef)) { return "/main/decisions/" + referenceId; }
-        if ("PROPOSAL".equals(normalizedRef)) { return "/main/proposals/" + referenceId; }
-        if ("SERIES".equals(normalizedRef)) { return "/main/notifications"; }
-        return null;
-    }
 
     /** Map đầy đủ ResultSet → TaskSummary kèm thông tin chapter/series/assistant */
     private TaskSummary mapDetailed(ResultSet rs) throws SQLException {

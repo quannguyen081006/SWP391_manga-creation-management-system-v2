@@ -14,23 +14,22 @@ import org.springframework.stereotype.Repository;
 /**
  * JDBC access for the Notification table.
  * <p>
- * <b>Two write paths converge on the same title/URL rules:</b>
+ * All notification creation, deduplication, and title/URL mapping resolves
+ * here in exactly one place, regardless of caller:
  * <ol>
  * <li>{@link manga.service.NotificationService#notifyUser} -> {@link #create(long, String, String, long, String)}
  * for workflow-driven alerts (proposals, manuscripts, account changes,
  * etc.).</li>
- * <li>PageTaskRepository scheduler jobs use a parallel bypass
- * ({@code createNotificationIfAbsent} /
- * {@code createNotificationIfAbsentToday}) with local title/URL helpers that
- * follow the same rules as {@link #defaultTitle} and {@link #defaultViewUrl}
- * below. That bypass keeps batch SQL in one transaction.</li>
+ * <li>{@code PageTaskRepository} scheduler jobs call {@link #createIfAbsent}
+ * / {@link #createIfAbsentToday} directly instead of holding a private
+ * copy of this SQL/title/URL logic.</li>
  * </ol>
  * <p>
- * <b>Dedup patterns:</b> {@link #exists(long, String, long)} supports once-ever
- * checks (e.g. ReviewTaskService uses it before {@code REVIEW_WARNING}). Task
- * schedulers use once-ever for {@code TASK_OVERDUE} and daily dedup for
- * {@code TASK_DUE_SOON} / {@code TASK_DELAYED} via PageTaskRepository helpers
- * that filter on {@code createdAt} date.
+ * <b>Dedup patterns:</b> {@link #exists(long, String, long)} and
+ * {@link #createIfAbsent} support once-ever checks (e.g. {@code TASK_OVERDUE},
+ * {@code REVIEW_WARNING}). {@link #createIfAbsentToday} scopes the check to
+ * today's date for daily-recurring states ({@code TASK_DUE_SOON},
+ * {@code TASK_DELAYED}).
  */
 @Repository
 public class NotificationRepository {
@@ -40,6 +39,43 @@ public class NotificationRepository {
 
     public void create(long userId, String type, String message, long referenceId, String referenceType) {
         create(userId, type, defaultTitle(type), message, defaultViewUrl(type, referenceId, referenceType), referenceId, referenceType);
+    }
+
+    /**
+     * Creates a notification only if one with the same userId/type/referenceId
+     * does not already exist. Returns true when a new row was inserted.
+     * Used by scheduler jobs that must not re-notify on every run (e.g. TASK_OVERDUE).
+     */
+    public boolean createIfAbsent(long userId, String type, String message, long referenceId, String referenceType) {
+        if (exists(userId, type, referenceId)) {
+            return false;
+        }
+        create(userId, type, message, referenceId, referenceType);
+        return true;
+    }
+
+    /**
+     * Same as {@link #createIfAbsent} but scoped to today's date, allowing one
+     * notification per day for recurring states (e.g. TASK_DUE_SOON, TASK_DELAYED).
+     */
+    public boolean createIfAbsentToday(long userId, String type, String message, long referenceId, String referenceType) {
+        String checkSql = "SELECT COUNT(1) FROM Notification "
+                + "WHERE userId = ? AND type = ? AND referenceId = ? "
+                + "AND CAST(createdAt AS DATE) = CAST(GETDATE() AS DATE)";
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement check = conn.prepareStatement(checkSql)) {
+            check.setLong(1, userId);
+            check.setString(2, type);
+            check.setLong(3, referenceId);
+            try ( ResultSet rs = check.executeQuery()) {
+                if (rs.next() && rs.getInt(1) > 0) {
+                    return false;
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot check notification duplication", ex);
+        }
+        create(userId, type, message, referenceId, referenceType);
+        return true;
     }
 
     public void create(long userId, String type, String title, String message, String viewUrl, long referenceId, String referenceType) {
@@ -203,6 +239,22 @@ public class NotificationRepository {
             return "Notification";
         }
         String normalized = type.trim().toUpperCase();
+        // Specific TASK_* titles (moved here from PageTaskRepository so title/URL
+        // mapping lives in exactly one place regardless of caller).
+        if ("TASK_ASSIGNED".equals(normalized)) { return "New page task assigned"; }
+        if ("TASK_SUBMITTED".equals(normalized)) { return "Task submitted for review"; }
+        if ("TASK_APPROVED".equals(normalized)) { return "Task approved"; }
+        if ("TASK_REJECTED".equals(normalized)) { return "Task rejected - rework needed"; }
+        if ("TASK_DELETED".equals(normalized)) { return "Task deleted"; }
+        if ("TASK_REASSIGNED".equals(normalized)) { return "Task reassigned"; }
+        if ("TASK_DUE_SOON".equals(normalized)) { return "Task due in 24 hours"; }
+        if ("TASK_DELAYED".equals(normalized)) { return "Task delayed"; }
+        if ("TASK_OVERDUE".equals(normalized)) { return "Task overdue"; }
+        if ("TASK_OVERDUE_ACTION_REQUIRED".equals(normalized)) { return "Task overdue - action required"; }
+        if ("TASK_EXTENDED".equals(normalized)) { return "Task deadline extended"; }
+        if ("TASK_CANCELLED".equals(normalized)) { return "Task cancelled"; }
+        if ("TASK_ESCALATED".equals(normalized)) { return "Task escalated"; }
+        if ("CHAPTER_AT_RISK".equals(normalized)) { return "Chapter at risk"; }
         // Keep titles generic by module so BR-PRO/BR-VOT/BR-TSK/BR-MAN events share UI language.
         if (normalized.contains("TASK")) {
             return "Task update";
