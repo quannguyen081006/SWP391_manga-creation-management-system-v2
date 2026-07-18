@@ -522,8 +522,8 @@ public class DecisionRepository {
                 + "FROM VoteEntry ve "
                 + "JOIN RankingPeriod rp ON rp.id = ve.periodId "
                 + "WHERE ve.seriesId IN (" + inClause.toString() + ") AND (rp.status = 'CALCULATED' OR rp.id = ?) "
-                + "GROUP BY ve.seriesId, rp.id, rp.name, rp.endDate "
-                + "ORDER BY rp.endDate DESC";
+                + "GROUP BY ve.seriesId, rp.id, rp.name "
+                + "ORDER BY rp.id DESC";
 
         // Map seriesId -> list of revenue data points
         Map<Long, List<RevenueDataPoint>> revenueHistoryMap = new HashMap<>();
@@ -556,15 +556,10 @@ public class DecisionRepository {
             long rankingRecordId = rankingRecordIds.get(i);
             List<RevenueDataPoint> revenueTrend = revenueHistoryMap.get(seriesId);
 
-            // Reverse to get chronological order
-            java.util.Collections.reverse(revenueTrend);
             // Keep only last 6 periods for decision analysis
             if (revenueTrend.size() > 6) {
                 revenueTrend = new ArrayList<>(
-                        revenueTrend.subList(
-                                revenueTrend.size() - 6,
-                                revenueTrend.size()
-                        )
+                        revenueTrend.subList(0,6)
                 );
             }
             String suggestion = calculateSystemSuggestion(revenueTrend);
@@ -608,11 +603,11 @@ public class DecisionRepository {
         }
 
         // trend size >= 3
-        BigDecimal r0 = trend.get(trend.size() - 3).getRevenue();
-        BigDecimal r1 = trend.get(trend.size() - 2).getRevenue();
-        BigDecimal r2 = trend.get(trend.size() - 1).getRevenue();
+        BigDecimal r0 = trend.get(2).getRevenue();
+        BigDecimal r1 = trend.get(1).getRevenue();
+        BigDecimal r2 = trend.get(0).getRevenue();
 
-        boolean increasing = r2.compareTo(r1) > 0 && r1.compareTo(r0) > 0;
+        boolean increasing = r2.compareTo(r1) >= 0 && r1.compareTo(r0) >= 0;
         boolean decreasing = r2.compareTo(r1) < 0 && r1.compareTo(r0) < 0;
 
         if (increasing) {
