@@ -1066,7 +1066,6 @@ public class PageTaskRepository {
 
             closeReviewHistoryRound(conn, taskId, "APPROVED", mangakaId, comment);
 
-            replaceTaskStages(conn, taskId, summarizePageStages(pageStages));
             promoteTaskImagesToChapter(taskId, chapterId, mangakaId, pageStages);
             refreshChapterProgress(chapterId);
 
