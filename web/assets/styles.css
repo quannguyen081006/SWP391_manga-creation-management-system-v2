@@ -2960,8 +2960,7 @@ select,
 .nav-ranking .nav-icon::before { content: "\2605"; }
 .nav-salary .nav-icon::before { content: "\0024"; }
 .nav-analytics .nav-icon::before { content: "\25A5"; }
-.nav-users .nav-icon::before { content: "\1F464"; }
-.nav-users .nav-icon { color: #38bdf8; }
+.nav-users .nav-icon::before { content: "\1F464\FE0E"; }
 .nav-settings .nav-icon::before { content: "\2699"; }
 
 .top-user {
