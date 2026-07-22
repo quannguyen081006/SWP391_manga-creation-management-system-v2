@@ -161,18 +161,43 @@
         return 'status-in-progress';
     }
 
-    // Toast notification that auto-dismisses after 3 seconds
+    // Toast notification.
+    // Success messages are confirmations, so they still auto-dismiss after 3s.
+    // Errors stay on screen until the user closes them: they carry instructions
+    // the user has to act on, and auto-hiding gave no time to read them.
     function showToast(message, type) {
         if (!toastContainer) {
             return;
         }
+        var isError = type === 'error';
+
         var toast = document.createElement('div');
-        toast.className = 'toast ' + (type === 'error' ? 'error' : 'success');
-        toast.textContent = message;
+        toast.className = 'toast ' + (isError ? 'error' : 'success');
+
+        var text = document.createElement('span');
+        text.className = 'toast-text';
+        text.textContent = message;
+        toast.appendChild(text);
+
+        if (isError) {
+            var close = document.createElement('button');
+            close.type = 'button';
+            close.className = 'toast-close';
+            close.setAttribute('aria-label', 'Dismiss');
+            close.textContent = '×';
+            close.addEventListener('click', function () {
+                toast.remove();
+            });
+            toast.appendChild(close);
+        }
+
         toastContainer.appendChild(toast);
-        setTimeout(function () {
-            toast.remove();
-        }, 3000);
+
+        if (!isError) {
+            setTimeout(function () {
+                toast.remove();
+            }, 3000);
+        }
     }
 
     // Load all images for the task from the server, storing them into pageImages by pageNumber

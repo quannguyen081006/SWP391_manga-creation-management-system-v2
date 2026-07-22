@@ -123,7 +123,14 @@ public class AuthInterceptor implements HandlerInterceptor {
         if (path.startsWith("/main/tasks")) {
             return user.hasRole("ADMIN") || user.hasRole("MANGAKA") || user.hasRole("ASSISTANT") || user.hasRole("TANTOU_EDITOR");
         }
-        if (path.startsWith("/main/manuscripts")) {
+        // All three prefixes are listed explicitly: the real manuscript screens live
+        // under /main/manuscript-review and /main/manuscript-workspace, neither of
+        // which starts with "/main/manuscripts". Matching only the plural form let
+        // every authenticated user (including ASSISTANT) reach those pages through
+        // the default allow at the end of this method.
+        if (path.startsWith("/main/manuscripts")
+                || path.startsWith("/main/manuscript-review")
+                || path.startsWith("/main/manuscript-workspace")) {
             return user.hasRole("ADMIN") || user.hasRole("MANGAKA") || user.hasRole("TANTOU_EDITOR");
         }
         return true;

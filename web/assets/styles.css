@@ -2849,11 +2849,15 @@ select,
     position: fixed;
     bottom: 24px;
     right: 24px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
     padding: 12px 20px;
     border-radius: 8px;
     color: white;
     font-size: 14px;
     font-weight: 500;
+    line-height: 1.45;
     z-index: 10000;
     animation: toastIn 0.2s ease;
     max-width: min(420px, 92vw);
@@ -2861,6 +2865,30 @@ select,
 
 .toast.success { background: #22c55e; }
 .toast.error { background: #ef4444; }
+
+.toast-text {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Only error toasts carry this button; they do not auto-dismiss. */
+.toast-close {
+    flex: 0 0 auto;
+    margin: -2px -8px 0 0;
+    padding: 0 4px;
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 20px;
+    line-height: 1.2;
+    font-weight: 700;
+    cursor: pointer;
+    opacity: .8;
+}
+
+.toast-close:hover {
+    opacity: 1;
+}
 
 @keyframes toastIn {
     from { opacity: 0; transform: translateY(8px); }

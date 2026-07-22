@@ -181,9 +181,9 @@ public class ChapterImageRepository {
                 while (rs.next()) {
                     String existing = rs.getString(1);
                     if (ImagePhashUtil.hammingDistance(newHash, existing) <= threshold) {
+                        // Kept short so it stays readable in the upload toast.
                         throw new IllegalArgumentException(
-                                "This image has already been used before in this chapter (including rejected/replaced versions). "
-                                + "Please modify the content before uploading again.");
+                                "This image was already used in this chapter. Please edit it before uploading.");
                     }
                 }
             }
