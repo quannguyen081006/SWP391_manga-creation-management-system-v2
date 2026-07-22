@@ -7,22 +7,61 @@ import javax.servlet.http.HttpSession;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.ModelAndView;
 
+/**
+ * Cổng kiểm soát duy nhất cho mọi request trước khi vào controller.
+ *
+ * <p><b>Vì sao dùng interceptor thay vì kiểm tra trong từng controller?</b>
+ * Kiểm tra viết trong controller chỉ bảo vệ đúng method đó, và rất dễ quên khi
+ * thêm endpoint mới. Interceptor chạy TRƯỚC mọi handler, nên route thêm sau này
+ * mặc định đã được bảo vệ. Toàn bộ luật phân quyền nằm gọn trong một file, đọc
+ * từ trên xuống là nắm được.
+ *
+ * <p><b>Hai câu hỏi tách biệt, theo đúng thứ tự này:</b>
+ * <ol>
+ *   <li><i>Authentication</i> (xác thực) — bạn là ai? Lấy từ session key
+ *       {@code AUTH_USER}. Không có session = chưa đăng nhập.</li>
+ *   <li><i>Authorization</i> (phân quyền) — bạn có được vào đây không? Do
+ *       {@link #isAllowed} quyết định, dựa trên tiền tố URL và role của user.</li>
+ * </ol>
+ * Trượt câu 1 → 401 / chuyển về trang login.
+ * Trượt câu 2 → 403 / chuyển về dashboard.
+ * Hai tình huống khác nhau nên xử lý ở hai nhánh khác nhau.
+ *
+ * <p><b>Sidebar đã ẩn link rồi, sao server còn phải chặn?</b>
+ * Ẩn menu chỉ là chuyện hiển thị. Người dùng hoàn toàn có thể gõ thẳng URL, nên
+ * server bắt buộc phải là nơi quyết định cuối cùng. Đây chính là lỗi đã được vá
+ * trong {@link #isAllowed} ở nhóm route manuscript: link thì đã ẩn, nhưng server
+ * vẫn cho mọi user đã đăng nhập đi qua.
+ */
 public class AuthInterceptor implements HandlerInterceptor {
 
+    /**
+     * Chạy trước mọi method của controller.
+     *
+     * @return {@code true} = cho request đi tiếp vào controller.
+     *         {@code false} = chặn tại đây (lúc này redirect hoặc JSON lỗi đã
+     *         được ghi vào response rồi).
+     */
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         String uri = request.getRequestURI();
         String context = request.getContextPath();
 
-        // Public routes must stay available without an AUTH_USER session.
+        // BƯỚC 0 - Route công khai: phải vào được khi CHƯA đăng nhập.
+        // Nếu chặn cả /login thì user không bao giờ đăng nhập được (vòng lặp vô tận
+        // redirect về login). /assets/ mở vì CSS/JS phải tải được ở trang login.
         if (uri.endsWith("/login") || uri.endsWith("/logout")
                 || uri.contains("/assets/") || uri.endsWith("/redirect.jsp")) {
             return true;
         }
 
+        // BƯỚC 1 - XÁC THỰC: user này là ai?
         AuthenticatedUser user = getSessionUser(request);
         if (user == null) {
-            // API callers get JSON status codes; browser pages redirect to login.
+            // Chưa đăng nhập. Cách báo lỗi khác nhau tuỳ loại client:
+            // - Gọi API (AJAX): trả JSON 401, vì redirect sang HTML trang login
+            //   sẽ làm JavaScript parse JSON bị lỗi.
+            // - Mở trang web: redirect sang /login cho người dùng đăng nhập.
             if (uri.contains("/api/v1/")) {
                 writeJsonError(response, HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
             } else {
@@ -31,12 +70,19 @@ public class AuthInterceptor implements HandlerInterceptor {
             return false;
         }
 
-        // Controllers and JSPs can reuse the already-checked session user.
+        // Đã xác thực xong -> đưa user vào request để controller/JSP dùng lại,
+        // khỏi phải đọc session và ép kiểu thêm lần nữa.
         request.setAttribute("AUTH_USER_CHECKED", user);
+
+        // Chặn trình duyệt cache trang đã đăng nhập. Nếu không có bước này, sau khi
+        // Logout mà bấm nút Back thì trình duyệt vẫn dựng lại trang cũ từ cache,
+        // làm lộ dữ liệu dù session ở server đã bị huỷ.
         preventCachedAuthenticatedPage(response, uri);
 
+        // BƯỚC 2 - PHÂN QUYỀN: user này có được vào đường dẫn này không?
         if (!isAllowed(user, uri, context)) {
-            // RBAC denies API callers with 403 but keeps web users inside the app.
+            // Đã đăng nhập nhưng không đủ quyền -> 403, KHÁC với 401 ở trên.
+            // Web thì đẩy về dashboard thay vì hiện trang lỗi, để user không bị kẹt.
             if (uri.contains("/api/v1/")) {
                 writeJsonError(response, HttpServletResponse.SC_FORBIDDEN, "Forbidden");
             } else {
