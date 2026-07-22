@@ -40,13 +40,13 @@
                     <%-- /click marks read server-side then redirects through isSupportedViewUrl allowlist. --%>
                     <a href="${pageContext.request.contextPath}/main/notifications/${n.id}/click" class="notification-main text-decoration-none notification-main-link">
                         <div class="notification-row-head">
-                            <span class="notification-title">${empty n.title ? n.type : n.title}</span>
+                            <span class="notification-title"><c:out value="${empty n.title ? n.type : n.title}" /></span>
                             <span class="notification-time noti-time" data-time="${n.createdAt}"></span>
                         </div>
-                        <p>${n.message}</p>
+                        <p><c:out value="${n.message}" /></p>
                         <%-- Reference chips explain which workflow object produced the notification. --%>
                         <c:if test="${not empty n.referenceType}">
-                            <span class="status-chip status-draft">${n.referenceType} #${n.referenceId}</span>
+                            <span class="status-chip status-draft"><c:out value="${n.referenceType}" /> #<c:out value="${n.referenceId}" /></span>
                         </c:if>
                     </a>
                     <%-- Dot is a visual unread indicator; server-side data remains the source. --%>

@@ -69,12 +69,22 @@
     margin-top: var(--spacing-1);
 }
 
-.profile-flash {
-    margin-bottom: 18px;
+/* .btn-primary (hyphenated) loses to the generic .btn rule in styles.css
+   on equal specificity + later source order, so it was rendering as a
+   plain white button here. Force the intended blue explicitly. */
+.profile-actions .btn-primary {
+    background: #1877f2;
+    border-color: #1877f2;
+    color: #fff;
 }
 
-.profile-logout-card {
-    grid-column: 1 / -1;
+.profile-actions .btn-primary:hover {
+    background: #145dc4;
+    border-color: #145dc4;
+}
+
+.profile-flash {
+    margin-bottom: 18px;
 }
 
 @media (max-width: 640px) {

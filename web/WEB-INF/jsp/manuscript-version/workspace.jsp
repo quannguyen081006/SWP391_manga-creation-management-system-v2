@@ -139,7 +139,7 @@
 
                     <div>
 
-                        <strong>Chapter ${chapter.chapterNumber}: ${chapter.title}</strong>
+                        <strong>Chapter <c:out value="${chapter.chapterNumber}" />: <c:out value="${chapter.title}" /></strong>
 
                         <span class="workspace-version-meta">
 
@@ -251,7 +251,7 @@
 
                 <c:if test="${error != null}">
 
-                    <div class="error-message">${error}</div>
+                    <div class="error-message"><c:out value="${error}" /></div>
 
                 </c:if>
 
@@ -397,7 +397,7 @@
 
                             <div class="feedback-title">Feedback for v${version.version}</div>
 
-                            <div class="feedback-content">${version.feedback}</div>
+                            <div class="feedback-content"><c:out value="${version.feedback}" /></div>
 
                         </div>
 
@@ -435,7 +435,7 @@
 
                                 data-page-id="${annotation.manuscriptPageId}"
 
-                                data-category="${annotation.category}"
+                                data-category="<c:out value='${annotation.category}' />"
 
                                 data-content="<c:out value='${annotation.content}' />"
 
@@ -445,19 +445,19 @@
 
 
 
-                                <div>${annotation.category}</div>
+                                <div><c:out value="${annotation.category}" /></div>
 
-                                <div>${annotation.content}</div>
+                                <div><c:out value="${annotation.content}" /></div>
 
 
 
                                 <div>
 
-                                    Page ${annotation.pageNumber}
+                                    Page <c:out value="${annotation.pageNumber}" />
 
                                     -
 
-                                    ${annotation.status}
+                                    <c:out value="${annotation.status}" />
 
                                 </div>
 

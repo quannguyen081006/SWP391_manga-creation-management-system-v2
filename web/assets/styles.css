@@ -26,20 +26,6 @@ body {
 
 a { color: inherit; text-decoration: none; }
 
-.page-auth {
-    min-height: 100vh;
-    display: grid;
-    place-items: center;
-    background: radial-gradient(circle at top left, #131c2d, #0b1220 55%);
-}
-.auth-card {
-    width: min(460px, 92vw);
-    background: #fff;
-    border-radius: 18px;
-    padding: 28px;
-    border: 1px solid #d7dbe5;
-    box-shadow: 0 15px 45px rgba(9, 15, 28, 0.28);
-}
 .auth-card h1 { margin: 0 0 8px; font-size: 30px; }
 .subtitle { margin: 0 0 14px; color: var(--muted); }
 
@@ -105,32 +91,10 @@ a { color: inherit; text-decoration: none; }
     color: #fff;
     font-weight: 600;
 }
-.side-bottom {
-    margin-top: auto;
-    padding: 16px;
-    color: #6b7280;
-    border-top: 1px solid #1f2937;
-    font-size: 20px;
-}
-.side-bottom span {
-    background: #1f2937;
-    border-radius: 6px;
-    padding: 2px 7px;
-    color: #e2e8f0;
-}
-
 .main-shell {
     display: flex;
     flex-direction: column;
     min-width: 0;
-}
-.top-shell {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 26px;
-    background: #fff;
-    border-bottom: 1px solid var(--line);
 }
 .page-head {
     display: flex;
@@ -150,23 +114,6 @@ a { color: inherit; text-decoration: none; }
     font-size: 16px;
     font-weight: 700;
 }
-.top-user {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    position: relative;
-}
-.bell-dot {
-    background: var(--brand);
-    color: #fff;
-    border-radius: 999px;
-    width: 22px;
-    height: 22px;
-    display: inline-grid;
-    place-items: center;
-    font-size: 12px;
-    font-weight: 700;
-}
 .avatar {
     width: 40px;
     height: 40px;
@@ -178,7 +125,6 @@ a { color: inherit; text-decoration: none; }
     font-weight: 700;
 }
 .user-name { font-weight: 600; font-size: 24px; }
-.user-sub { color: var(--muted); font-size: 20px; }
 
 .page-wrap {
     padding: 24px;
@@ -1136,13 +1082,11 @@ input, textarea, select {
     .side-nav { display: none; }
     .metric-grid { grid-template-columns: 1fr; }
     .page-wrap { padding: 14px; }
-    .top-shell { padding: 14px; }
     .section-title { font-size: 24px; }
     .page-title { font-size: 34px; }
 }
 
 /* FX hover upgrade */
-.side-bottom { display: none; }
 
 .side-nav {
     background: linear-gradient(160deg, #0b1220 0%, #101a2f 48%, #0b1324 100%);
@@ -1218,159 +1162,28 @@ input, textarea, select {
 
 /* Role color themes */
 .role-pill.role-admin,
-.avatar.role-admin,
-.bell-dot.role-admin {
+.avatar.role-admin {
     background: linear-gradient(135deg, #7c3aed, #a78bfa);
 }
 
 .role-pill.role-mangaka,
-.avatar.role-mangaka,
-.bell-dot.role-mangaka {
+.avatar.role-mangaka {
     background: linear-gradient(135deg, #e11d48, #fb7185);
 }
 
 .role-pill.role-assistant,
-.avatar.role-assistant,
-.bell-dot.role-assistant {
+.avatar.role-assistant {
     background: linear-gradient(135deg, #2563eb, #60a5fa);
 }
 
 .role-pill.role-tantou,
-.avatar.role-tantou,
-.bell-dot.role-tantou {
+.avatar.role-tantou {
     background: linear-gradient(135deg, #ea580c, #fb923c);
 }
 
 .role-pill.role-board,
-.avatar.role-board,
-.bell-dot.role-board {
+.avatar.role-board {
     background: linear-gradient(135deg, #059669, #34d399);
-}
-
-/* Login refresh */
-.page-auth {
-    min-height: 100vh;
-    display: grid;
-    place-items: center;
-    padding: 24px;
-    background:
-        radial-gradient(circle at 12% 8%, rgba(251, 113, 133, 0.26), transparent 30%),
-        radial-gradient(circle at 86% 20%, rgba(56, 189, 248, 0.2), transparent 28%),
-        linear-gradient(135deg, #0b1220 0%, #111c31 45%, #0d1426 100%);
-}
-
-.auth-shell {
-    width: min(980px, 96vw);
-    display: grid;
-    grid-template-columns: 1.08fr 0.92fr;
-    gap: 20px;
-    align-items: stretch;
-}
-
-.auth-hero {
-    border: 1px solid rgba(148, 163, 184, 0.25);
-    border-radius: 20px;
-    padding: 30px;
-    background: linear-gradient(160deg, rgba(15, 23, 42, 0.88), rgba(30, 41, 59, 0.72));
-    color: #e2e8f0;
-    box-shadow: 0 24px 48px rgba(2, 6, 23, 0.34);
-}
-
-.auth-hero-mark {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    display: grid;
-    place-items: center;
-    font-weight: 800;
-    font-size: 22px;
-    color: #fff;
-    background: linear-gradient(135deg, #e11d48, #fb7185);
-    margin-bottom: 18px;
-}
-
-.auth-hero h1 {
-    margin: 0;
-    font-size: 34px;
-    line-height: 1.1;
-}
-
-.auth-hero p {
-    margin: 14px 0 0;
-    color: #cbd5e1;
-    font-size: 17px;
-    line-height: 1.45;
-}
-
-.auth-hero-chips {
-    margin-top: 24px;
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.auth-hero-chips span {
-    font-size: 12px;
-    font-weight: 700;
-    color: #e2e8f0;
-    border: 1px solid rgba(148, 163, 184, 0.38);
-    background: rgba(30, 41, 59, 0.68);
-    border-radius: 999px;
-    padding: 6px 10px;
-}
-
-.auth-card-rich {
-    width: 100%;
-    border-radius: 20px;
-    padding: 28px;
-    background: rgba(255, 255, 255, 0.97);
-    box-shadow: 0 24px 48px rgba(2, 6, 23, 0.28);
-}
-
-.auth-header h2 {
-    margin: 0;
-    font-size: 30px;
-}
-
-.auth-form {
-    margin-top: 14px;
-}
-
-.auth-label {
-    font-size: 13px;
-    font-weight: 700;
-    color: #374151;
-    margin-bottom: 2px;
-}
-
-.auth-input {
-    height: 44px;
-    border-radius: 12px;
-    font-size: 15px;
-}
-
-.auth-submit {
-    margin-top: 10px;
-    width: 100%;
-    justify-content: center;
-    height: 44px;
-    font-size: 15px;
-    font-weight: 700;
-}
-
-.auth-footnote {
-    margin: 12px 0 0;
-    color: #6b7280;
-    font-size: 12px;
-}
-
-@media (max-width: 900px) {
-    .auth-shell {
-        grid-template-columns: 1fr;
-    }
-    .auth-hero {
-        display: none;
-    }
 }
 
 /* Notifications dropdown */
@@ -1403,11 +1216,6 @@ input, textarea, select {
     transform: translateY(-1px);
     border-color: #c3ccde;
     box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
-}
-
-.notify-bell {
-    font-size: 15px;
-    line-height: 1;
 }
 
 .notify-count {
@@ -1561,36 +1369,9 @@ input, textarea, select {
     width: 8px;
 }
 
-.notify-type {
-    font-size: 11px;
-    font-weight: 700;
-    color: #334155;
-    margin-bottom: 3px;
-}
-
-.notify-message {
-    font-size: 13px;
-    color: #111827;
-    line-height: 1.35;
-}
-
 .notify-item.read .notify-type,
 .notify-item.read .notify-message {
     color: #6c757d;
-}
-
-.notify-read-form {
-    margin-top: 7px;
-}
-
-.notify-read-form button {
-    border: none;
-    background: transparent;
-    color: #e11d48;
-    padding: 0;
-    font-size: 12px;
-    font-weight: 800;
-    cursor: pointer;
 }
 
 .notify-see-all {
@@ -1813,31 +1594,6 @@ input, textarea, select {
     place-items: center;
 }
 
-.user-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 2px;
-}
-
-.logout-link {
-    font-size: 13px;
-    font-weight: 700;
-    color: #b91c1c;
-    border: 1px solid #fecaca;
-    background: #fff1f2;
-    border-radius: 999px;
-    padding: 4px 10px;
-    line-height: 1;
-    transition: background-color .15s ease, border-color .15s ease, transform .12s ease;
-}
-
-.logout-link:hover {
-    background: #ffe4e6;
-    border-color: #fda4af;
-    transform: translateY(-1px);
-}
-
 .muted {
     color: #64748b;
     font-size: 13px;
@@ -1895,25 +1651,6 @@ input, textarea, select {
 
 .role-cell {
     min-width: 230px;
-}
-
-.role-add-form {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    background: #f8fafc;
-}
-
-.role-add-form select {
-    height: 32px;
-    min-width: 155px;
-    padding: 0 28px 0 10px;
-    font-size: 12px;
-    font-weight: 700;
-    background: #fff;
 }
 
 .add-role-cell {
@@ -2182,16 +1919,6 @@ input, textarea, select {
     line-height: 1.45;
 }
 
-.notification-actions {
-    display: flex;
-    align-items: flex-start;
-    white-space: nowrap;
-}
-
-.notification-actions form {
-    margin: 0;
-}
-
 .detail-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -2281,7 +2008,6 @@ input, textarea, select {
     border-top: 1px solid #e5e7eb;
 }
 
-.btn.disabled-soft,
 .btn:disabled {
     color: #94a3b8;
     background: #f1f5f9;
@@ -2300,28 +2026,6 @@ input, textarea, select {
 .inline-form select {
     min-width: 180px;
     height: 40px;
-}
-
-.decision-vote-form {
-    display: grid;
-    grid-template-columns: 1fr 2fr auto;
-    gap: 8px;
-    align-items: end;
-    margin-top: 12px;
-}
-
-.decision-vote-form label {
-    display: block;
-    color: #475569;
-    font-size: 13px;
-    font-weight: 800;
-    margin-bottom: 6px;
-}
-
-@media (max-width: 760px) {
-    .decision-vote-form {
-        grid-template-columns: 1fr;
-    }
 }
 
 @media (max-width: 720px) {
@@ -2427,11 +2131,6 @@ body {
     transform: translateX(3px);
 }
 
-.top-shell {
-    background: rgba(255, 253, 248, .96);
-    border-bottom: 2px solid rgba(23, 23, 23, .12);
-}
-
 .page-head h1 {
     font-size: 24px;
 }
@@ -2519,14 +2218,6 @@ select,
     color: #78350f;
 }
 
-.role-lock {
-    border-radius: 999px;
-    padding: 3px 6px;
-    background: #ffffff;
-    color: #92400e;
-    font-size: 10px;
-}
-
 .login-page {
     background:
         linear-gradient(115deg, rgba(17, 24, 39, .94), rgba(17, 24, 39, .8)),
@@ -2561,8 +2252,8 @@ select,
 .manga-page {
     height: 100%;
     display: grid;
-    grid-template-columns: 1.15fr .85fr;
-    grid-template-rows: 1.1fr .9fr;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1.15fr .85fr;
     gap: 12px;
 }
 
@@ -2593,7 +2284,6 @@ select,
         var(--paper);
 }
 
-.manga-panel-small.accent,
 .strip-panel-tone {
     background:
         radial-gradient(circle at 1px 1px, rgba(17, 17, 17, .2) 1px, transparent 1.5px),
@@ -2601,97 +2291,6 @@ select,
     background-size: 10px 10px, auto;
 }
 
-.speed-line {
-    position: absolute;
-    left: -12%;
-    width: 124%;
-    height: 3px;
-    background: var(--ink-line);
-    transform: rotate(-12deg);
-}
-
-.speed-line-a { top: 27%; }
-.speed-line-b { top: 46%; }
-.speed-line-c { top: 65%; }
-
-.ink-burst {
-    position: absolute;
-    right: 18%;
-    top: 23%;
-    width: 74px;
-    height: 74px;
-    border: 4px solid var(--ink-line);
-    border-radius: 50%;
-    background: #e11d48;
-    box-shadow: 0 0 0 12px rgba(225, 29, 72, .18);
-}
-
-.panel-face {
-    position: absolute;
-    left: 24%;
-    top: 20%;
-    width: 42%;
-    height: 52%;
-    border: 3px solid var(--ink-line);
-    border-radius: 50% 50% 44% 44%;
-    background: #ffffff;
-}
-
-.panel-face::before,
-.panel-face::after {
-    content: "";
-    position: absolute;
-    top: 36%;
-    width: 7px;
-    height: 13px;
-    border-radius: 999px;
-    background: var(--ink-line);
-}
-
-.panel-face::before { left: 28%; }
-.panel-face::after { right: 28%; }
-
-.panel-shadow {
-    position: absolute;
-    left: 18%;
-    right: 18%;
-    bottom: 13%;
-    height: 12px;
-    border-radius: 999px;
-    background: rgba(15, 23, 42, .22);
-}
-
-.speech-bubble {
-    position: absolute;
-    left: 18%;
-    top: 24%;
-    width: 58%;
-    height: 42%;
-    border: 3px solid var(--ink-line);
-    border-radius: 999px;
-    background: #ffffff;
-}
-
-.speech-bubble::after {
-    content: "";
-    position: absolute;
-    right: 16%;
-    bottom: -14px;
-    width: 18px;
-    height: 18px;
-    border-right: 3px solid var(--ink-line);
-    border-bottom: 3px solid var(--ink-line);
-    background: #ffffff;
-    transform: rotate(38deg);
-}
-
-.tone-dot-grid {
-    position: absolute;
-    inset: 14px;
-    background-image: radial-gradient(#111827 1px, transparent 1.5px);
-    background-size: 8px 8px;
-    opacity: .38;
-}
 
 .manga-dashboard-strip {
     display: grid;
@@ -2804,14 +2403,6 @@ select,
 
 .app-shell.sidebar-hover-suspended .main-shell {
     margin-left: var(--sidebar-collapsed);
-}
-
-.top-shell {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    min-height: var(--topbar-height);
-    backdrop-filter: blur(12px);
 }
 
 .page-wrap {
@@ -2953,19 +2544,13 @@ select,
 .nav-dashboard .nav-icon::before { content: "\2302"; }
 .nav-proposals .nav-icon::before { content: "\270E"; }
 .nav-series .nav-icon::before { content: "\25A3"; }
-.nav-chapters .nav-icon::before { content: "\25EB"; }
 .nav-tasks .nav-icon::before { content: "\2713"; }
 .nav-manuscripts .nav-icon::before { content: "\2630"; }
 .nav-decisions .nav-icon::before { content: "\2696"; }
 .nav-ranking .nav-icon::before { content: "\2605"; }
 .nav-salary .nav-icon::before { content: "\0024"; }
-.nav-analytics .nav-icon::before { content: "\25A5"; }
 .nav-users .nav-icon::before { content: "\1F464\FE0E"; }
 .nav-settings .nav-icon::before { content: "\2699"; }
-
-.top-user {
-    flex-shrink: 0;
-}
 
 @media (max-width: 1100px) {
     .app-shell {
@@ -3006,10 +2591,6 @@ select,
 
     .app-shell.sidebar-pinned .main-shell {
         margin-left: var(--sidebar-collapsed);
-    }
-
-    .top-shell {
-        gap: 12px;
     }
 
     .page-head {
@@ -3308,4 +2889,199 @@ select,
 .sticky-submit-bar .btn[disabled] {
     opacity: 0.55;
     cursor: not-allowed;
+}
+
+/* ---------------------------------------------------------------------
+   Sidebar account area (profile + role + notifications).
+   Header/topbar no longer shows a page title or the profile menu; both
+   the avatar/role and the notification bell now live at the bottom of
+   the sidebar instead.
+   --------------------------------------------------------------------- */
+.sidebar-account {
+    margin-top: auto;
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    padding: 12px 10px 16px;
+    border-top: 1px solid #1f2937;
+    background: #0b1324;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sidebar-account .notify-switcher.side-notify {
+    position: relative;
+}
+
+.sidebar-account .notify-toggle {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 40px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    color: #cbd5e1;
+    cursor: pointer;
+    list-style: none;
+    white-space: nowrap;
+}
+
+.sidebar-account .notify-toggle::-webkit-details-marker {
+    display: none;
+}
+
+.sidebar-account .notify-toggle:hover {
+    background: #111f36;
+}
+
+.sidebar-account .notify-icon {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.sidebar-account .notify-label {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.sidebar-account .notify-count {
+    margin-left: auto;
+}
+
+/* Notification + profile dropdowns fly out to the right of the sidebar,
+   level with their trigger, instead of popping up above it (which read as
+   disconnected from the bell/avatar down at the bottom of a tall page). */
+.sidebar-account .notify-menu,
+.sidebar-account .user-dropdown {
+    left: calc(100% + 12px);
+    right: auto;
+    top: auto;
+    bottom: 0;
+    color: #111827;
+}
+
+.sidebar-account .user-menu-wrapper {
+    position: relative;
+}
+
+.sidebar-account .user-menu {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.sidebar-account .user-menu:hover {
+    background: #111f36;
+}
+
+.sidebar-account .avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
+    flex: 0 0 36px;
+    object-fit: cover;
+}
+
+.sidebar-account .user-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.sidebar-account .user-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #f1f5f9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sidebar-account .role-pill {
+    align-self: flex-start;
+    font-size: 11px;
+    padding: 2px 9px;
+    white-space: nowrap;
+}
+
+/* Collapse to icons-only alongside the rest of the sidebar when it isn't
+   expanded (hover/focus/pinned), matching nav-label/side-title behavior. */
+.sidebar-account .notify-label,
+.sidebar-account .user-meta {
+    opacity: 0;
+    transform: translateX(-8px);
+    transition: opacity .16s ease, transform .18s ease;
+}
+
+.side-nav:hover .sidebar-account .notify-label,
+.side-nav:focus-within .sidebar-account .notify-label,
+.app-shell.sidebar-pinned .sidebar-account .notify-label,
+.side-nav:hover .sidebar-account .user-meta,
+.side-nav:focus-within .sidebar-account .user-meta,
+.app-shell.sidebar-pinned .sidebar-account .user-meta {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.app-shell.sidebar-hover-suspended .sidebar-account .notify-label,
+.app-shell.sidebar-hover-suspended .sidebar-account .user-meta {
+    opacity: 0;
+    transform: translateX(-8px);
+}
+
+@media (max-width: 760px) {
+    .sidebar-account .user-meta,
+    .sidebar-account .notify-label {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* ---------------------------------------------------------------------
+   Photo panels (dashboard strip + login artwork).
+   Real photos replace the old pure-CSS decorative shapes; the comic
+   "panel" frame (thick ink border + hard drop shadow) from
+   .strip-panel / .manga-panel is kept so the photos still read as
+   manga panels instead of generic stock photography.
+   --------------------------------------------------------------------- */
+.photo-panel {
+    padding: 0;
+    background: var(--ink-line, #171717);
+}
+
+.photo-panel .panel-photo {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 15%;
+    filter: saturate(1.05) contrast(1.03);
+}
+
+/* Login artwork: the two portrait covers sit side by side on row 1, and
+   the wide cover fills row 2 -- explicit placement keeps exactly 3 panels
+   inside the grid so nothing overflows into an implicit row. */
+.manga-panel-tall {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.manga-panel-small {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+.manga-panel-wide {
+    grid-row: 2;
 }

@@ -28,7 +28,7 @@
         </select>
 
         <label>Synopsis</label>
-        <textarea name="synopsis" rows="8" required>${synopsis}</textarea>
+        <textarea name="synopsis" rows="8" required><c:out value="${synopsis}" /></textarea>
 
         <label>Sample File</label>
         <input type="file" name="sampleFile" required />

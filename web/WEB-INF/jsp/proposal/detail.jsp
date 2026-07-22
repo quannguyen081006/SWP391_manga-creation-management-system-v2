@@ -15,13 +15,13 @@
 
 <main class="container">
     <c:if test="${not empty error}">
-        <div class="alert error">${error}</div>
+        <div class="alert error"><c:out value="${error}" /></div>
     </c:if>
 
     <div class="panel">
-        <p><strong>Genre:</strong> ${proposal.genre}</p>
-        <p><strong>Status:</strong> <span class="chip">${proposal.status}</span></p>
-        <p><strong>Approximate Chapter:</strong> ${proposal.approximateChapter}</p>
+        <p><strong>Genre:</strong> <c:out value="${proposal.genre}" /></p>
+        <p><strong>Status:</strong> <span class="chip"><c:out value="${proposal.status}" /></span></p>
+        <p><strong>Approximate Chapter:</strong> <c:out value="${proposal.approximateChapter}" /></p>
         <p><strong>Submit Attempts:</strong> ${proposal.submitAttemptCount}/${maxSubmitAttempts}</p>
         <p><strong>Assigned Tantou Editor:</strong> <c:out value="${proposal.assignedEditorId}" default="Not assigned" /></p>
         <div class="proposal-vote-summary ${proposal.boardRoundStatus == 'OPEN' ? 'is-open' : ''}">
@@ -147,13 +147,13 @@
         <p><strong>File Upload:</strong>
             <c:choose>
                 <c:when test="${not empty proposal.originalFileName}">
-                    <a class="btn small" href="${pageContext.request.contextPath}/main/proposals/${proposal.id}/file">${proposal.originalFileName}</a>
+                    <a class="btn small" href="${pageContext.request.contextPath}/main/proposals/${proposal.id}/file"><c:out value="${proposal.originalFileName}" /></a>
                 </c:when>
                 <c:otherwise>No file uploaded</c:otherwise>
             </c:choose>
         </p>
         <p><strong>Synopsis:</strong></p>
-        <p>${proposal.synopsis}</p>
+        <p><c:out value="${proposal.synopsis}" /></p>
     </div>
 
     <c:if test="${canEdit || canSubmit}">
@@ -254,10 +254,10 @@
                     <tr>
                         <td><fmt:formatDate value="${h.createdAt}" pattern="yyyy-MM-dd HH:mm" /></td>
                         <td><c:out value="${empty h.actorName ? 'System' : h.actorName}" /></td>
-                        <td>${h.actorRole}</td>
-                        <td>${h.actionType}</td>
-                        <td>${h.submitAttemptNumber}</td>
-                        <td>${h.note}</td>
+                        <td><c:out value="${h.actorRole}" /></td>
+                        <td><c:out value="${h.actionType}" /></td>
+                        <td><c:out value="${h.submitAttemptNumber}" /></td>
+                        <td><c:out value="${h.note}" /></td>
                     </tr>
                 </c:forEach>
             </tbody>

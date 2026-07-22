@@ -38,7 +38,7 @@
 <jsp:include page="../common/header.jsp" />
 
 <%-- Form error from create/update validation. --%>
-<c:if test="${not empty error}"><div class="alert error">${error}</div></c:if>
+<c:if test="${not empty error}"><div class="alert error"><c:out value="${error}" /></div></c:if>
 
 <%-- User form: edit mode updates profile fields, create mode collects account and role data. --%>
 <div class="section-card">
@@ -48,15 +48,15 @@
     <form class="user-form" method="post" action="${pageContext.request.contextPath}/main/users/${editUser.id}/update">
         <div class="form-row">
             <label>Username</label>
-            <input type="text" value="${editUser.username}" disabled />
+            <input type="text" value="<c:out value='${editUser.username}' />" disabled />
         </div>
         <div class="form-row">
             <label>Full Name</label>
-            <input type="text" name="fullName" value="${editUser.fullName}" required />
+            <input type="text" name="fullName" value="<c:out value='${editUser.fullName}' />" required />
         </div>
         <div class="form-row">
             <label>Email</label>
-            <input type="email" name="email" value="${editUser.email}" required />
+            <input type="email" name="email" value="<c:out value='${editUser.email}' />" required />
         </div>
         <div class="form-actions">
             <button class="btn primary" type="submit">Update User</button>
@@ -69,15 +69,15 @@
         <div class="form-grid two-col">
             <div class="form-row">
                 <label>Full Name</label>
-                <input type="text" name="fullName" value="${formFullName}" required />
+                <input type="text" name="fullName" value="<c:out value='${formFullName}' />" required />
             </div>
             <div class="form-row">
                 <label>Email</label>
-                <input type="email" name="email" value="${formEmail}" required />
+                <input type="email" name="email" value="<c:out value='${formEmail}' />" required />
             </div>
             <div class="form-row">
                 <label>Username</label>
-                <input type="text" name="username" value="${formUsername}" required autocomplete="off" />
+                <input type="text" name="username" value="<c:out value='${formUsername}' />" required autocomplete="off" />
             </div>
             <div class="form-row">
                 <label>Password</label>

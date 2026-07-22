@@ -9,24 +9,17 @@
 </head>
 <body class="login-page">
     <main class="login-wrap" role="main">
-        <%-- Login artwork: decorative manga panels for the unauthenticated screen. --%>
+        <%-- Login artwork: featured series covers. --%>
         <section class="login-art" aria-hidden="true">
             <div class="manga-page">
-                <div class="manga-panel manga-panel-wide">
-                    <span class="speed-line speed-line-a"></span>
-                    <span class="speed-line speed-line-b"></span>
-                    <span class="speed-line speed-line-c"></span>
-                    <span class="ink-burst"></span>
+                <div class="manga-panel manga-panel-tall photo-panel">
+                    <img class="panel-photo" src="${pageContext.request.contextPath}/assets/images/Naruto_Volume_1_manga_cover.jpg" alt="Naruto Volume 1" loading="lazy" />
                 </div>
-                <div class="manga-panel manga-panel-tall">
-                    <span class="panel-face"></span>
-                    <span class="panel-shadow"></span>
+                <div class="manga-panel manga-panel-small photo-panel">
+                    <img class="panel-photo" src="${pageContext.request.contextPath}/assets/images/dragonball.jpg" alt="Dragon Ball" loading="lazy" />
                 </div>
-                <div class="manga-panel manga-panel-small">
-                    <span class="speech-bubble"></span>
-                </div>
-                <div class="manga-panel manga-panel-small accent">
-                    <span class="tone-dot-grid"></span>
+                <div class="manga-panel manga-panel-wide photo-panel">
+                    <img class="panel-photo" src="${pageContext.request.contextPath}/assets/images/one-piece-dai-dien-696x391.jpg" alt="One Piece" loading="lazy" />
                 </div>
             </div>
         </section>

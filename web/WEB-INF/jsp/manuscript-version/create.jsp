@@ -24,7 +24,7 @@
             </div>
             <div class="info-row">
                 <span class="info-label">Title:</span>
-                <span class="info-value">${chapter.title}</span>
+                <span class="info-value"><c:out value="${chapter.title}" /></span>
             </div>
             <div class="info-row">
                 <span class="info-label">Status:</span>

@@ -43,6 +43,23 @@ public class UserRepository {
         }
     }
 
+    /**
+     * Overwrites the stored password value for one account.
+     * Used by {@code AuthService} to transparently re-store a legacy plaintext
+     * password as a BCrypt hash the first time that account logs in, so the
+     * database migrates itself without a manual SQL re-seed.
+     */
+    public void updatePasswordHash(long userId, String passwordHash) {
+        String sql = "UPDATE [User] SET passwordHash = ?, updatedAt = GETDATE() WHERE id = ?";
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, passwordHash);
+            ps.setLong(2, userId);
+            ps.executeUpdate();
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot update password hash", ex);
+        }
+    }
+
     private void loadRoles(Connection conn, AuthenticatedUser user) throws SQLException {
         // Roles are loaded with the user so session checks can use user.hasRole(...).
         String sql = "SELECT r.name FROM UserRole ur JOIN [Role] r ON ur.roleId = r.id WHERE ur.userId = ?";

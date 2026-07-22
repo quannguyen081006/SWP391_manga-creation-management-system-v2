@@ -3,12 +3,16 @@ package manga.repository;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public class AuditLogRepository {
+
+    private static final Logger LOGGER = Logger.getLogger(AuditLogRepository.class.getName());
 
     @Autowired
     private DataSource dataSource;
@@ -36,19 +40,15 @@ public class AuditLogRepository {
                 ps.setLong(4, entityId);
             }
             ps.setString(5, detail);
-            System.out.println("actorId=" + actorId);
-            System.out.println("action=" + action);
-            System.out.println("entityType=" + entityType);
-            System.out.println("entityId=" + entityId);
-            System.out.println("detail=" + detail);
             ps.executeUpdate();
         } catch (SQLException ex) {
-            System.err.println("SQL State: " + ex.getSQLState());
-            System.err.println("Error Code: " + ex.getErrorCode());
-            System.err.println("Message: " + ex.getMessage());
-
-            ex.printStackTrace();
-
+            // The detail string is caller-supplied free text, so it is kept out of
+            // the log message; the exception itself carries what is needed to
+            // diagnose the failure.
+            LOGGER.log(Level.SEVERE,
+                    "Cannot insert audit log (action={0}, entityType={1}, entityId={2})",
+                    new Object[]{action, entityType, entityId});
+            LOGGER.log(Level.SEVERE, "Audit log insert failed", ex);
             throw new RuntimeException("Cannot insert audit log", ex);
         }
     }

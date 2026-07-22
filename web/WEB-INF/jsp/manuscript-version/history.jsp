@@ -73,7 +73,7 @@
                         <c:if test="${version.feedback != null && not empty version.feedback}">
                             <div class="feedback-section">
                                 <div class="feedback-label">Feedback:</div>
-                                <div>${version.feedback}</div>
+                                <div><c:out value="${version.feedback}" /></div>
                             </div>
                         </c:if>
 
@@ -81,7 +81,7 @@
                         <c:if test="${version.revisionNotes != null && not empty version.revisionNotes}">
                             <div class="feedback-section revision-notes">
                                 <div class="feedback-label">Revision Notes:</div>
-                                <div>${version.revisionNotes}</div>
+                                <div><c:out value="${version.revisionNotes}" /></div>
                             </div>
                         </c:if>
 

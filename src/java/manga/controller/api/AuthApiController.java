@@ -5,6 +5,7 @@ import manga.model.AuthenticatedUser;
 import manga.service.AuthService;
 import java.util.HashMap;
 import java.util.Map;
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,8 +24,16 @@ public class AuthApiController {
     public ApiResponse<Map<String, Object>> login(
             @RequestParam("username") String username,
             @RequestParam("password") String password,
-            HttpSession session) {
+            HttpServletRequest request) {
         AuthenticatedUser user = authService.login(username, password);
+
+        // Same session-fixation guard as the web login: discard any pre-login
+        // session so the authenticated user is bound to a freshly issued id.
+        HttpSession existingSession = request.getSession(false);
+        if (existingSession != null) {
+            existingSession.invalidate();
+        }
+        HttpSession session = request.getSession(true);
         session.setAttribute("AUTH_USER", user);
 
         Map<String, Object> data = new HashMap<String, Object>();

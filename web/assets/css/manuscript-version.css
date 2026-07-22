@@ -20,7 +20,6 @@
 .dashboard-container { max-width: 1200px; }
 .compare-header,
 .dashboard-header,
-.inbox-header { margin-bottom: 28px; }
 
 .versions-grid,
 .version-details,
@@ -38,13 +37,6 @@
 .stat-card,
 .progress-section,
 .annotations-section,
-.chapter-header {
-    padding: 24px;
-    background: var(--surface-color);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-sm);
-}
-
 .version-panel.version1 { border-top: 4px solid var(--primary-color); }
 .version-panel.version2 { border-top: 4px solid var(--success-color); }
 .version-title,
@@ -80,13 +72,6 @@
 .change-subtitle-spaced { margin-top: 30px; }
 
 .chapter-info,
-.chapter-header {
-    padding: 20px;
-    margin-bottom: 24px;
-    background: var(--neutral-50);
-    border-radius: var(--radius-md);
-}
-
 .info-box {
     padding: 15px;
     margin-bottom: 20px;
@@ -137,10 +122,7 @@
 .feedback-label { margin-bottom: 5px; color: #991b1b; font-weight: 700; }
 .revision-notes .feedback-label { color: #166534; }
 
-.inbox-header h1 { margin: 0 0 var(--spacing-2); font-size: 32px; }
-.inbox-header p { margin: 0; color: var(--text-muted); }
 .inbox-table { overflow: hidden; border: 1px solid var(--neutral-200); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); }
-.chapter-info-text { color: var(--text-color); font-size: 14px; font-weight: 500; }
 .chapter-series { margin-top: var(--spacing-1); color: var(--text-muted); font-size: 12px; }
 .version-label { color: var(--text-color); font-weight: 600; }
 .mangaka-name { color: #374151; font-weight: 500; }
@@ -209,14 +191,9 @@
 .modal-title { margin: 0 0 20px; font-size: 20px; }
 .modal-field { margin-bottom: 15px; }
 .modal-field label { display: block; margin-bottom: 5px; font-weight: 700; }
-.modal-size-grid { display: flex; gap: 10px; }
-.modal-size-grid > div { flex: 1; }
-.modal-size-grid label { font-size: 12px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: var(--spacing-3); text-align: right; }
 .annotation-popup { position: fixed; z-index: 9999; display: none; min-width: 250px; padding: var(--spacing-3); background: var(--surface-color); border: 1px solid var(--neutral-300); border-radius: var(--radius-md); box-shadow: var(--shadow-md); }
 .annotation-popup.show { display: block; }
-.annotation-popup-title { margin-bottom: var(--spacing-2); font-weight: 600; }
-.annotation-popup-meta { margin-top: 10px; color: var(--text-muted); font-size: 12px; }
 
 @media (max-width: 1200px) {
     .workspace-sidebar { width: 240px; padding: 20px 16px; }

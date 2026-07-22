@@ -30,6 +30,15 @@ public class AuthController {
             Model model) {
         try {
             AuthenticatedUser user = authService.login(username, password);
+            // Drop any session that existed before authentication so the browser
+            // gets a brand-new session id on login. Without this, an attacker who
+            // can plant a known JSESSIONID in the victim's browser beforehand would
+            // still hold a valid handle on the session after the victim signs in
+            // (session fixation).
+            HttpSession existingSession = request.getSession(false);
+            if (existingSession != null) {
+                existingSession.invalidate();
+            }
             HttpSession session = request.getSession(true);
             // AUTH_USER is the single session key used by controllers, JSPs, and RBAC.
             session.setAttribute("AUTH_USER", user);

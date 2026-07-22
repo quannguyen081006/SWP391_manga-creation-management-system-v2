@@ -12,17 +12,14 @@
 <jsp:include page="../common/header.jsp" />
 
 <section class="manga-dashboard-strip" aria-hidden="true">
-    <div class="strip-panel strip-panel-focus">
-        <span class="speed-line speed-line-a"></span>
-        <span class="speed-line speed-line-b"></span>
-        <span class="ink-burst"></span>
+    <div class="strip-panel strip-panel-focus photo-panel">
+        <img class="panel-photo" src="${pageContext.request.contextPath}/assets/images/one-piece-dai-dien-696x391.jpg" alt="One Piece" loading="lazy" />
     </div>
-    <div class="strip-panel strip-panel-page">
-        <span class="panel-face"></span>
-        <span class="panel-shadow"></span>
+    <div class="strip-panel strip-panel-page photo-panel">
+        <img class="panel-photo" src="${pageContext.request.contextPath}/assets/images/Naruto_Volume_1_manga_cover.jpg" alt="Naruto Volume 1" loading="lazy" />
     </div>
-    <div class="strip-panel strip-panel-tone">
-        <span class="speech-bubble"></span>
+    <div class="strip-panel strip-panel-tone photo-panel">
+        <img class="panel-photo" src="${pageContext.request.contextPath}/assets/images/dragonball.jpg" alt="Dragon Ball" loading="lazy" />
     </div>
 </section>
 

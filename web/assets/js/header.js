@@ -113,6 +113,26 @@
         }
     }
 
+    // The sidebar is a fixed-width column with overflow-x: hidden (needed so
+    // the collapse/expand animation doesn't show a horizontal scrollbar).
+    // Any flyout menu inside it that positions itself with CSS left/right
+    // percentages gets silently clipped by that overflow rule -- it "opens"
+    // (the DOM/class state changes) but is invisible, which reads as
+    // "clicking does nothing". Fix: position flyouts with fixed + JS-computed
+    // viewport coordinates so they escape the sidebar's clipping box.
+    function positionFlyout(trigger, panel) {
+        if (!trigger || !panel) {
+            return;
+        }
+        var rect = trigger.getBoundingClientRect();
+        var margin = 12;
+        panel.style.position = 'fixed';
+        panel.style.left = Math.round(rect.right + margin) + 'px';
+        panel.style.right = 'auto';
+        panel.style.top = 'auto';
+        panel.style.bottom = Math.round(window.innerHeight - rect.bottom) + 'px';
+    }
+
     function bindUserMenu() {
         var trigger = document.getElementById('userMenuTrigger');
         var dropdown = document.getElementById('userDropdown');
@@ -121,6 +141,9 @@
         }
 
         function setOpen(isOpen) {
+            if (isOpen) {
+                positionFlyout(trigger, dropdown);
+            }
             dropdown.classList.toggle('open', isOpen);
             trigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
         }
@@ -149,6 +172,45 @@
         document.addEventListener('click', function (event) {
             if (!trigger.contains(event.target) && !dropdown.contains(event.target)) {
                 setOpen(false);
+            }
+        });
+
+        window.addEventListener('resize', function () {
+            if (dropdown.classList.contains('open')) {
+                positionFlyout(trigger, dropdown);
+            }
+        });
+    }
+
+    function bindNotificationFlyout() {
+        var details = document.querySelector('.sidebar-account .notify-switcher');
+        if (!details) {
+            return;
+        }
+        var summary = details.querySelector('.notify-toggle');
+        var panel = details.querySelector('.notify-menu');
+        if (!summary || !panel) {
+            return;
+        }
+
+        details.addEventListener('toggle', function () {
+            if (details.open) {
+                positionFlyout(summary, panel);
+            }
+        });
+
+        window.addEventListener('resize', function () {
+            if (details.open) {
+                positionFlyout(summary, panel);
+            }
+        });
+
+        // Native <details> already closes on an outside click in most
+        // browsers only when focus moves away; be explicit so it behaves
+        // like the user-menu dropdown.
+        document.addEventListener('click', function (event) {
+            if (details.open && !details.contains(event.target)) {
+                details.open = false;
             }
         });
     }
@@ -181,6 +243,7 @@
     function initialize() {
         bindSidebar();
         bindUserMenu();
+        bindNotificationFlyout();
         bindNotificationActions();
         renderNotificationTimes();
     }

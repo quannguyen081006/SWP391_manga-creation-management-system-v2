@@ -80,8 +80,8 @@
         <tbody>
             <c:forEach items="${proposals}" var="p">
                 <tr>
-                    <td><strong>${p.title}</strong></td>
-                    <td>${p.genre}</td>
+                    <td><strong><c:out value="${p.title}" /></strong></td>
+                    <td><c:out value="${p.genre}" /></td>
                     <td>${p.approximateChapter}</td>
                     <td>
                         <span class="status-chip ${p.status=='UNDER_REVIEW' || p.status=='BOARD_REVIEW' ? 'status-review' : (p.status=='DRAFT' || p.status=='REVISION_REQUESTED' ? 'status-draft' : (p.status=='APPROVED' ? 'status-approved' : 'status-rejected'))}">${p.status}</span>

@@ -39,7 +39,7 @@
                         <tr>
                             <td>
                                 <div class="chapter-info">
-                                    <strong>Chapter ${chapter.chapterNumber}</strong>: ${chapter.title}
+                                    <strong>Chapter <c:out value="${chapter.chapterNumber}" /></strong>: <c:out value="${chapter.title}" />
                                 </div>
                                 <div class="chapter-series">
                                     Series ID: ${chapter.seriesId}

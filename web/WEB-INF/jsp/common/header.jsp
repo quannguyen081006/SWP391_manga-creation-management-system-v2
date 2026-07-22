@@ -57,34 +57,13 @@
         <c:set var="avatarText" value="${avatarText}X" />
     </c:otherwise>
 </c:choose>
-<%
-    Object forwardedUri = request.getAttribute("javax.servlet.forward.request_uri");
-    String uri = forwardedUri == null ? request.getRequestURI() : forwardedUri.toString();
-    String pageName = "";
-    if (uri.contains("/dashboard")) pageName = "Dashboard";
-    else if (uri.contains("/notifications")) pageName = "Notifications";
-    else if (uri.contains("/settings")) pageName = "Settings";
-    else if (uri.contains("/proposals")) pageName = "Proposals";
-    else if (uri.contains("/series")) pageName = "Series";
-    else if (uri.contains("/chapters")) pageName = "Chapters";
-    else if (uri.contains("/tasks")) pageName = "Tasks";
-    else if (uri.contains("/manuscript-review") || uri.contains("/manuscripts")) pageName = "Manuscript Reviews";
-    else if (uri.contains("/ranking")) pageName = "Ranking";
-    else if (uri.contains("/salary")) pageName = "Salary & KPI";
-    else if (uri.contains("/decisions")) pageName = "Decisions";
-    else if (uri.contains("/profile")) pageName = "Profile";
-    else if (uri.contains("/users")) pageName = "Users";
-    else if (uri.contains("/analytics")) pageName = "Analytics";
-    request.setAttribute("_pageName", pageName);
-%>
-
 <%-- App shell sidebar: role-based navigation for authenticated users. --%>
 <div class="app-shell">
     <aside class="side-nav">
         <a class="side-brand" href="${ctx}/main/dashboard" title="Back to Dashboard">
             <div class="brand-icon">MF</div>
             <div>
-                <div class="brand-name">MangaFlow <span class="brand-version">v2.5</span></div>
+                <div class="brand-name">MangaFlow <span class="brand-version">v2.6</span></div>
                 <div class="brand-sub">Manga Studio Ops</div>
             </div>
         </a>
@@ -160,121 +139,104 @@
             </a>
         </c:if>
 
-    </aside>
-
-    <section class="main-shell">
-        <header class="top-shell">
-            <%-- Top header: dashboard title, active role pills, notifications, and account actions. --%>
-            <div class="page-head">
-                <span class="page-heading-label"><%= pageName %></span>
-                <c:if test="${sessionScope.AUTH_USER != null && sessionScope.AUTH_USER.hasRole('ADMIN')}">
-                    <span class="role-pill role-admin">Admin</span>
-                </c:if>
-                <c:if test="${sessionScope.AUTH_USER != null && sessionScope.AUTH_USER.hasRole('MANGAKA')}">
-                    <span class="role-pill role-mangaka">Mangaka</span>
-                </c:if>
-                <c:if test="${sessionScope.AUTH_USER != null && sessionScope.AUTH_USER.hasRole('ASSISTANT')}">
-                    <span class="role-pill role-assistant">Assistant</span>
-                </c:if>
-                <c:if test="${sessionScope.AUTH_USER != null && sessionScope.AUTH_USER.hasRole('TANTOU_EDITOR')}">
-                    <span class="role-pill role-tantou">Tantou Editor</span>
-                </c:if>
-                <c:if test="${sessionScope.AUTH_USER != null && sessionScope.AUTH_USER.hasRole('EDITORIAL_BOARD')}">
-                    <span class="role-pill role-board">Editorial Board</span>
-                </c:if>
-            </div>
-            <div class="top-user">
-                <%-- Notification dropdown: click item to mark read and redirect through web controller. --%>
-                <details class="notify-switcher">
-                    <summary class="notify-toggle" title="Notifications">
+        <div class="sidebar-account">
+            <%-- Notification dropdown: click item to mark read and redirect through web controller. --%>
+            <details class="notify-switcher side-notify">
+                <summary class="notify-toggle" title="Notifications">
     <svg class="notify-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h11"></path>
         <path d="M9 21a3 3 0 0 0 6 0"></path>
     </svg>
+    <span class="notify-label">Notifications</span>
     <c:if test="${headerUnreadNotificationCount gt 0}">
         <span class="notify-count noti-badge">${headerUnreadNotificationCount}</span>
     </c:if>
 </summary>
-                    <div class="notify-menu">
-                        <div class="notify-menu-head">
-                            <span>Notifications</span>
-                            <form method="post" action="${ctx}/main/notifications/mark-all-read" class="notify-mark-all-form">
-                                <button type="submit" ${headerUnreadNotificationCount == 0 ? 'disabled' : ''}>Mark all read</button>
-                            </form>
-                        </div>
-                        <c:choose>
-                            <c:when test="${empty headerNotifications}">
-                                <div class="notify-empty">No notifications yet.</div>
-                            </c:when>
-                            <c:otherwise>
-                                <c:forEach items="${headerNotifications}" var="n">
-                                    <div class="notify-item noti-item ${n.read ? 'is-read read' : 'is-unread unread'}" data-noti-id="${n.id}" data-is-read="${n.read}">
-                                        <a href="${ctx}/main/notifications/${n.id}/click" class="notify-item-main text-decoration-none">
-                                            <div class="noti-title">${empty n.title ? n.type : n.title}</div>
-                                            <div class="noti-message">${n.message}</div>
-                                            <div class="noti-time" data-time="${n.createdAt}"></div>
-                                        </a>
-                                        <c:if test="${!n.read}">
-                                            <span class="noti-dot" aria-hidden="true"></span>
-                                        </c:if>
-                                        <div class="noti-actions ms-2">
-                                            <button type="button"
-                                                    class="btn btn-sm p-0 text-muted noti-menu-btn"
-                                                    data-id="${n.id}"
-                                                    data-read="${n.read}"
-                                                    data-menu-id="header-noti-menu-${n.id}"
-                                                    data-notification-menu>...</button>
-                                            <div class="noti-actions-menu" id="header-noti-menu-${n.id}">
-                                                <button type="button" class="noti-menu-item noti-menu-delete"
-                                                        data-notification-delete="${n.id}">Delete</button>
-                                                <button type="button" class="noti-menu-item noti-menu-toggle"
-                                                        data-notification-toggle="${n.id}" data-read="${n.read}">
-                                                    ${n.read ? 'Mark as unread' : 'Mark as read'}
-                                                </button>
-                                            </div>
+                <div class="notify-menu">
+                    <div class="notify-menu-head">
+                        <span>Notifications</span>
+                        <form method="post" action="${ctx}/main/notifications/mark-all-read" class="notify-mark-all-form">
+                            <button type="submit" ${headerUnreadNotificationCount == 0 ? 'disabled' : ''}>Mark all read</button>
+                        </form>
+                    </div>
+                    <c:choose>
+                        <c:when test="${empty headerNotifications}">
+                            <div class="notify-empty">No notifications yet.</div>
+                        </c:when>
+                        <c:otherwise>
+                            <c:forEach items="${headerNotifications}" var="n">
+                                <div class="notify-item noti-item ${n.read ? 'is-read read' : 'is-unread unread'}" data-noti-id="${n.id}" data-is-read="${n.read}">
+                                    <a href="${ctx}/main/notifications/${n.id}/click" class="notify-item-main text-decoration-none">
+                                        <div class="noti-title"><c:out value="${empty n.title ? n.type : n.title}" /></div>
+                                        <div class="noti-message"><c:out value="${n.message}" /></div>
+                                        <div class="noti-time" data-time="${n.createdAt}"></div>
+                                    </a>
+                                    <c:if test="${!n.read}">
+                                        <span class="noti-dot" aria-hidden="true"></span>
+                                    </c:if>
+                                    <div class="noti-actions ms-2">
+                                        <button type="button"
+                                                class="btn btn-sm p-0 text-muted noti-menu-btn"
+                                                data-id="${n.id}"
+                                                data-read="${n.read}"
+                                                data-menu-id="header-noti-menu-${n.id}"
+                                                data-notification-menu>...</button>
+                                        <div class="noti-actions-menu" id="header-noti-menu-${n.id}">
+                                            <button type="button" class="noti-menu-item noti-menu-delete"
+                                                    data-notification-delete="${n.id}">Delete</button>
+                                            <button type="button" class="noti-menu-item noti-menu-toggle"
+                                                    data-notification-toggle="${n.id}" data-read="${n.read}">
+                                                ${n.read ? 'Mark as unread' : 'Mark as read'}
+                                            </button>
                                         </div>
                                     </div>
-                                </c:forEach>
-                            </c:otherwise>
-                        </c:choose>
-                        <%-- Full notification list link; individual items redirect through stored viewUrl validation. --%>
-                        <div class="dropdown-divider"></div>
-                        <a href="${ctx}/main/notifications" class="dropdown-item text-center text-primary fw-semibold py-2 notify-see-all">
-                            View all notifications
-                        </a>
-                    </div>
-                </details>
+                                </div>
+                            </c:forEach>
+                        </c:otherwise>
+                    </c:choose>
+                    <%-- Full notification list link; individual items redirect through stored viewUrl validation. --%>
+                    <div class="dropdown-divider"></div>
+                    <a href="${ctx}/main/notifications" class="dropdown-item text-center text-primary fw-semibold py-2 notify-see-all">
+                        View all notifications
+                    </a>
+                </div>
+            </details>
 
-                <div class="user-menu-wrapper">
-                    <div class="user-menu" id="userMenuTrigger" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false">
-                        <c:choose>
-                            <c:when test="${not empty sessionScope.AUTH_USER.avatarUrl}">
-                                <img class="avatar header-avatar-image" src="${ctx}${sessionScope.AUTH_USER.avatarUrl}" alt="Profile avatar" />
-                            </c:when>
-                            <c:otherwise>
-                                <span class="avatar role-${roleKey}">${avatarText}</span>
-                            </c:otherwise>
-                        </c:choose>
+            <div class="user-menu-wrapper">
+                <div class="user-menu" id="userMenuTrigger" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false">
+                    <c:choose>
+                        <c:when test="${not empty sessionScope.AUTH_USER.avatarUrl}">
+                            <img class="avatar header-avatar-image" src="${ctx}${sessionScope.AUTH_USER.avatarUrl}" alt="Profile avatar" />
+                        </c:when>
+                        <c:otherwise>
+                            <span class="avatar role-${roleKey}"><c:out value="${avatarText}" /></span>
+                        </c:otherwise>
+                    </c:choose>
+                    <span class="user-meta">
                         <span class="user-name profile-name-link"><c:out value="${displayName}" default="Yuki Tanaka"/></span>
-                    </div>
-                    <div class="user-dropdown" id="userDropdown">
-                        <a href="${ctx}/main/profile" class="user-dropdown-item">
-                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                                <path d="M20 21a8 8 0 0 0-16 0"></path>
-                                <circle cx="12" cy="7" r="4"></circle>
-                            </svg>
-                            <span>Profile</span>
-                        </a>
-                        <a href="${ctx}/main/logout" class="user-dropdown-item user-dropdown-logout">
-                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                                <path d="M10 17l5-5-5-5"></path>
-                                <path d="M15 12H3"></path>
-                                <path d="M21 3v18"></path>
-                            </svg>
-                            <span>Logout</span>
-                        </a>
-                    </div>
+                        <span class="role-pill role-${roleKey}"><c:out value="${displayRole}" /></span>
+                    </span>
+                </div>
+                <div class="user-dropdown" id="userDropdown">
+                    <a href="${ctx}/main/profile" class="user-dropdown-item">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <path d="M20 21a8 8 0 0 0-16 0"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                        <span>Profile</span>
+                    </a>
+                    <a href="${ctx}/main/logout" class="user-dropdown-item user-dropdown-logout">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <path d="M10 17l5-5-5-5"></path>
+                            <path d="M15 12H3"></path>
+                            <path d="M21 3v18"></path>
+                        </svg>
+                        <span>Logout</span>
+                    </a>
                 </div>
             </div>
-        </header>
+        </div>
+    </aside>
+
+    <section class="main-shell">
         <main class="page-wrap">

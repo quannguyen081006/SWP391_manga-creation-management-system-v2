@@ -11,30 +11,30 @@
 <body>
 <jsp:include page="../common/header.jsp" />
 
-<c:if test="${not empty error}"><div class="alert error">${error}</div></c:if>
+<c:if test="${not empty error}"><div class="alert error"><c:out value="${error}" /></div></c:if>
 
 <div class="section-card">
     <form class="form-grid" method="post" action="${pageContext.request.contextPath}/main/proposals/${proposal.id}/edit" enctype="multipart/form-data">
         <label>Title</label>
-        <input type="text" name="title" value="${proposal.title}" required ${lockIdentityFields ? 'readonly' : ''} />
+        <input type="text" name="title" value="<c:out value='${proposal.title}' />" required ${lockIdentityFields ? 'readonly' : ''} />
 
         <label>Genre</label>
         <c:if test="${lockIdentityFields}">
-            <input type="hidden" name="genre" value="${proposal.genre}" />
+            <input type="hidden" name="genre" value="<c:out value='${proposal.genre}' />" />
         </c:if>
         <select name="genre" required ${lockIdentityFields ? 'disabled' : ''}>
             <c:forEach items="${genres}" var="g">
-                <option value="${g}" ${g == proposal.genre ? 'selected' : ''}>${g}</option>
+                <option value="<c:out value='${g}' />" ${g == proposal.genre ? 'selected' : ''}><c:out value="${g}" /></option>
             </c:forEach>
         </select>
 
         <label>Synopsis</label>
-        <textarea name="synopsis" rows="8" required>${proposal.synopsis}</textarea>
+        <textarea name="synopsis" rows="8" required><c:out value="${proposal.synopsis}" /></textarea>
 
         <label>Sample File</label>
         <input type="file" name="sampleFile" />
         <c:if test="${not empty proposal.originalFileName}">
-            <p class="form-note">Current file: <a href="${pageContext.request.contextPath}/main/proposals/${proposal.id}/file">${proposal.originalFileName}</a></p>
+            <p class="form-note">Current file: <a href="${pageContext.request.contextPath}/main/proposals/${proposal.id}/file"><c:out value="${proposal.originalFileName}" /></a></p>
         </c:if>
 
         <label>Approximate Chapter</label>

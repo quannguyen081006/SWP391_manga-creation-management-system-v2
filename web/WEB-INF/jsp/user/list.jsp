@@ -1,5 +1,6 @@
 ﻿<%@page contentType="text/html" pageEncoding="UTF-8"%>
 <%@taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
+<%@taglib uri="http://java.sun.com/jsp/jstl/functions" prefix="fn" %>
 <!DOCTYPE html>
 <html>
 <head>
@@ -12,8 +13,8 @@
 <jsp:include page="../common/header.jsp" />
 
 <%-- User management alerts: success and validation errors from controller actions. --%>
-<c:if test="${not empty success}"><div class="alert success">${success}</div></c:if>
-<c:if test="${not empty error}"><div class="alert error">${error}</div></c:if>
+<c:if test="${not empty success}"><div class="alert success"><c:out value="${success}" /></div></c:if>
+<c:if test="${not empty error}"><div class="alert error"><c:out value="${error}" /></div></c:if>
 <%-- User creation action: opens the admin create-user form. --%>
 <div class="page-actions">
     <a class="btn primary" href="${pageContext.request.contextPath}/main/users/new">+ New User</a>
@@ -26,12 +27,12 @@
         <tbody>
             <c:forEach items="${users}" var="u">
                 <tr class="${createdUserId == u.id ? 'row-created' : ''}">
-                    <td>${u.id}</td>
-                    <td>${u.username}</td>
-                    <td>${u.fullName}</td>
-                    <td>${u.email}</td>
+                    <td><c:out value="${u.id}" /></td>
+                    <td><c:out value="${u.username}" /></td>
+                    <td><c:out value="${u.fullName}" /></td>
+                    <td><c:out value="${u.email}" /></td>
                     <td>
-                        <span class="status-badge ${u.status == 'ACTIVE' ? 'status-active' : 'status-inactive'}">${u.status}</span>
+                        <span class="status-badge ${u.status == 'ACTIVE' ? 'status-active' : 'status-inactive'}"><c:out value="${u.status}" /></span>
                     </td>
                     <td class="role-cell">
                         <c:choose>
@@ -45,7 +46,6 @@
                                             <c:when test="${r eq 'ADMIN'}">
                                                 <span class="role-chip locked">
                                                     <span>${r}</span>
-                                                    <span class="role-lock">Locked</span>
                                                 </span>
                                             </c:when>
                                             <c:otherwise>
@@ -53,7 +53,7 @@
                                                     <input type="hidden" name="role" value="${r}" />
                                                     <span class="role-chip">
                                                         <span>${r}</span>
-                                                        <button class="role-remove" type="submit" title="Remove ${r}" data-confirm="Remove role ${r} from ${u.username}?">x</button>
+                                                        <button class="role-remove" type="submit" title="Remove ${r}" data-confirm="Remove role ${r} from ${fn:escapeXml(u.username)}?">x</button>
                                                     </span>
                                                 </form>
                                             </c:otherwise>
@@ -88,12 +88,12 @@
                     </td>
                     <td>
                         <div class="row-actions">
-                            <a class="btn small" href="${pageContext.request.contextPath}/main/users/${u.id}/edit">Edit</a>
-                            <%-- The seed admin account is kept visible but not toggled from this table. --%>
+                            <%-- The seed admin account is kept visible but not edited or toggled from this table. --%>
                             <c:if test="${u.username ne 'admin'}">
+                                <a class="btn small" href="${pageContext.request.contextPath}/main/users/${u.id}/edit">Edit</a>
                                 <form method="post" action="${pageContext.request.contextPath}/main/users/${u.id}/status">
                                     <input type="hidden" name="status" value="${u.status == 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'}" />
-                                    <button class="btn small ${u.status == 'ACTIVE' ? 'danger-soft' : 'success-soft'}" type="submit" data-confirm="${u.status == 'ACTIVE' ? 'Deactivate' : 'Activate'} ${u.username}?">${u.status == 'ACTIVE' ? 'Deactivate' : 'Activate'}</button>
+                                    <button class="btn small ${u.status == 'ACTIVE' ? 'danger-soft' : 'success-soft'}" type="submit" data-confirm="${u.status == 'ACTIVE' ? 'Deactivate' : 'Activate'} ${fn:escapeXml(u.username)}?">${u.status == 'ACTIVE' ? 'Deactivate' : 'Activate'}</button>
                                 </form>
                             </c:if>
                         </div>

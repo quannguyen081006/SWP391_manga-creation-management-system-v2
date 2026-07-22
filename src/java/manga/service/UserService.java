@@ -1,5 +1,6 @@
 package manga.service;
 
+import manga.common.util.BCrypt;
 import manga.common.util.RoleCombinationValidator;
 import manga.repository.UserAdminRepository;
 import java.util.ArrayList;
@@ -71,7 +72,7 @@ public class UserService {
      * which assigns roles through the dedicated role endpoint afterward.
      */
     public long createUser(String username, String password, String fullName, String email) {
-        long id = userAdminRepository.createUser(username, normalizedPassword(password), fullName, email);
+        long id = userAdminRepository.createUser(username, hashedPassword(password), fullName, email);
         notificationService.notifyUser(id, "ACCOUNT_CREATED", "Your MangaFlow account has been created.", 0, null);
         return id;
     }
@@ -82,7 +83,7 @@ public class UserService {
      */
     public long createUserWithRoles(String username, String password, String fullName, String email, List<String> roles) {
         validateCreateUser(username, password, fullName, email, roles);
-        long id = userAdminRepository.createUser(username, normalizedPassword(password), fullName, email);
+        long id = userAdminRepository.createUser(username, hashedPassword(password), fullName, email);
         for (String role : roles) {
             userAdminRepository.addRole(id, role);
         }
@@ -159,7 +160,8 @@ public class UserService {
      */
     public void changePassword(long userId, String currentPassword, String newPassword, String confirmNewPassword) {
         String currentPasswordHash = userAdminRepository.getPasswordHash(userId);
-        if (currentPasswordHash == null || currentPassword == null || !currentPassword.equals(currentPasswordHash)) {
+        if (currentPasswordHash == null || currentPassword == null
+                || !currentPasswordMatches(currentPassword, currentPasswordHash)) {
             throw new IllegalArgumentException("Current password is incorrect");
         }
         if (newPassword == null || !newPassword.equals(confirmNewPassword)) {
@@ -168,7 +170,20 @@ public class UserService {
         if (newPassword.length() < 5) {
             throw new IllegalArgumentException("Password must be at least 5 characters");
         }
-        userAdminRepository.updatePassword(userId, newPassword);
+        // The new value is hashed here, so changing a password also migrates a
+        // legacy plaintext account off plain text.
+        userAdminRepository.updatePassword(userId, BCrypt.hashpw(newPassword));
+    }
+
+    /**
+     * Compares the submitted current password with the stored value, accepting
+     * both BCrypt hashes and legacy plaintext rows for the same reason described
+     * on {@link AuthService}.
+     */
+    private boolean currentPasswordMatches(String submitted, String stored) {
+        return BCrypt.looksHashed(stored)
+                ? BCrypt.checkpw(submitted, stored)
+                : submitted.equals(stored);
     }
 
     // ------------------------------------------------------------
@@ -177,6 +192,23 @@ public class UserService {
 
     private String normalizedPassword(String password) {
         return (password == null || password.trim().isEmpty()) ? "12345" : password;
+    }
+
+    /**
+     * Returns the value to persist in the passwordHash column: the plaintext
+     * password run through BCrypt. Accounts are therefore stored hashed from
+     * creation onward; only rows predating this change hold plain text, and
+     * {@link AuthService} upgrades those on their next successful login.
+     * <p>
+     * The minimum-length rule is enforced here because UserAdminRepository can no
+     * longer check it: that layer now only ever receives the fixed-length hash.
+     */
+    private String hashedPassword(String password) {
+        String effective = normalizedPassword(password);
+        if (effective.length() < 5) {
+            throw new IllegalArgumentException("Password must be at least 5 characters");
+        }
+        return BCrypt.hashpw(effective);
     }
 
     /**

@@ -195,11 +195,6 @@ button:disabled {
 }
 
 .table-scroll,
-.table-responsive {
-    width: 100%;
-    overflow-x: auto;
-}
-
 .data-table,
 .notification-table,
 .vote-table,
@@ -326,14 +321,8 @@ button:disabled {
 
 .text-success { color: var(--success-color); }
 .text-danger { color: var(--danger-color); }
-.text-warning { color: var(--warning-color); }
 .text-muted { color: var(--text-muted); }
-.text-semibold { font-weight: 600; }
-.text-small { font-size: 12px; }
-.text-xs { font-size: 11px; }
 .section-title-sm { margin-bottom: var(--spacing-6); font-size: 24px; }
-.section-title-xs { margin-bottom: 20px; font-size: 20px; }
-.content-section-spaced { margin-top: var(--spacing-6); }
 .content-section-large { margin-top: 30px; }
 
 @media (max-width: 900px) {
