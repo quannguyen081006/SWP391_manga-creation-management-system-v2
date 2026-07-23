@@ -52,7 +52,7 @@ public class ModuleWebController {
     private ProposalService proposalService;
 
     @Autowired
-    private ProductionRepository productionRepository;
+    private ProductionService productionService;
 
     @Autowired
     private ChapterService chapterService;
@@ -263,7 +263,7 @@ public class ModuleWebController {
     public String seriesDetail(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
         SeriesSummary found = null;
-        for (SeriesSummary s : productionRepository.listSeries(user)) {
+        for (SeriesSummary s : productionService.listSeries(user)) {
             if (s.getId() == id) {
                 found = s;
                 break;
@@ -426,7 +426,7 @@ public class ModuleWebController {
     public String rankingPeriods(HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
         model.addAttribute("periods", rankingService.listPeriods());
-        model.addAttribute("seriesList", productionRepository.listSeries());
+        model.addAttribute("seriesList", productionService.listSeries());
 
         // BR-RNK-06: Track which periods the current board member has already submitted for
         if (user.hasRole("EDITORIAL_BOARD")) {
