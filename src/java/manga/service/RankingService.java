@@ -7,6 +7,7 @@ import manga.enums.RankingPeriodStatus;
 import manga.model.AuthenticatedUser;
 import manga.repository.RankingRepository;
 import manga.repository.MangakaRankingRepository;
+import manga.repository.UserRepository;
 import manga.service.NotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -32,9 +33,12 @@ public class RankingService {
 
     @Autowired
     private NotificationService notificationService;
-    
+
     @Autowired
     private RankingCsvUploadRepository rankingCsvUploadRepository;
+
+    @Autowired
+    private UserRepository userRepository;
 
     public List<Map<String, Object>> listPeriods() {
         return rankingRepository.listPeriods();
@@ -62,16 +66,27 @@ public class RankingService {
 
         long periodId = rankingRepository.createPeriod(request.getName(), startDate, request.getEndDate(),"OPEN");
 
-        // Notify Editorial Board
-        notificationService.notifyUser(
-                user.getId(), // In real implementation, would notify all Editorial Board members
-                "RANKING_PERIOD_OPENED",
-                "New ranking period '" + request.getName() + "' is now open for vote submissions.",
-                periodId,
-                "RANKING_PERIOD"
-        );
+        // Notify every real Editorial Board member, same lookup the scheduler
+        // uses for the monthly auto-open job. Wrapped in try/catch per the
+        // convention elsewhere in the app (see ReviewTaskService): a failed
+        // notification must not roll back a period that was already created.
+        notifyEditorialBoardPeriodOpened(periodId, request.getName());
 
         return periodId;
+    }
+
+    private void notifyEditorialBoardPeriodOpened(long periodId, String periodName) {
+        List<Map<String, Object>> boardMembers = userRepository.findByRole("EDITORIAL_BOARD");
+        String message = "New ranking period '" + periodName + "' is now open for vote submissions.";
+        for (Map<String, Object> member : boardMembers) {
+            long memberId = ((Number) member.get("id")).longValue();
+            try {
+                notificationService.notifyUser(memberId, "RANKING_PERIOD_OPENED", message, periodId, "RANKING_PERIOD");
+            } catch (Exception ex) {
+                System.err.println("Warning: Failed to notify Editorial Board member " + memberId
+                        + " about ranking period " + periodId + ": " + ex.getMessage());
+            }
+        }
     }
 
     public void closeRankingPeriod(long periodId, AuthenticatedUser user) {
