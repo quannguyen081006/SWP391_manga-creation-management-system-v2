@@ -57,9 +57,9 @@
     
     <c:if test="${empty mangakaRanking}">
         <div class="empty-state">
-            <div class="icon"><i class="bi bi-trophy-fill" style="font-size: 48px; color: #ffd700;"></i></div>
-            <div class="title">No mangaka ranking data yet</div>
-            <div class="subtitle">Close a period to generate the prestige snapshot</div>
+            <div class="empty-state-icon gold"><i class="bi bi-trophy-fill"></i></div>
+            <div class="empty-state-title">No mangaka ranking data yet</div>
+            <div class="empty-state-copy">Close a period to generate the prestige snapshot</div>
         </div>
     </c:if>
 </div>

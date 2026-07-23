@@ -311,9 +311,95 @@
 
 .bottom-twenty-badge { background: var(--danger-color); }
 .elite-badge { background: linear-gradient(135deg, #667eea, #764ba2); }
+.vote-submitted-badge {
+    display: inline-flex;
+    padding: 8px 16px;
+    color: var(--success-color);
+    background: #f0fdf4;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+}
 .podium-icon,
 .trophy-icon { font-size: 24px; }
 .entries-section { margin-top: 40px; }
+
+/* Gold/silver/bronze accent reused on any empty-state icon, e.g. the mangaka
+   leaderboard's trophy placeholder, so it doesn't need an inline style. */
+.empty-state-icon.gold { color: #ffd700; }
+
+/* --- CSV preview modal (opened from the upload form on period.jsp) --- */
+.csv-preview-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+}
+
+.csv-preview-content {
+    max-width: 80%;
+    max-height: 80%;
+    padding: 30px;
+    overflow: auto;
+    white-space: pre-wrap;
+    background: var(--surface-color);
+    border-radius: var(--radius-md);
+    font-family: monospace;
+    font-size: 14px;
+}
+
+.csv-preview-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    padding: 10px 20px;
+    color: #fff;
+    background: var(--danger-color);
+    border: none;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* --- CSV upload list (csv-uploads.jsp) --- */
+.csv-upload-icon { font-size: 28px; }
+.csv-upload-details { display: flex; flex-direction: column; gap: 4px; }
+
+/* --- CSV viewer (csv-view.jsp) --- */
+.csv-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 30px;
+    margin-bottom: var(--spacing-4);
+    padding: 15px 20px;
+    background: var(--neutral-100);
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.csv-meta-item { display: flex; flex-direction: column; gap: 5px; }
+.csv-meta-label { color: #2c3e50; font-weight: 600; }
+
+.csv-content {
+    max-height: 600px;
+    padding: 20px;
+    overflow: auto;
+    background: var(--surface-color);
+    border: 1px solid #e0e0e0;
+    border-radius: var(--radius-md);
+}
+
+.csv-content pre {
+    margin: 0;
+    white-space: pre-wrap;
+    color: #2c3e50;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+}
 
 @media (max-width: 900px) {
     .period-create-form,
