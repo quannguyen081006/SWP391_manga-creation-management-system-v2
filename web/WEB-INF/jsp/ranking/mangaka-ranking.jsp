@@ -7,6 +7,7 @@
     <title>Mangaka Ranking</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css" />
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/ranking.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
@@ -21,9 +22,9 @@
             <c:forEach items="${mangakaRanking}" var="m">
                 <div class="mangaka-card rank-${m.rankPosition}">
                     <div class="mangaka-rank">
-                        <c:if test="${m.rankPosition == 1}">👑</c:if>
-                        <c:if test="${m.rankPosition == 2}">🥈</c:if>
-                        <c:if test="${m.rankPosition == 3}">🥉</c:if>
+                        <c:if test="${m.rankPosition == 1}"><i class="bi bi-trophy-fill rank-icon gold"></i></c:if>
+                        <c:if test="${m.rankPosition == 2}"><i class="bi bi-award-fill rank-icon silver"></i></c:if>
+                        <c:if test="${m.rankPosition == 3}"><i class="bi bi-award-fill rank-icon bronze"></i></c:if>
                         ${m.rankPosition}
                     </div>
                     <div class="mangaka-info">
@@ -56,7 +57,7 @@
     
     <c:if test="${empty mangakaRanking}">
         <div class="empty-state">
-            <div class="icon">👑</div>
+            <div class="icon"><i class="bi bi-trophy-fill" style="font-size: 48px; color: #ffd700;"></i></div>
             <div class="title">No mangaka ranking data yet</div>
             <div class="subtitle">Close a period to generate the prestige snapshot</div>
         </div>

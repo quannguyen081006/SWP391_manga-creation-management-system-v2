@@ -586,7 +586,7 @@ public class ModuleWebController {
         if (!user.hasRole("ADMIN") && !user.hasRole("EDITORIAL_BOARD")) {
             throw new IllegalArgumentException("Only ADMIN/EDITORIAL_BOARD can view decision sessions");
         }
-        model.addAttribute("sessions", decisionService.listDecisionSessions(user));
+        model.addAttribute("groupedSessions", decisionService.listDecisionSessionsGroupedBySeries(user));
         return "decision/session";
     }
 

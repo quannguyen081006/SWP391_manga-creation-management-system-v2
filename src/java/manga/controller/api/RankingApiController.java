@@ -24,6 +24,15 @@ public class RankingApiController {
     @Autowired
     private RankingService rankingService;
 
+    @Autowired
+    private manga.repository.ProductionRepository productionRepository;
+
+    @RequestMapping(value = "/series/{id}/team", method = RequestMethod.GET)
+    public ApiResponse<Map<String, Object>> getSeriesTeam(@PathVariable("id") long id, HttpSession session) {
+        SessionUserUtil.requireUser(session);
+        return ApiResponse.ok(productionRepository.getSeriesTeam(id), "Series team");
+    }
+
     @RequestMapping(value = "/periods", method = RequestMethod.GET)
     public ApiResponse<List<Map<String, Object>>> listPeriods(HttpSession session) {
         SessionUserUtil.requireUser(session);

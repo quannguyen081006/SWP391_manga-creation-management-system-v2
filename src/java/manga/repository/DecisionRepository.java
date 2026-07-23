@@ -51,6 +51,67 @@ public class DecisionRepository {
     }
 
     // ------------------------------------------------------------------ //
+    //  listSessionsGroupedBySeries — group sessions by series for UI     //
+    // ------------------------------------------------------------------ //
+    public List<Map<String, Object>> listSessionsGroupedBySeries() {
+        List<Map<String, Object>> grouped = new ArrayList<Map<String, Object>>();
+        try ( Connection conn = dataSource.getConnection()) {
+            boolean hasSystemSuggestion = hasDecisionSessionSystemSuggestionColumn(conn);
+            
+            // Get all sessions
+            String sql = "SELECT ds.id, ds.seriesId, ds.rankingRecordId, ds.status, ds.result"
+                    + (hasSystemSuggestion ? ", ds.systemSuggestion" : "")
+                    + ", ds.openedAt, ds.closedAt, s.title AS seriesTitle"
+                    + " FROM DecisionSession ds"
+                    + " JOIN Series s ON s.id = ds.seriesId"
+                    + " ORDER BY ds.openedAt DESC";
+            
+            Map<Long, List<Map<String, Object>>> seriesMap = new HashMap<>();
+            
+            try ( PreparedStatement ps = conn.prepareStatement(sql);  ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> session = mapSession(rs, hasSystemSuggestion, false);
+                    Long seriesId = (Long) session.get("seriesId");
+                    
+                    if (!seriesMap.containsKey(seriesId)) {
+                        seriesMap.put(seriesId, new ArrayList<Map<String, Object>>());
+                    }
+                    seriesMap.get(seriesId).add(session);
+                }
+            }
+            
+            // Build grouped result
+            for (Map.Entry<Long, List<Map<String, Object>>> entry : seriesMap.entrySet()) {
+                List<Map<String, Object>> sessions = entry.getValue();
+                Map<String, Object> group = new HashMap<>();
+                
+                // Series info from latest session
+                Map<String, Object> latest = sessions.get(0);
+                group.put("seriesId", latest.get("seriesId"));
+                group.put("seriesTitle", latest.get("seriesTitle"));
+                group.put("sessionCount", sessions.size());
+                group.put("latestStatus", latest.get("status"));
+                group.put("latestResult", latest.get("result"));
+                group.put("latestOpenedAt", latest.get("openedAt"));
+                group.put("sessions", sessions);
+                
+                grouped.add(group);
+            }
+            
+            // Sort by latest session date
+            grouped.sort((a, b) -> {
+                java.sql.Timestamp dateA = (java.sql.Timestamp) a.get("latestOpenedAt");
+                java.sql.Timestamp dateB = (java.sql.Timestamp) b.get("latestOpenedAt");
+                return dateB.compareTo(dateA);
+            });
+            
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot list grouped decision sessions", ex);
+        }
+        return grouped;
+    }
+
+    // ------------------------------------------------------------------ //
     //  getSessionDetail — không thay đổi                                  //
     // ------------------------------------------------------------------ //
     public Map<String, Object> getSessionDetail(long sessionId) {

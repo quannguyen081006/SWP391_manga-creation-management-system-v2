@@ -199,28 +199,47 @@
 
         <c:if test="${not empty error}"><div class="alert error"><c:out value="${error}" /></div></c:if>
 
-        <c:if test="${not empty sessions}">
+        <c:if test="${not empty groupedSessions}">
             <div class="section-card">
-                <h3 class="section-title" style="font-size: 24px; margin-bottom: 24px;">📋 Active Decision Sessions</h3>
+                <h3 class="section-title" style="font-size: 24px; margin-bottom: 24px;">📋 Decision Sessions by Series</h3>
 
-                <c:forEach items="${sessions}" var="s">
-                    <div class="decision-card status-${s.status}">
+                <c:forEach items="${groupedSessions}" var="group">
+                    <div class="decision-card status-${group.latestStatus}">
                         <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 16px;">
                             <div>
-                                <h3 style="margin: 0 0 8px 0; font-size: 18px; color: #2c3e50;"><c:out value="${s.seriesTitle}" /> <span style="font-size: 14px; color: #95a5a6;">(#<c:out value="${s.seriesId}" />)</span></h3>
-                                <div style="display: flex; gap: 12px; align-items: center;">
-                                    <span class="risk-badge HIGH">⚠️ High Risk</span>
-                                    <span style="color: #7f8c8d; font-size: 14px;">Opened: ${s.openedAt}</span>
+                                <h3 style="margin: 0 0 8px 0; font-size: 18px; color: #2c3e50;"><c:out value="${group.seriesTitle}" /> <span style="font-size: 14px; color: #95a5a6;">(#<c:out value="${group.seriesId}" />)</span></h3>
+                                <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                                    <span style="background: #f39c12; color: white; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase;">Entered Bottom 20: ${group.sessionCount} times</span>
+                                    <span style="color: #7f8c8d; font-size: 14px;">Latest: ${group.latestOpenedAt}</span>
                                 </div>
                             </div>
                             <div style="text-align: right;">
-                                <div style="font-size: 12px; color: #95a5a6; text-transform: uppercase; letter-spacing: 0.5px;">Status</div>
-                                <div style="font-weight: 600; color: #2c3e50;">${s.status}</div>
+                                <div style="font-size: 12px; color: #95a5a6; text-transform: uppercase; letter-spacing: 0.5px;">Latest Status</div>
+                                <div id="status-label-${group.seriesId}" style="font-weight: 600; color: #2c3e50;">Loading...</div>
                             </div>
                         </div>
 
                         <div style="display: flex; gap: 12px; margin-top: 16px;">
-                            <a class="btn small" href="${pageContext.request.contextPath}/main/decisions/${s.id}" style="background: #2c3e50; color: white;">Review Details →</a>
+                            <button class="btn small" onclick="toggleHistory('${group.seriesId}')" style="background: #667eea; color: white; border: none; cursor: pointer;">View History</button>
+                            <c:if test="${not empty group.sessions}">
+                                <a class="btn small" href="${pageContext.request.contextPath}/main/decisions/${group.sessions[0].id}" style="background: #2c3e50; color: white;">Review Latest →</a>
+                            </c:if>
+                        </div>
+
+                        <div id="history-${group.seriesId}" style="display: none; margin-top: 20px; padding: 16px; background: #f8f9fa; border-radius: 8px;">
+                            <h4 style="margin: 0 0 12px 0; font-size: 14px; color: #2c3e50;">Decision History</h4>
+                            <c:forEach items="${group.sessions}" var="s">
+                                <div style="padding: 10px; background: white; border-radius: 4px; margin-bottom: 8px; border-left: 3px solid #667eea;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <span style="font-weight: 600; color: #2c3e50;">${s.openedAt}</span>
+                                            <span style="margin-left: 12px; color: #7f8c8d; font-size: 13px;">Status: ${s.status}</span>
+                                        </div>
+                                        <span class="decision-${s.result.toLowerCase()}" style="font-weight: 600;">${s.result}</span>
+                                    </div>
+                                    <a href="${pageContext.request.contextPath}/main/decisions/${s.id}" style="display: inline-block; margin-top: 8px; font-size: 13px; color: #667eea; text-decoration: none;">View Details →</a>
+                                </div>
+                            </c:forEach>
                         </div>
                     </div>
                 </c:forEach>
@@ -243,7 +262,7 @@
                     </div>
                     <div>
                         <div style="font-size: 12px; color: #95a5a6; text-transform: uppercase; letter-spacing: 0.5px;">Status</div>
-                        <div style="font-weight: 600; color: #2c3e50;"><c:out value="${sessionDetail.status}" /></div>
+                        <div class="decision-detail-status" style="font-weight: 600; color: #2c3e50;"><c:out value="${sessionDetail.status}" /></div>
                     </div>
                     <div>
                         <div style="font-size: 12px; color: #95a5a6; text-transform: uppercase; letter-spacing: 0.5px;">Result</div>
@@ -341,6 +360,89 @@
         <jsp:include page="../common/footer.jsp" />
         <script>
             window.revenueHistory = '${revenueHistory}';
+            
+            function toggleHistory(seriesId) {
+                var historyDiv = document.getElementById('history-' + seriesId);
+                if (historyDiv) {
+                    historyDiv.style.display = historyDiv.style.display === 'none' ? 'block' : 'none';
+                }
+            }
+            
+            function getDecisionStatusLabel(status, result) {
+                if (!status) return '';
+                
+                if (status === 'OPEN') {
+                    return 'High Risk';
+                }
+                
+                if (status === 'UNDER_REVIEW') {
+                    return 'Under Review';
+                }
+                
+                if (status === 'CLOSED' || status === 'FINALIZED') {
+                    if (result === 'CONTINUE') {
+                        return 'Resolved';
+                    }
+                    if (result === 'CHANGE_TYPE') {
+                        return 'Changed';
+                    }
+                    if (result === 'CANCEL') {
+                        return 'Cancelled';
+                    }
+                }
+                
+                return status;
+            }
+            
+            function getStatusBadgeColor(status, result) {
+                if (!status) return '#7f8c8d';
+                
+                if (status === 'OPEN') {
+                    return '#e74c3c';
+                }
+                
+                if (status === 'UNDER_REVIEW') {
+                    return '#f39c12';
+                }
+                
+                if (status === 'CLOSED' || status === 'FINALIZED') {
+                    if (result === 'CONTINUE') {
+                        return '#27ae60';
+                    }
+                    if (result === 'CHANGE_TYPE') {
+                        return '#3498db';
+                    }
+                    if (result === 'CANCEL') {
+                        return '#e74c3c';
+                    }
+                }
+                
+                return '#7f8c8d';
+            }
+            
+            // Initialize status labels on page load
+            document.addEventListener('DOMContentLoaded', function() {
+                <c:forEach items="${groupedSessions}" var="group">
+                    var statusLabel = document.getElementById('status-label-${group.seriesId}');
+                    if (statusLabel) {
+                        var label = getDecisionStatusLabel('${group.latestStatus}', '${group.latestResult}');
+                        var color = getStatusBadgeColor('${group.latestStatus}', '${group.latestResult}');
+                        statusLabel.textContent = label;
+                        statusLabel.style.color = color;
+                    }
+                </c:forEach>
+                
+                // Also update session detail status if present
+                <c:if test="${not empty sessionDetail}">
+                    var detailStatus = document.querySelector('.decision-detail-status');
+                    if (detailStatus) {
+                        var label = getDecisionStatusLabel('${sessionDetail.status}', '${sessionDetail.result}');
+                        var color = getStatusBadgeColor('${sessionDetail.status}', '${sessionDetail.result}');
+                        detailStatus.textContent = label;
+                        detailStatus.style.color = color;
+                    }
+                </c:if>
+            });
         </script>
 
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

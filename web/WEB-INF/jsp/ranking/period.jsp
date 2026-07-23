@@ -6,6 +6,7 @@
         <meta charset="UTF-8">
         <title>Ranking Periods</title>
         <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css" />
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
         <style>
             .dashboard-hero {
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -409,8 +410,8 @@
                     </div>
 
                     <div class="period-actions" style="margin-top: 20px;">
-                        <a class="btn small" href="${pageContext.request.contextPath}/main/ranking/periods/${p.id}/results">📊 Series Ranking</a>
-                        <a class="btn small" href="${pageContext.request.contextPath}/main/ranking/periods/${p.id}/mangaka">👑 Mangaka Ranking</a>
+                        <a class="btn small" href="${pageContext.request.contextPath}/main/ranking/periods/${p.id}/results"><i class="bi bi-bar-chart-fill"></i> Series Ranking</a>
+                        <a class="btn small" href="${pageContext.request.contextPath}/main/ranking/periods/${p.id}/mangaka"><i class="bi bi-trophy-fill"></i> Mangaka Ranking</a>
 
                         <c:if test="${p.status == 'OPEN'}">
                             <c:if test="${sessionScope.AUTH_USER.hasRole('EDITORIAL_BOARD')}">

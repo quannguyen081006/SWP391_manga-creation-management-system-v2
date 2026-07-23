@@ -272,6 +272,86 @@ public class ProductionRepository {
         }
         return rows;
     }
+
+    public Map<String, Object> getSeriesTeam(long seriesId) {
+        Map<String, Object> team = new HashMap<>();
+        
+        // Get Lead Mangaka
+        String mangakaSql = "SELECT u.id, u.username, u.fullName, u.email "
+            + "FROM Series s "
+            + "JOIN [User] u ON u.id = s.mangakaId "
+            + "WHERE s.id = ?";
+        
+        // Get Tantou Editor
+        String tantouSql = "SELECT u.id, u.username, u.fullName, u.email "
+            + "FROM Series s "
+            + "JOIN [User] u ON u.id = s.tantouEditorId "
+            + "WHERE s.id = ? AND s.tantouEditorId IS NOT NULL";
+        
+        // Get Editorial Board members
+        String boardSql = "SELECT u.id, u.username, u.fullName, u.email "
+            + "FROM [User] u "
+            + "JOIN UserRole ur ON ur.userId = u.id "
+            + "JOIN [Role] r ON r.id = ur.roleId "
+            + "WHERE r.name = 'EDITORIAL_BOARD' AND u.status = 'ACTIVE' "
+            + "ORDER BY u.fullName";
+        
+        try (Connection conn = dataSource.getConnection()) {
+            // Lead Mangaka
+            try (PreparedStatement ps = conn.prepareStatement(mangakaSql)) {
+                ps.setLong(1, seriesId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        Map<String, Object> mangaka = new HashMap<>();
+                        mangaka.put("id", rs.getLong("id"));
+                        mangaka.put("username", rs.getString("username"));
+                        mangaka.put("fullName", rs.getString("fullName"));
+                        mangaka.put("email", rs.getString("email"));
+                        team.put("leadMangaka", mangaka);
+                    }
+                }
+            }
+            
+            // Tantou Editor
+            try (PreparedStatement ps = conn.prepareStatement(tantouSql)) {
+                ps.setLong(1, seriesId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        Map<String, Object> tantou = new HashMap<>();
+                        tantou.put("id", rs.getLong("id"));
+                        tantou.put("username", rs.getString("username"));
+                        tantou.put("fullName", rs.getString("fullName"));
+                        tantou.put("email", rs.getString("email"));
+                        team.put("tantouEditor", tantou);
+                    }
+                }
+            }
+            
+            // Assistants (reuse existing method)
+            team.put("assistants", listMangakaAssistantsBySeries(seriesId));
+            
+            // Editorial Board
+            List<Map<String, Object>> boardMembers = new ArrayList<>();
+            try (PreparedStatement ps = conn.prepareStatement(boardSql)) {
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        Map<String, Object> member = new HashMap<>();
+                        member.put("id", rs.getLong("id"));
+                        member.put("username", rs.getString("username"));
+                        member.put("fullName", rs.getString("fullName"));
+                        member.put("email", rs.getString("email"));
+                        boardMembers.add(member);
+                    }
+                }
+            }
+            team.put("editorialBoard", boardMembers);
+            
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot load series team", ex);
+        }
+        
+        return team;
+    }
     public List<ChapterSummary> listChapters() {
         String sql = "SELECT id, seriesId, chapterNumber, title, status, submissionDeadline, publicationDate, completionPct, atRisk FROM Chapter ORDER BY createdAt DESC";
         List<ChapterSummary> rows = new ArrayList<ChapterSummary>();

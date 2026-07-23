@@ -38,6 +38,14 @@ public class DecisionService {
         return decisionRepository.listSessions();
     }
 
+    public List<Map<String, Object>> listDecisionSessionsGroupedBySeries(AuthenticatedUser user) {
+        // Only ADMIN and EDITORIAL_BOARD can view decisions
+        if (!user.hasRole("ADMIN") && !user.hasRole("EDITORIAL_BOARD")) {
+            throw new BusinessRuleException("Only ADMIN/EDITORIAL_BOARD can view decisions");
+        }
+        return decisionRepository.listSessionsGroupedBySeries();
+    }
+
     public Map<String, Object> getDecisionSession(long sessionId, AuthenticatedUser user) {
         // Only ADMIN and EDITORIAL_BOARD can view decision detail
         if (!user.hasRole("ADMIN") && !user.hasRole("EDITORIAL_BOARD")) {
