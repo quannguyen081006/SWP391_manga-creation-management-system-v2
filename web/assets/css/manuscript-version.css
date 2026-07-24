@@ -208,3 +208,7 @@
     .workspace-pages { padding: var(--spacing-4); }
     .annotation-summary { flex-direction: column; }
 }
+
+/* Trạng thái hạn review render sẵn từ server thay cho đồng hồ JS (review-inbox.js cũ). */
+.countdown { font-variant-numeric: tabular-nums; }
+.countdown-overdue { color: #dc2626; font-weight: 600; }

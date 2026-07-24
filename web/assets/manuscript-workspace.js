@@ -534,64 +534,6 @@ async function handleAnnotationSubmit(event) {
     }
 }
 
-// Resolve annotation
-async function resolveAnnotation(annotationId) {
-    if (!confirm('Are you sure you want to resolve this annotation?')) {
-        return;
-    }
-
-    try {
-        const response = await fetch(`${window.contextPath}/api/v1/annotations/${annotationId}/resolve`, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            // Reload page to show updated annotation
-            window.location.reload();
-        } else {
-            alert('Failed to resolve annotation: ' + result.message);
-        }
-    } catch (error) {
-        console.error('Error resolving annotation:', error);
-        alert('Error resolving annotation. Please try again.');
-    }
-}
-
-// Dismiss annotation
-async function dismissAnnotation(annotationId) {
-    if (!confirm('Are you sure you want to dismiss this annotation?')) {
-        return;
-    }
-
-    try {
-        const response = await fetch(`${window.contextPath}/api/v1/annotations/${annotationId}/dismiss`, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            // Reload page to show updated annotation
-            window.location.reload();
-        } else {
-            alert('Failed to dismiss annotation: ' + result.message);
-        }
-    } catch (error) {
-        console.error('Error dismissing annotation:', error);
-        alert('Error dismissing annotation. Please try again.');
-    }
-}
-
 // Delete annotation
 async function deleteAnnotation(annotationId) {
     if (!confirm('Are you sure you want to delete this annotation? This action cannot be undone.')) {
@@ -621,49 +563,6 @@ async function deleteAnnotation(annotationId) {
     }
 }
 
-// Reopen annotation (for resolved/dismissed annotations)
-async function reopenAnnotation(annotationId) {
-    if (!confirm('Are you sure you want to reopen this annotation?')) {
-        return;
-    }
-
-    // This would require a reopen endpoint in the API
-    // For now, alert the user
-    alert('Reopen annotation feature not yet implemented');
-}
-
-// Add reply to annotation
-async function addReply(annotationId) {
-    const replyContent = prompt('Enter your reply:');
-    if (!replyContent || replyContent.trim() === '') {
-        return;
-    }
-
-    try {
-        const response = await fetch(`${window.contextPath}/api/v1/annotations/${annotationId}/replies`, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                content: replyContent
-            })
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            // Reload page to show new reply
-            window.location.reload();
-        } else {
-            alert('Failed to add reply: ' + result.message);
-        }
-    } catch (error) {
-        console.error('Error adding reply:', error);
-        alert('Error adding reply. Please try again.');
-    }
-}
 function focusAnnotation(
         annotationId,
         pageId,

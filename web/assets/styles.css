@@ -476,6 +476,14 @@ a { color: inherit; text-decoration: none; }
 .board-decision-card.is-approve.is-selected { border-color: #10b981; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14); }
 .board-decision-card.is-revise.is-selected { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.16); }
 .board-decision-card.is-reject.is-selected { border-color: #ef4444; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14); }
+/* Highlight thẻ đang chọn bằng CSS thuần thay cho JS (proposal.js cũ). */
+.board-decision-card:has(input[type="radio"]:checked) {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+.board-decision-card.is-approve:has(input:checked) { border-color: #10b981; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14); }
+.board-decision-card.is-revise:has(input:checked) { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.16); }
+.board-decision-card.is-reject:has(input:checked) { border-color: #ef4444; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14); }
 .board-vote-note-field {
     display: grid;
     gap: 7px;

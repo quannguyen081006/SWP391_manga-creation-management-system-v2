@@ -1,7 +1,6 @@
 <%@page contentType="text/html" pageEncoding="UTF-8"%>
 <%@taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
 <%@taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
-<%@taglib uri="http://java.sun.com/jsp/jstl/functions" prefix="fn" %>
 <!DOCTYPE html>
 <html>
 <head>
@@ -124,9 +123,10 @@
                                                     <c:when test="${v.voteDecision == 'REJECTED'}">
                                                         <span class="proposal-vote-label reject">Reject</span>
                                                         <c:if test="${not empty v.voteNote}">
-                                                            <button type="button"
-                                                                    class="btn small reject-reason-button"
-                                                                    data-reject-reason="${fn:escapeXml(v.voteNote)}">Lý do</button>
+                                                            <details class="reject-reason-details">
+                                                                <summary class="btn small reject-reason-button">Lý do</summary>
+                                                                <p class="reject-reason-text"><c:out value="${v.voteNote}" /></p>
+                                                            </details>
                                                         </c:if>
                                                     </c:when>
                                                     <c:otherwise>-</c:otherwise>
@@ -267,7 +267,6 @@
     <p><a href="${pageContext.request.contextPath}/main/proposals">Back to list</a></p>
 </main>
 
-<script src="${pageContext.request.contextPath}/assets/js/proposal.js"></script>
 <jsp:include page="../common/footer.jsp" />
 </body>
 </html>

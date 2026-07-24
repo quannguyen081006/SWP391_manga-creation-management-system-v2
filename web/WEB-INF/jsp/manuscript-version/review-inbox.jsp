@@ -27,7 +27,7 @@
                         <th>Chapter</th>
                         <th>Version</th>
                         <th>Status</th>
-                        <th>Time Left</th>
+                        <th>Due</th>
                         <th>Mangaka</th>
                         <th>Submitted At</th>
                         <th>Action</th>
@@ -61,8 +61,11 @@
                             </td>
                             <td>
                                 <c:choose>
-                                    <c:when test="${not empty remainingSecondsMap[version.id]}">
-                                        <span class="countdown" data-version-id="${version.id}" data-remaining="${remainingSecondsMap[version.id]}">Loading...</span>
+                                    <c:when test="${urgencyMap[version.id] == 'OVERDUE'}">
+                                        <span class="countdown countdown-overdue">OVERDUE</span>
+                                    </c:when>
+                                    <c:when test="${not empty dueAtMap[version.id]}">
+                                        <span class="countdown"><c:out value="${dueAtMap[version.id]}" /></span>
                                     </c:when>
                                     <c:otherwise>
                                         <span class="text-muted">—</span>
@@ -87,5 +90,4 @@
         </c:if>
     </div>
 </body>
-<script src="${pageContext.request.contextPath}/assets/js/review-inbox.js"></script>
 </html>

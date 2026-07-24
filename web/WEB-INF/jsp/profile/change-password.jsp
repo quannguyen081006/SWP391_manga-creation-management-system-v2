@@ -101,7 +101,6 @@
     </section>
 </div>
 
-<script src="${pageContext.request.contextPath}/assets/js/profile.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         var toggles = document.querySelectorAll('.toggle-password');

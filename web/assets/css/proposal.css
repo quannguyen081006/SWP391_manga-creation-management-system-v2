@@ -11,7 +11,10 @@
 .proposal-vote-label.revise { color: var(--warning-color); }
 .proposal-vote-label.reject { color: var(--danger-color); }
 .proposal-voting-pending { color: #9ca3af; }
-.reject-reason-button { margin-left: 6px; padding: 2px 8px; font-size: 11px; }
+.reject-reason-button { margin-left: 6px; padding: 2px 8px; font-size: 11px; cursor: pointer; list-style: none; display: inline-block; }
+.reject-reason-button::-webkit-details-marker { display: none; }
+.reject-reason-details[open] .reject-reason-button { margin-bottom: 6px; }
+.reject-reason-text { margin: 0; padding: 6px 8px; font-size: 12px; background: #fef2f2; border-radius: 6px; white-space: pre-wrap; }
 .proposal-form-actions { display: flex; gap: 10px; margin-top: var(--spacing-2); }
 
 .proposal-settings-panel {

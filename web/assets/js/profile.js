@@ -1,6 +1,10 @@
 (function () {
     'use strict';
 
+    // Hiển thị ngay ảnh vừa chọn lên khung avatar (preview), trước khi bấm Save.
+    // Đây là việc bắt buộc phải dùng JS: HTML thuần không đọc được file trên máy
+    // để hiện trước khi upload. Việc kiểm tra định dạng/dung lượng thật sự vẫn do
+    // server (ProfileController) quyết định — đoạn dưới chỉ là báo sớm cho tiện.
     var input = document.getElementById('avatar');
     var preview = document.getElementById('avatarPreview');
     var empty = document.getElementById('avatarEmpty');
