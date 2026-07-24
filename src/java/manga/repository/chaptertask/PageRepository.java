@@ -46,7 +46,7 @@ import org.springframework.stereotype.Repository;
  *     - delete(pageId)              : deletes a slot, blocked if there is an active task
  *
  *  7. STAGE PROGRESSION (drawing pipeline)
- *     - resolveNextStage()          : computes the next stage, validates that it doesn't move backwards
+ *     - resolveNextStage()          : computes the next stage, rejects only backwards moves
  *     - resolveTaskCompletionStage(): computes the completion stage based on taskType
  *     - normalizeStage()            : normalizes the stage name (e.g. "INK" -> "INKING")
  *     Stage order: SKETCHING -> INKING -> COLORING -> SCREENTONE -> LETTERING
@@ -584,7 +584,9 @@ public class PageRepository {
 
     /**
      * Computes the next stage based on the current stage and the requested stage.
-     * Does not allow moving the stage backwards or skipping more than one step.
+     * Only moving backwards is rejected; a Mangaka may mark several stages done in one upload
+     * (e.g. sketch + ink together), which is what the upload modal's stage picker offers and what
+     * the very first upload of a page has always allowed.
      */
     private String resolveNextStage(long pageId, String requestedStage) {
         String current = findCurrentCompletedStage(pageId);
@@ -599,9 +601,6 @@ public class PageRepository {
         int requestedIndex = PAGE_STAGES.indexOf(normalized);
         if (requestedIndex < currentIndex) {
             throw new IllegalArgumentException("Page stage cannot move backwards");
-        }
-        if (requestedIndex > currentIndex + 1) {
-            throw new IllegalArgumentException("Page stage must follow SKETCHING -> INKING -> COLORING -> SCREENTONE -> LETTERING");
         }
         return normalized;
     }
