@@ -164,8 +164,11 @@
     }
 
     /**
-     * Applies the width and color to the progress bar fill.
+     * Applies the width to the progress bar fill.
      * Uses a data attribute instead of inline style to avoid CSP issues when rendering an HTML string.
+     * Colour normally comes from the shared .progress is-low/is-mid/is-done classes in styles.css;
+     * data-chapter-progress-color is only for bars that opt out of those thresholds (the violet
+     * overall-progress bar, which is an aggregate rather than a per-chapter signal).
      * Called after every table render.
      */
     function applyChapterProgressStyles(root) {
@@ -173,8 +176,11 @@
         var fills = scope.querySelectorAll('[data-chapter-progress]');
         for (var i = 0; i < fills.length; i++) {
             var fill = fills[i];
+            var overrideColor = fill.getAttribute('data-chapter-progress-color');
             fill.style.width = fill.getAttribute('data-chapter-progress') + '%';
-            fill.style.background = fill.getAttribute('data-chapter-progress-color') || '#8b5cf6';
+            if (overrideColor) {
+                fill.style.background = overrideColor;
+            }
         }
     }
 
@@ -555,8 +561,8 @@
             var overdue = isChapterOverdue(ch);
             var deadlineText = formatDeadlineCell(ch.submissionDeadline, done, overdue);
             var seriesName = (seriesById[String(ch.seriesId)] || {}).title || ('#' + ch.seriesId);
-            // Màu progress bar: xanh ≥100%, vàng ≥50%, đỏ <50%
-            var progressColor = progress >= 100 ? '#10b981' : (progress >= 50 ? '#f59e0b' : '#ef4444');
+            // Màu progress bar (class dùng chung với trang Series): xanh 100%, vàng 50-99%, đỏ <50%
+            var progressClass = progress >= 100 ? 'is-done' : (progress >= 50 ? 'is-mid' : 'is-low');
             var seriesCell = showSeries
                 ? '<td class="chapter-series-cell" title="' + escapeHtml(seriesName) + '">' + escapeHtml(seriesName) + '</td>'
                 : '';
@@ -573,8 +579,8 @@
                 + '<div class="chapter-progress-meta">'
                 + '<span class="chapter-progress-percent">' + Math.round(progress) + '%</span>'
                 + '</div>'
-                + '<div class="progress chapter-progress-bar' + (progress < 40 ? ' red' : '') + '">'
-                + '<span class="chapter-progress-fill" data-chapter-progress="' + progress + '" data-chapter-progress-color="' + progressColor + '"></span></div>'
+                + '<div class="progress chapter-progress-bar ' + progressClass + '">'
+                + '<span class="chapter-progress-fill" data-chapter-progress="' + progress + '"></span></div>'
                 + '</td>'
                 + '<td>' + renderAtRiskCell(ch) + '</td>'
                 + actionsCell

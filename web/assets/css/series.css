@@ -1,2 +1,11 @@
 .series-message { margin-bottom: var(--spacing-4); }
 .series-card-head { margin-bottom: var(--spacing-2); }
+
+/* Legend for the progress colours; swatches mirror the .progress is-* classes in styles.css. */
+.series-legend { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-3) var(--spacing-4); margin-bottom: var(--spacing-4); font-size: 12px; color: var(--muted); }
+.series-legend-title { font-weight: 600; }
+.series-legend-item { display: flex; align-items: center; gap: 6px; }
+.series-legend-swatch { display: inline-block; width: 22px; height: 8px; border-radius: 999px; }
+.series-legend-swatch-low { background: linear-gradient(90deg, #ef4444, #dc2626); }
+.series-legend-swatch-mid { background: linear-gradient(90deg, #f59e0b, #f97316); }
+.series-legend-swatch-done { background: linear-gradient(90deg, #10b981, #059669); }
