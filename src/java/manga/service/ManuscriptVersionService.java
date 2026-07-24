@@ -17,7 +17,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.sql.DataSource;
-import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -61,6 +60,9 @@ public class ManuscriptVersionService {
 
     @Autowired
     private DataSource dataSource;
+
+    @Autowired
+    private manga.repository.ProductionRepository productionRepository;
 
     /**
      * Validate that manuscript version can be edited. Centralized immutability
@@ -952,5 +954,49 @@ public class ManuscriptVersionService {
         // Implementation: Calculate SHA-256 checksum
         // For now, return placeholder
         return "placeholder-checksum-" + System.currentTimeMillis();
+    }
+
+    // ============================================================
+    // WORKSPACE UI ENHANCEMENT METHODS
+    // ============================================================
+
+    /**
+     * Build ResponsiblePeopleDTO for manuscript workspace.
+     * Aggregates mangaka, tantou editor, and editorial board information.
+     */
+    public manga.dto.ResponsiblePeopleDTO buildResponsiblePeopleDTO(Long chapterId) {
+        manga.model.chaptertask.ChapterSummary chapter = chapterRepository.findById(chapterId);
+        if (chapter == null) {
+            throw new BusinessRuleException("Chapter not found");
+        }
+
+        java.util.Map<String, Object> seriesTeam = productionRepository.getSeriesTeam(chapter.getSeriesId());
+        manga.dto.ResponsiblePeopleDTO dto = new manga.dto.ResponsiblePeopleDTO();
+
+        // Extract mangaka information
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> mangaka = (java.util.Map<String, Object>) seriesTeam.get("leadMangaka");
+        if (mangaka != null) {
+            dto.setMangakaName((String) mangaka.get("fullName"));
+            dto.setMangakaEmail((String) mangaka.get("email"));
+        }
+
+        // Extract tantou editor information
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> tantou = (java.util.Map<String, Object>) seriesTeam.get("tantouEditor");
+        if (tantou != null) {
+            dto.setTantouEditorName((String) tantou.get("fullName"));
+            dto.setTantouEditorEmail((String) tantou.get("email"));
+        }
+
+        // Extract editorial board information
+        @SuppressWarnings("unchecked")
+        java.util.List<java.util.Map<String, Object>> editorialBoard = 
+            (java.util.List<java.util.Map<String, Object>>) seriesTeam.get("editorialBoard");
+        if (editorialBoard != null && !editorialBoard.isEmpty()) {
+            dto.setEditorialBoardName("Editorial Team");
+        }
+
+        return dto;
     }
 }

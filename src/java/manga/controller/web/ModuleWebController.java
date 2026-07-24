@@ -1051,6 +1051,10 @@ public class ModuleWebController {
         model.addAttribute("isReadonly", isReadonly);
         model.addAttribute("productionLocked", manuscriptVersionService.isProductionLocked(version.getChapterId()));
 
+        // Build and add workspace enhancement DTOs
+        manga.dto.ResponsiblePeopleDTO responsiblePeople = manuscriptVersionService.buildResponsiblePeopleDTO(version.getChapterId());
+        model.addAttribute("responsiblePeople", responsiblePeople);
+        
         return "manuscript-version/workspace";
     }
 

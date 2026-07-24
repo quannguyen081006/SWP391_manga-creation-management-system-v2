@@ -352,6 +352,66 @@ public class ProductionRepository {
         
         return team;
     }
+
+    /**
+     * Get series details by ID.
+     * Used for workspace header and timeline construction.
+     */
+    public Map<String, Object> getSeriesById(long seriesId) {
+        String sql = "SELECT s.id, s.title, s.genre, s.status, s.proposalId, s.mangakaId, s.tantouEditorId, s.publicationDate, s.createdAt "
+            + "FROM Series s WHERE s.id = ?";
+        
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, seriesId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    Map<String, Object> series = new HashMap<>();
+                    series.put("id", rs.getLong("id"));
+                    series.put("title", rs.getString("title"));
+                    series.put("genre", rs.getString("genre"));
+                    series.put("status", rs.getString("status"));
+                    series.put("proposalId", rs.getLong("proposalId"));
+                    series.put("mangakaId", rs.getLong("mangakaId"));
+                    series.put("tantouEditorId", rs.getObject("tantouEditorId") != null ? rs.getLong("tantouEditorId") : null);
+                    series.put("publicationDate", rs.getDate("publicationDate"));
+                    series.put("createdAt", rs.getTimestamp("createdAt"));
+                    return series;
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot load series", ex);
+        }
+        return null;
+    }
+
+    /**
+     * Get proposal details by series ID.
+     * Used for timeline construction to show proposal approval status.
+     */
+    public Map<String, Object> getProposalBySeriesId(long seriesId) {
+        String sql = "SELECT p.id, p.title, p.status, p.submittedAt, p.rejectedAt "
+            + "FROM Proposal p JOIN Series s ON s.proposalId = p.id WHERE s.id = ?";
+        
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, seriesId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    Map<String, Object> proposal = new HashMap<>();
+                    proposal.put("id", rs.getLong("id"));
+                    proposal.put("title", rs.getString("title"));
+                    proposal.put("status", rs.getString("status"));
+                    proposal.put("submittedAt", rs.getTimestamp("submittedAt"));
+                    proposal.put("rejectedAt", rs.getTimestamp("rejectedAt"));
+                    return proposal;
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot load proposal", ex);
+        }
+        return null;
+    }
     public List<ChapterSummary> listChapters() {
         String sql = "SELECT id, seriesId, chapterNumber, title, status, submissionDeadline, publicationDate, completionPct, atRisk FROM Chapter ORDER BY createdAt DESC";
         List<ChapterSummary> rows = new ArrayList<ChapterSummary>();

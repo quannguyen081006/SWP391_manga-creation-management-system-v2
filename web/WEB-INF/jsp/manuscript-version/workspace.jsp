@@ -105,6 +105,24 @@
 
 
                 <div class="sidebar-section">
+                    <div class="sidebar-title">Responsible People</div>
+                    <div class="dashboard-stat">
+                        <span class="stat-label">Mangaka</span>
+                        <span class="stat-value">${responsiblePeople.mangakaName}</span>
+                    </div>
+                    <div class="dashboard-stat">
+                        <span class="stat-label">Tantou Editor</span>
+                        <span class="stat-value">${responsiblePeople.tantouEditorName}</span>
+                    </div>
+                    <div class="dashboard-stat">
+                        <span class="stat-label">Editorial Board</span>
+                        <span class="stat-value">${responsiblePeople.editorialBoardName}</span>
+                    </div>
+                </div>
+
+
+
+                <div class="sidebar-section">
 
                     <div class="sidebar-title">Version History</div>
 
@@ -498,7 +516,6 @@
             </div>
 
         </div>
-
 
 
         <!-- Reject Modal -->
