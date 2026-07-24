@@ -51,7 +51,6 @@ DELETE FROM [dbo].[PageTaskPageStage]
 DELETE FROM [dbo].[SalaryPeriod]
 DELETE FROM [dbo].[AssistantSalaryRecord]
 DELETE FROM [dbo].[RankingCsvUpload]
-
 SET @sql = N'';
 SELECT @sql += 'ALTER TABLE ' + QUOTENAME(s.name) + '.' + QUOTENAME(t.name) + ' WITH CHECK CHECK CONSTRAINT ALL;' + CHAR(10)
 FROM sys.tables t JOIN sys.schemas s ON t.schema_id = s.schema_id;

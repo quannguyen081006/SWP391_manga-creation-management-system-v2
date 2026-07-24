@@ -356,7 +356,7 @@ public class ModuleWebController {
     // POST /main/tasks/{id}/assistant-status
     // - Param: status (string)
     // - Goi pageTaskService.updateStatusByAssistant(id, user, status)
-    // - Flow hop le: Pending -> In-Progress -> Submitted (service enforce)
+    // - Flow hop le: In-Progress -> Submitted (service enforce)
     // - Thanh cong: redirect task detail
     // - Loi: render lai task/detail kem error
     // ============================================================
