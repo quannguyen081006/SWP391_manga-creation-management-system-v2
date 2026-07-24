@@ -32,7 +32,7 @@
                             <c:if test="${r.isBottomTwenty}">
                                 <span class="bottom-twenty-badge">⚠️ Decision Review Candidate</span>
                             </c:if>
-                            <button class="btn-view-team" onclick="viewTeam(${r.seriesId}, '${r.seriesTitle}')" style="margin-left: 10px; padding: 4px 12px; font-size: 12px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer;">View Team</button>
+                            <button class="btn-view-team" onclick="viewTeam(${r.seriesId}, '${r.seriesTitle}')">View Team</button>
                         </div>
                     </div>
                     <div class="series-stats">
@@ -109,10 +109,11 @@
 <jsp:include page="../common/footer.jsp" />
 
 <!-- Team Modal -->
-<div id="team-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); justify-content: center; align-items: center; z-index: 1000;">
-    <div style="background: white; padding: 30px; border-radius: 12px; max-width: 600px; max-height: 80vh; overflow-y: auto; position: relative;">
-        <button onclick="closeTeamModal()" style="position: absolute; top: 15px; right: 15px; background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600;">✕ Close</button>
-        <h3 id="team-modal-title" style="margin: 0 0 20px 0; color: #2c3e50; font-size: 24px;">Series Team</h3>
+<div id="team-modal" class="team-modal">
+    <div class="team-modal-panel">
+        <button class="team-modal-close" onclick="closeTeamModal()">✕ Close</button>
+        <h3 id="team-modal-title" class="team-modal-title">Series Team</h3>
+        <p class="team-modal-subtitle">Everyone assigned to this series, grouped by role.</p>
         <div id="team-modal-content"></div>
     </div>
 </div>
@@ -120,70 +121,70 @@
 <script>
 function viewTeam(seriesId, seriesTitle) {
     document.getElementById('team-modal-title').textContent = 'Team: ' + seriesTitle;
-    document.getElementById('team-modal-content').innerHTML = '<p style="color: #7f8c8d;">Loading team information...</p>';
+    document.getElementById('team-modal-content').innerHTML = '<p class="text-muted">Loading team information...</p>';
     document.getElementById('team-modal').style.display = 'flex';
-    
+
     fetch('${pageContext.request.contextPath}/api/v1/ranking/series/' + seriesId + '/team')
         .then(response => response.json())
         .then(data => {
             if (data.success && data.data) {
                 renderTeam(data.data);
             } else {
-                document.getElementById('team-modal-content').innerHTML = '<p style="color: #e74c3c;">Failed to load team information.</p>';
+                document.getElementById('team-modal-content').innerHTML = '<p class="text-danger">Failed to load team information.</p>';
             }
         })
         .catch(error => {
-            document.getElementById('team-modal-content').innerHTML = '<p style="color: #e74c3c;">Error loading team: ' + error.message + '</p>';
+            document.getElementById('team-modal-content').innerHTML = '<p class="text-danger">Error loading team: ' + error.message + '</p>';
         });
+}
+
+// First letter of the member's name, shown inside the round avatar badge.
+function initialOf(fullName) {
+    var trimmed = (fullName || '?').trim();
+    return trimmed.length > 0 ? trimmed.charAt(0).toUpperCase() : '?';
+}
+
+// Builds one "role-block" section: colored left border, a heading (with an
+// optional count badge), and one avatar + name row per person. modifierClass
+// picks the color from ranking.css (.team-role-block.lead / .assistants /
+// .board; tantou editor uses the block's default indigo, so it gets none).
+function renderTeamRoleBlock(icon, roleName, members, modifierClass) {
+    var blockClass = 'team-role-block' + (modifierClass ? ' ' + modifierClass : '');
+    var html = '<div class="' + blockClass + '">';
+    html += '<h4 class="team-role-heading">' + icon + ' ' + roleName;
+    if (members.length > 1) {
+        html += '<span class="team-role-count">' + members.length + '</span>';
+    }
+    html += '</h4>';
+    members.forEach(function (member) {
+        html += '<div class="team-member-row">';
+        html += '<span class="team-avatar">' + initialOf(member.fullName) + '</span>';
+        html += '<span>';
+        html += '<span class="team-member-name">' + escapeHtml(member.fullName) + '</span>';
+        html += '<span class="team-member-meta">ID: #' + member.id + ' &middot; ' + escapeHtml(member.username) + '</span>';
+        html += '</span>';
+        html += '</div>';
+    });
+    html += '</div>';
+    return html;
 }
 
 function renderTeam(team) {
     let html = '';
-    
-    // Lead Mangaka
+
     if (team.leadMangaka) {
-        html += '<div style="margin-bottom: 20px; padding: 15px; background: linear-gradient(to right, #fff9e6, #fff); border-left: 4px solid #ffd700; border-radius: 4px;">';
-        html += '<h4 style="margin: 0 0 10px 0; color: #d4af00; font-size: 16px;">⭐ Lead Mangaka</h4>';
-        html += '<div style="color: #2c3e50; font-weight: 600;">' + escapeHtml(team.leadMangaka.fullName) + '</div>';
-        html += '<div style="color: #7f8c8d; font-size: 13px;">ID: #' + team.leadMangaka.id + ' | ' + escapeHtml(team.leadMangaka.username) + '</div>';
-        html += '</div>';
+        html += renderTeamRoleBlock('⭐', 'Lead Mangaka', [team.leadMangaka], 'lead');
     }
-    
-    // Tantou Editor
     if (team.tantouEditor) {
-        html += '<div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-left: 4px solid #667eea; border-radius: 4px;">';
-        html += '<h4 style="margin: 0 0 10px 0; color: #667eea; font-size: 16px;">📝 Tantou Editor</h4>';
-        html += '<div style="color: #2c3e50; font-weight: 600;">' + escapeHtml(team.tantouEditor.fullName) + '</div>';
-        html += '<div style="color: #7f8c8d; font-size: 13px;">ID: #' + team.tantouEditor.id + ' | ' + escapeHtml(team.tantouEditor.username) + '</div>';
-        html += '</div>';
+        html += renderTeamRoleBlock('📝', 'Tantou Editor', [team.tantouEditor], '');
     }
-    
-    // Assistants
     if (team.assistants && team.assistants.length > 0) {
-        html += '<div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-left: 4px solid #27ae60; border-radius: 4px;">';
-        html += '<h4 style="margin: 0 0 10px 0; color: #27ae60; font-size: 16px;">🎨 Assistants (' + team.assistants.length + ')</h4>';
-        team.assistants.forEach(function(assistant) {
-            html += '<div style="padding: 8px 0; border-bottom: 1px solid #e9ecef; color: #2c3e50;">';
-            html += '<span style="font-weight: 600;">' + escapeHtml(assistant.fullName) + '</span>';
-            html += '<span style="color: #7f8c8d; font-size: 13px; margin-left: 10px;">ID: #' + assistant.id + ' | ' + escapeHtml(assistant.username) + '</span>';
-            html += '</div>';
-        });
-        html += '</div>';
+        html += renderTeamRoleBlock('🎨', 'Assistants', team.assistants, 'assistants');
     }
-    
-    // Editorial Board
     if (team.editorialBoard && team.editorialBoard.length > 0) {
-        html += '<div style="padding: 15px; background: #f8f9fa; border-left: 4px solid #9b59b6; border-radius: 4px;">';
-        html += '<h4 style="margin: 0 0 10px 0; color: #9b59b6; font-size: 16px;">⚖️ Editorial Board (' + team.editorialBoard.length + ')</h4>';
-        team.editorialBoard.forEach(function(member) {
-            html += '<div style="padding: 8px 0; border-bottom: 1px solid #e9ecef; color: #2c3e50;">';
-            html += '<span style="font-weight: 600;">' + escapeHtml(member.fullName) + '</span>';
-            html += '<span style="color: #7f8c8d; font-size: 13px; margin-left: 10px;">ID: #' + member.id + ' | ' + escapeHtml(member.username) + '</span>';
-            html += '</div>';
-        });
-        html += '</div>';
+        html += renderTeamRoleBlock('⚖️', 'Editorial Board', team.editorialBoard, 'board');
     }
-    
+
     document.getElementById('team-modal-content').innerHTML = html;
 }
 

@@ -367,6 +367,152 @@
 .csv-upload-icon { font-size: 28px; }
 .csv-upload-details { display: flex; flex-direction: column; gap: 4px; }
 
+/* --- "View Team" modal (results.jsp) --- */
+.btn-view-team {
+    margin-left: 10px;
+    padding: 4px 12px;
+    color: #fff;
+    background: #667eea;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    cursor: pointer;
+}
+.btn-view-team:hover { background: #5568d3; }
+
+.team-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    justify-content: center;
+    align-items: center;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(2px);
+    z-index: 1000;
+}
+
+@keyframes team-modal-pop-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.team-modal-panel {
+    position: relative;
+    max-width: 600px;
+    max-height: 80vh;
+    padding: 32px;
+    overflow-y: auto;
+    background: var(--surface-color);
+    border-radius: 16px;
+    box-shadow: 0 20px 50px rgba(15, 23, 42, 0.35);
+    animation: team-modal-pop-in 0.18s ease-out;
+}
+
+.team-modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    padding: 8px 16px;
+    color: #fff;
+    background: var(--danger-color);
+    border: none;
+    border-radius: 999px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform var(--transition-fast, 0.15s), box-shadow var(--transition-fast, 0.15s);
+}
+.team-modal-close:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(220, 38, 38, 0.35);
+}
+
+.team-modal-title {
+    margin: 0 0 4px;
+    padding-right: 90px;
+    color: #2c3e50;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.team-modal-subtitle {
+    margin: 0 0 22px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+/* One colored block per role in the team (lead mangaka, tantou editor,
+   assistants, editorial board). Same "left border + tinted background"
+   language as .period-card and .ranking-card elsewhere in this module. */
+.team-role-block {
+    margin-bottom: 16px;
+    padding: 16px 18px;
+    border-left: 4px solid #667eea;
+    border-radius: var(--radius-sm);
+    background: var(--neutral-100);
+    box-shadow: var(--shadow-sm);
+}
+.team-role-block:last-child { margin-bottom: 0; }
+
+.team-role-block.lead {
+    border-left-color: #ffd700;
+    background: linear-gradient(to right, #fff9e6, #fff);
+}
+.team-role-block.assistants { border-left-color: var(--success-color); }
+.team-role-block.board { border-left-color: #9b59b6; }
+
+.team-role-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #667eea;
+}
+.team-role-block.lead .team-role-heading { color: #d4af00; }
+.team-role-block.assistants .team-role-heading { color: var(--success-color); }
+.team-role-block.board .team-role-heading { color: #9b59b6; }
+
+.team-role-count {
+    padding: 1px 9px;
+    color: inherit;
+    background: rgba(15, 23, 42, 0.06);
+    border-radius: 999px;
+    font-size: 12px;
+}
+
+.team-member-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 6px;
+    color: #2c3e50;
+    border-radius: var(--radius-sm);
+    transition: background-color var(--transition-fast, 0.15s);
+}
+.team-member-row:not(:last-child) { border-bottom: 1px solid rgba(15, 23, 42, 0.06); }
+.team-member-row:hover { background: rgba(255, 255, 255, 0.7); }
+
+.team-avatar {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    color: #fff;
+    background: #667eea;
+    border-radius: 50%;
+    font-size: 13px;
+    font-weight: 700;
+}
+.team-role-block.lead .team-avatar { background: #d4af00; }
+.team-role-block.assistants .team-avatar { background: var(--success-color); }
+.team-role-block.board .team-avatar { background: #9b59b6; }
+
+.team-member-name { font-weight: 600; }
+.team-member-meta { display: block; color: var(--text-muted); font-size: 12px; }
+
 /* --- CSV viewer (csv-view.jsp) --- */
 .csv-meta {
     display: flex;
