@@ -1,9 +1,11 @@
 package manga.web.interceptor;
 
 import manga.model.AuthenticatedUser;
+import manga.web.ActiveSessionRegistry;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.ModelAndView;
 
@@ -36,6 +38,13 @@ import org.springframework.web.servlet.ModelAndView;
 public class AuthInterceptor implements HandlerInterceptor {
 
     /**
+     * Sổ ghi phiên hợp lệ duy nhất của mỗi tài khoản. Được tiêm vì bean này khai
+     * báo trong dispatcher-servlet.xml nằm trong ngữ cảnh có bật xử lý annotation.
+     */
+    @Autowired
+    private ActiveSessionRegistry activeSessionRegistry;
+
+    /**
      * Chạy trước mọi method của controller.
      *
      * @return {@code true} = cho request đi tiếp vào controller.
@@ -66,6 +75,25 @@ public class AuthInterceptor implements HandlerInterceptor {
                 writeJsonError(response, HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
             } else {
                 response.sendRedirect(context + "/login");
+            }
+            return false;
+        }
+
+        // BƯỚC 1b - MỘT TÀI KHOẢN CHỈ MỘT PHIÊN: session hiện tại có còn là phiên
+        // hợp lệ của tài khoản không? Nếu tài khoản vừa được đăng nhập ở nơi khác,
+        // phiên này đã bị đá khỏi registry -> huỷ nó và bắt đăng nhập lại.
+        HttpSession session = request.getSession(false);
+        String sessionId = session == null ? null : session.getId();
+        if (!activeSessionRegistry.isCurrent(user.getId(), sessionId)) {
+            if (session != null) {
+                session.invalidate();
+            }
+            if (uri.contains("/api/v1/")) {
+                writeJsonError(response, HttpServletResponse.SC_UNAUTHORIZED, "Session ended: signed in elsewhere");
+            } else {
+                // Kèm cờ để trang login có thể hiện thông báo "tài khoản vừa đăng
+                // nhập ở nơi khác" thay vì để người dùng bối rối không rõ vì sao.
+                response.sendRedirect(context + "/login?reason=session_replaced");
             }
             return false;
         }

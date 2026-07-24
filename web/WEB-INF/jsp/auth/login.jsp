@@ -39,6 +39,9 @@
             <c:if test="${not empty error}">
                 <div class="alert error">${error}</div>
             </c:if>
+            <c:if test="${param.reason == 'session_replaced'}">
+                <div class="alert error">Tài khoản này vừa được đăng nhập ở nơi khác. Bạn đã bị đăng xuất khỏi phiên hiện tại.</div>
+            </c:if>
 
             <form method="post" action="${pageContext.request.contextPath}/main/login" class="login-form" novalidate>
                 <label class="login-label" for="username">Username</label>
