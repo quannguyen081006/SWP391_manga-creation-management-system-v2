@@ -71,8 +71,13 @@ public class PageTaskRepository {
     // [1] HẰNG SỐ & TRẠNG THÁI
     // ============================================================
 
-    /** Số ngày buffer tối thiểu giữa dueDate của task và submissionDeadline của chapter (BR-34) */
-    private static final int TASK_REJECT_SERIES_DEADLINE_BUFFER_DAYS = 3;
+    /**
+     * Số ngày buffer tối thiểu giữa dueDate của task và submissionDeadline của chapter (BR-34).
+     * 0 = task được phép due đúng ngày deadline của chapter.
+     * Lưu ý: hằng số này cũng là trần khi gia hạn dueDate lúc reject (xem extendedRejectDueDate).
+     * Nếu đổi giá trị, đổi luôn TASK_DUE_BUFFER_DAYS trong chapter-detail.js và task-list.js.
+     */
+    private static final int TASK_REJECT_SERIES_DEADLINE_BUFFER_DAYS = 0;
 
     /** Các trạng thái "đã đóng" — task ở các trạng thái này không còn block việc tái sử dụng page range */
     private static final String SQL_CLOSED_TASK_STATUSES = "'APPROVED','DELETED','REASSIGNED','CANCELLED'";
@@ -1171,7 +1176,7 @@ public class PageTaskRepository {
 
     /**
      * Tính dueDate mới sau khi reject: cộng thêm 1 ngày, nhưng không vượt quá
-     * (seriesDeadline - 3 ngày). Nếu không còn đủ buffer, giữ nguyên dueDate cũ.
+     * (seriesDeadline trừ đi số ngày buffer). Nếu không còn đủ buffer, giữ nguyên dueDate cũ.
      */
     private Date extendedRejectDueDate(Date currentDueDate, Date seriesDeadline) {
         if (currentDueDate == null || seriesDeadline == null) {
@@ -1415,11 +1420,12 @@ public class PageTaskRepository {
         }
         Date latestDueDate = findLatestTaskDueDate(chapterId);
         if (dueDate.after(latestDueDate)) {
-            throw new IllegalArgumentException("Task dueDate must be at least 3 days before chapter submissionDeadline (BR-34)");
+            // Nêu thẳng ngày tối đa thay vì số ngày buffer, để thông báo không lệch khi buffer đổi
+            throw new IllegalArgumentException("Task dueDate must not be after " + latestDueDate + " (BR-34)");
         }
     }
 
-    /** Trả về ngày tối đa cho dueDate của task: submissionDeadline - 3 ngày */
+    /** Trả về ngày tối đa cho dueDate của task: submissionDeadline trừ đi số ngày buffer */
     private Date findLatestTaskDueDate(long chapterId) {
         String sql = "SELECT submissionDeadline FROM Chapter WHERE id = ?";
         try (Connection conn = dataSource.getConnection();

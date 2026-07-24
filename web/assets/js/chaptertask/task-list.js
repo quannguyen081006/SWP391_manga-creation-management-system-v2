@@ -43,6 +43,9 @@
     var activePopoverTaskId = null;
     var activePopoverCell = null;
     var viewModalTaskId = null;  // taskId currently open in the detail view modal
+    // Buffer between a task's due date and the chapter deadline (BR-34).
+    // Must match TASK_REJECT_SERIES_DEADLINE_BUFFER_DAYS in PageTaskRepository.java.
+    var TASK_DUE_BUFFER_DAYS = 0;
 
     // ─── 2a. UTILITY: ESCAPE HTML ────────────────────────────────────────────
     function escapeHtml(value) {
@@ -650,7 +653,7 @@
     }
 
     // Cập nhật hint về deadline khi Mangaka chọn chapter trong form tạo task
-    // Due date của task phải nằm trong [today, chapter.submissionDeadline - 3 ngày]
+    // Due date của task phải nằm trong [today, chapter.submissionDeadline - TASK_DUE_BUFFER_DAYS]
     function updateCreateTaskDeadlineHint(chapter) {
         var hint = document.getElementById('createTaskDeadlineHint');
         var dueDateInput = document.getElementById('taskCreateDueDate');
@@ -658,7 +661,8 @@
             dueDateInput.min = todayIso();
             dueDateInput.removeAttribute('max');
         }
-        var latestDueDate = chapter && chapter.submissionDeadline ? addDaysIso(chapter.submissionDeadline, -3) : '';
+        var latestDueDate = chapter && chapter.submissionDeadline
+                ? addDaysIso(chapter.submissionDeadline, -TASK_DUE_BUFFER_DAYS) : '';
         if (dueDateInput && latestDueDate) {
             dueDateInput.max = latestDueDate;
         }

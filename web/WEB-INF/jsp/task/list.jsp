@@ -68,7 +68,7 @@
     [5] MODAL taskCreateModal: form to create a new task
     Selection flow: Chapter (dropdown) → automatically loads the Assistant list for that chapter
               → fill in Page Start/End + Task Type + Due Date → submit
-    createTaskDeadlineHint: JS fills in the suggested max deadline (chapter deadline - 3 days)
+    createTaskDeadlineHint: JS fills in the suggested max deadline (chapter deadline - TASK_DUE_BUFFER_DAYS)
     taskCreateError: JS shows validation errors or API errors
     Note: this form is MISSING the SCREENTONE option in taskType — only 4/5 stages are present
 --%>
