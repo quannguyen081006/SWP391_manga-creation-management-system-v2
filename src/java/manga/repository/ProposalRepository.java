@@ -28,6 +28,9 @@ public class ProposalRepository {
     private manga.service.ProposalSettingsService proposalSettingsService;
 
     private Boolean boardVotingSchemaReady;
+    // Whether the Proposal.sampleFileHash column exists (added for duplicate-file detection).
+    // Detected lazily so the app keeps working on an older DB that lacks the column.
+    private Boolean sampleFileHashColumnReady;
 
     private static final String BOARD_REVOTE_NOTE = "Board vote tied across approve, revise, and reject. Revote requested.";
     private static final String BOARD_VOTE_ACTIONS = "'APPROVED','REVISE_REQUESTED','REJECTED'";
@@ -102,9 +105,17 @@ public class ProposalRepository {
 
     public long createDraft(AuthenticatedUser actor, String title, String genre, String synopsis,
             String sampleFilePath, String originalFileName, int approximateChapter) {
+        return createDraft(actor, title, genre, synopsis, sampleFilePath, originalFileName, approximateChapter, null);
+    }
+
+    public long createDraft(AuthenticatedUser actor, String title, String genre, String synopsis,
+            String sampleFilePath, String originalFileName, int approximateChapter, String sampleFileHash) {
+        boolean withHash = isSampleFileHashColumnReady();
         String sql
-                = "INSERT INTO Proposal (mangakaId, title, genre, synopsis, sampleFilePath, originalFileName, approximateChapter, status, createdAt, updatedAt) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, 'DRAFT', GETDATE(), GETDATE())";
+                = "INSERT INTO Proposal (mangakaId, title, genre, synopsis, sampleFilePath, originalFileName, approximateChapter, "
+                + (withHash ? "sampleFileHash, " : "")
+                + "status, createdAt, updatedAt) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, " + (withHash ? "?, " : "") + "'DRAFT', GETDATE(), GETDATE())";
         try ( Connection conn = dataSource.getConnection()) {
             conn.setAutoCommit(false);
             try {
@@ -112,13 +123,17 @@ public class ProposalRepository {
                     throw new IllegalArgumentException("You already have an active draft proposal");
                 }
                 try ( PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-                    ps.setLong(1, actor.getId());
-                    ps.setString(2, title);
-                    ps.setString(3, genre);
-                    ps.setString(4, synopsis);
-                    ps.setString(5, sampleFilePath);
-                    ps.setString(6, originalFileName);
-                    ps.setInt(7, approximateChapter);
+                    int idx = 1;
+                    ps.setLong(idx++, actor.getId());
+                    ps.setString(idx++, title);
+                    ps.setString(idx++, genre);
+                    ps.setString(idx++, synopsis);
+                    ps.setString(idx++, sampleFilePath);
+                    ps.setString(idx++, originalFileName);
+                    ps.setInt(idx++, approximateChapter);
+                    if (withHash) {
+                        ps.setString(idx++, sampleFileHash);
+                    }
                     ps.executeUpdate();
                     try ( ResultSet rs = ps.getGeneratedKeys()) {
                         if (!rs.next()) {
@@ -144,9 +159,19 @@ public class ProposalRepository {
 
     public void updateDraft(AuthenticatedUser actor, long proposalId, String title, String genre, String synopsis,
             String sampleFilePath, String originalFileName, int approximateChapter) {
+        updateDraft(actor, proposalId, title, genre, synopsis, sampleFilePath, originalFileName, approximateChapter, null);
+    }
+
+    public void updateDraft(AuthenticatedUser actor, long proposalId, String title, String genre, String synopsis,
+            String sampleFilePath, String originalFileName, int approximateChapter, String sampleFileHash) {
+        // Only overwrite the stored hash when a new file is actually uploaded (sampleFilePath != null).
+        boolean withHash = sampleFilePath != null && isSampleFileHashColumnReady();
         StringBuilder sql = new StringBuilder("UPDATE Proposal SET title = ?, genre = ?, synopsis = ?");
         if (sampleFilePath != null) {
             sql.append(", sampleFilePath = ?, originalFileName = ?");
+        }
+        if (withHash) {
+            sql.append(", sampleFileHash = ?");
         }
         sql.append(", approximateChapter = ?, updatedAt = GETDATE() ")
                 .append("WHERE id = ? AND mangakaId = ? AND status IN ('DRAFT','REVISION_REQUESTED')");
@@ -160,6 +185,9 @@ public class ProposalRepository {
                 if (sampleFilePath != null) {
                     ps.setString(i++, sampleFilePath);
                     ps.setString(i++, originalFileName);
+                }
+                if (withHash) {
+                    ps.setString(i++, sampleFileHash);
                 }
                 ps.setInt(i++, approximateChapter);
                 ps.setLong(i++, proposalId);
@@ -1225,6 +1253,44 @@ public class ProposalRepository {
             return boardVotingSchemaReady.booleanValue();
         } catch (SQLException ex) {
             boardVotingSchemaReady = Boolean.FALSE;
+            return false;
+        }
+    }
+
+    /**
+     * Returns {@code true} when another proposal already stores a sample file with the exact
+     * same content hash. Used to block duplicate sample-file uploads on create/edit/resubmit.
+     *
+     * @param sampleFileHash   SHA-256 hex hash of the uploaded file content
+     * @param excludeProposalId proposal id to ignore (the one being edited); pass 0 on create
+     */
+    public boolean isDuplicateSampleFileHash(String sampleFileHash, long excludeProposalId) {
+        if (sampleFileHash == null || sampleFileHash.trim().isEmpty() || !isSampleFileHashColumnReady()) {
+            return false;
+        }
+        String sql = "SELECT TOP 1 1 FROM Proposal WHERE sampleFileHash = ? AND id <> ?";
+        try ( Connection conn = dataSource.getConnection();
+                PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, sampleFileHash);
+            ps.setLong(2, excludeProposalId);
+            try ( ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot check duplicate sample file", ex);
+        }
+    }
+
+    private boolean isSampleFileHashColumnReady() {
+        if (sampleFileHashColumnReady != null) {
+            return sampleFileHashColumnReady.booleanValue();
+        }
+        String sql = "SELECT CASE WHEN COL_LENGTH('dbo.Proposal', 'sampleFileHash') IS NOT NULL THEN 1 ELSE 0 END";
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql);  ResultSet rs = ps.executeQuery()) {
+            sampleFileHashColumnReady = Boolean.valueOf(rs.next() && rs.getInt(1) == 1);
+            return sampleFileHashColumnReady.booleanValue();
+        } catch (SQLException ex) {
+            sampleFileHashColumnReady = Boolean.FALSE;
             return false;
         }
     }

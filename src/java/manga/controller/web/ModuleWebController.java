@@ -119,8 +119,16 @@ public class ModuleWebController {
         try {
             UploadInfo upload = saveUpload(request, "sampleFile");
             proposalService.updateDraft(user, id, title, genre, synopsis,
-                    upload.path, upload.originalName, approximateChapter);
+                    upload.path, upload.originalName, approximateChapter, upload.hash);
             return "redirect:/main/proposals/" + id;
+        } catch (manga.common.exception.DuplicateSampleFileException ex) {
+            // Sample file trùng nội dung với proposal khác → hiện toast góc phải, bắt chọn file khác.
+            Proposal proposal = proposalService.getDetail(user, id);
+            model.addAttribute("proposal", proposal);
+            model.addAttribute("duplicateFileError", ex.getMessage());
+            model.addAttribute("genres", proposalService.listGenres());
+            model.addAttribute("lockIdentityFields", "DRAFT".equalsIgnoreCase(proposal.getStatus()) && proposal.getSubmitAttemptCount() == 0);
+            return "proposal/edit";
         } catch (Exception ex) {
             Proposal proposal = proposalService.getDetail(user, id);
             model.addAttribute("proposal", proposal);
@@ -218,7 +226,7 @@ public class ModuleWebController {
     private UploadInfo saveUpload(HttpServletRequest request, String fieldName) throws IOException, ServletException {
         Part part = request.getPart(fieldName);
         if (part == null || part.getSize() == 0) {
-            return new UploadInfo(null, null);
+            return new UploadInfo(null, null, null);
         }
         if (part.getSize() > SAMPLE_FILE_MAX_SIZE_BYTES) {
             throw new IllegalArgumentException("Sample file must not exceed 20 MB");
@@ -235,18 +243,22 @@ public class ModuleWebController {
         if (!dir.exists() && !dir.mkdirs()) {
             throw new IOException("Cannot create upload directory");
         }
-        part.write(new File(dir, storedName).getAbsolutePath());
-        return new UploadInfo("/uploads/proposals/" + storedName, originalName);
+        File saved = new File(dir, storedName);
+        part.write(saved.getAbsolutePath());
+        String hash = manga.common.util.FileHashUtil.sha256Hex(saved);
+        return new UploadInfo("/uploads/proposals/" + storedName, originalName, hash);
     }
 
     private static class UploadInfo {
 
         private final String path;
         private final String originalName;
+        private final String hash;
 
-        private UploadInfo(String path, String originalName) {
+        private UploadInfo(String path, String originalName, String hash) {
             this.path = path;
             this.originalName = originalName;
+            this.hash = hash;
         }
     }
 
