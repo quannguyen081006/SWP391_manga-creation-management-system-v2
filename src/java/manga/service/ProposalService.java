@@ -70,22 +70,36 @@ public class ProposalService {
 
     public long createProposal(AuthenticatedUser user, String title, String genre, String synopsis,
             String sampleFilePath, String originalFileName, Integer approximateChapter) {
+        return createProposal(user, title, genre, synopsis, sampleFilePath, originalFileName, approximateChapter, null);
+    }
+
+    public long createProposal(AuthenticatedUser user, String title, String genre, String synopsis,
+            String sampleFilePath, String originalFileName, Integer approximateChapter, String sampleFileHash) {
         requireRole(user, "MANGAKA", "Only MANGAKA can create proposals");
         validateProposalContent(title, genre, synopsis, sampleFilePath, approximateChapter, true);
+        // Block a sample file whose content already exists on another proposal.
+        assertSampleFileNotDuplicate(sampleFileHash, 0L);
         if (proposalRepository.hasActiveDraft(user.getId(), 0L)) {
             throw new IllegalArgumentException("You already have an active draft proposal");
         }
         return proposalRepository.createDraft(user, title.trim(), genre.trim(), synopsis.trim(),
-                sampleFilePath, safeTrim(originalFileName), approximateChapter.intValue());
+                sampleFilePath, safeTrim(originalFileName), approximateChapter.intValue(), sampleFileHash);
     }
 
     public void updateDraft(AuthenticatedUser user, long proposalId, String title, String genre, String synopsis,
             String sampleFilePath, String originalFileName, Integer approximateChapter) {
+        updateDraft(user, proposalId, title, genre, synopsis, sampleFilePath, originalFileName, approximateChapter, null);
+    }
+
+    public void updateDraft(AuthenticatedUser user, long proposalId, String title, String genre, String synopsis,
+            String sampleFilePath, String originalFileName, Integer approximateChapter, String sampleFileHash) {
         requireRole(user, "MANGAKA", "Only MANGAKA can update proposals");
         Proposal p = proposalRepository.findById(proposalId);
         if (p == null) {
             throw new IllegalArgumentException("Proposal not found");
         }
+        // Only check duplication when the Mangaka actually uploads a new file on edit/resubmit.
+        assertSampleFileNotDuplicate(sampleFileHash, proposalId);
         boolean hasExistingFile = !isBlank(p.getSampleFilePath());
         if ("DRAFT".equalsIgnoreCase(p.getStatus()) && p.getSubmitAttemptCount() == 0) {
             title = p.getTitle();
@@ -93,7 +107,21 @@ public class ProposalService {
         }
         validateProposalContent(title, genre, synopsis, hasExistingFile ? "existing" : sampleFilePath, approximateChapter, true);
         proposalRepository.updateDraft(user, proposalId, title.trim(), genre.trim(), synopsis.trim(),
-                sampleFilePath, safeTrim(originalFileName), approximateChapter.intValue());
+                sampleFilePath, safeTrim(originalFileName), approximateChapter.intValue(), sampleFileHash);
+    }
+
+    /**
+     * Rejects an uploaded sample file whose content matches an existing proposal's file.
+     * No-op when there is no new file (hash null/blank) or the schema lacks the hash column.
+     */
+    private void assertSampleFileNotDuplicate(String sampleFileHash, long excludeProposalId) {
+        if (isBlank(sampleFileHash)) {
+            return;
+        }
+        if (proposalRepository.isDuplicateSampleFileHash(sampleFileHash, excludeProposalId)) {
+            throw new manga.common.exception.DuplicateSampleFileException(
+                    "This sample file is identical to one already submitted. Please choose a different file.");
+        }
     }
 
     public void submitProposal(AuthenticatedUser user, long proposalId) {

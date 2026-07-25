@@ -104,6 +104,55 @@
 
 
 
+                <c:if test="${seriesInformation != null}">
+                <div class="sidebar-section">
+                    <div class="sidebar-title series-info-header" onclick="toggleSeriesInfo()">
+                        📖 Series Information
+                        <span class="series-info-toggle">▼</span>
+                    </div>
+                    <div class="series-info-content" id="seriesInfoContent" style="display: none;">
+                        <table class="series-info-table">
+                            <tr class="series-info-row">
+                                <td class="series-info-label">Series Title</td>
+                                <td class="series-info-value"><c:out value="${seriesInformation.seriesTitle}" /></td>
+                            </tr>
+                            <tr class="series-info-row">
+                                <td class="series-info-label">Status</td>
+                                <td class="series-info-value"><c:out value="${seriesInformation.status}" /></td>
+                            </tr>
+                            <tr class="series-info-row">
+                                <td class="series-info-label">Genre</td>
+                                <td class="series-info-value"><c:out value="${seriesInformation.genre}" /></td>
+                            </tr>
+                            <tr class="series-info-row">
+                                <td class="series-info-label">Author</td>
+                                <td class="series-info-value"><c:out value="${seriesInformation.authorName}" /></td>
+                            </tr>
+                            <tr class="series-info-row">
+                                <td class="series-info-label">Current Chapter</td>
+                                <td class="series-info-value">${seriesInformation.currentChapter}</td>
+                            </tr>
+                            <tr class="series-info-row">
+                                <td class="series-info-label">Current Manuscript Version</td>
+                                <td class="series-info-value">v${seriesInformation.currentVersion}</td>
+                            </tr>
+                            <tr class="series-info-row">
+                                <td class="series-info-label">Published Chapters</td>
+                                <td class="series-info-value">${seriesInformation.publishedChapterCount}</td>
+                            </tr>
+                            <tr class="series-info-row">
+                                <td class="series-info-label">Under Review</td>
+                                <td class="series-info-value"><c:out value="${seriesInformation.currentReviewChapter}" /></td>
+                            </tr>
+                            <tr class="series-info-row">
+                                <td class="series-info-label">Total Views</td>
+                                <td class="series-info-value">${seriesInformation.totalViews > 0 ? seriesInformation.totalViews : '-'}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                </c:if>
+
                 <div class="sidebar-section">
                     <div class="sidebar-title">Responsible People</div>
                     <div class="dashboard-stat">
@@ -559,6 +608,25 @@
 
 
         </div>
+
+        <script>
+            function toggleSeriesInfo() {
+                var content = document.getElementById('seriesInfoContent');
+                var toggle = document.querySelector('.series-info-toggle');
+                
+                if (content.style.display === 'none') {
+                    content.style.display = 'block';
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                    toggle.textContent = '▲';
+                } else {
+                    content.style.maxHeight = '0';
+                    setTimeout(function() {
+                        content.style.display = 'none';
+                    }, 300);
+                    toggle.textContent = '▼';
+                }
+            }
+        </script>
 
     </body>
 
