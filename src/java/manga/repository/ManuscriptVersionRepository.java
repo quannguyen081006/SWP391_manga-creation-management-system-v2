@@ -438,7 +438,7 @@ public class ManuscriptVersionRepository {
         return version;
     }
     
-    private String getUserName(Long userId) {
+    public String getUserName(Long userId) {
         String sql = "SELECT fullName FROM [User] WHERE id = ?";
         try (java.sql.Connection conn = dataSource.getConnection();
              java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -454,7 +454,7 @@ public class ManuscriptVersionRepository {
         return null;
     }
 
-    private int countPublishedChapters(Long seriesId) {
+    public int countPublishedChapters(Long seriesId) {
         String sql = "SELECT COUNT(*) FROM Chapter WHERE seriesId = ? AND status = 'PUBLISHED'";
         try (java.sql.Connection conn = dataSource.getConnection();
              java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -470,7 +470,7 @@ public class ManuscriptVersionRepository {
         return 0;
     }
 
-    private String findCurrentReviewChapter(Long seriesId) {
+    public String findCurrentReviewChapter(Long seriesId) {
         String sql = "SELECT TOP 1 'Chapter ' + CAST(c.chapterNumber AS VARCHAR) FROM Chapter c "
                    + "JOIN ManuscriptVersion mv ON mv.chapterId = c.id "
                    + "WHERE c.seriesId = ? AND mv.status = 'UNDER_REVIEW' "
