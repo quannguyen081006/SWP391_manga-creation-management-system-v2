@@ -1067,6 +1067,15 @@ public class ModuleWebController {
         manga.dto.ResponsiblePeopleDTO responsiblePeople = manuscriptVersionService.buildResponsiblePeopleDTO(version.getChapterId());
         model.addAttribute("responsiblePeople", responsiblePeople);
         
+        // Build and add series information
+        try {
+            manga.dto.workspace.SeriesInformationDTO seriesInformation = manuscriptVersionService.buildSeriesInformation(version.getChapterId());
+            model.addAttribute("seriesInformation", seriesInformation);
+        } catch (Exception ex) {
+            // If series information fails to load, workspace should still render
+            model.addAttribute("seriesInformation", null);
+        }
+        
         return "manuscript-version/workspace";
     }
 

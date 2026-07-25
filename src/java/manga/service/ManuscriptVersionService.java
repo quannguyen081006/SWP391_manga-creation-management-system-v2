@@ -999,4 +999,110 @@ public class ManuscriptVersionService {
 
         return dto;
     }
+
+    /**
+     * Build SeriesInformationDTO for manuscript workspace.
+     * Aggregates series metadata for quick reference.
+     */
+    public manga.dto.workspace.SeriesInformationDTO buildSeriesInformation(Long chapterId) {
+        manga.model.chaptertask.ChapterSummary chapter = chapterRepository.findById(chapterId);
+        if (chapter == null) {
+            throw new BusinessRuleException("Chapter not found");
+        }
+
+        java.util.Map<String, Object> series = productionRepository.getSeriesById(chapter.getSeriesId());
+        if (series == null) {
+            return null;
+        }
+
+        manga.dto.workspace.SeriesInformationDTO dto = new manga.dto.workspace.SeriesInformationDTO();
+
+        // Series basic information
+        dto.setSeriesTitle((String) series.get("title"));
+        dto.setStatus((String) series.get("status"));
+        dto.setGenre((String) series.get("genre"));
+
+        // Author name (mangaka)
+        Long mangakaId = (Long) series.get("mangakaId");
+        if (mangakaId != null) {
+            String authorName = getUserName(mangakaId);
+            dto.setAuthorName(authorName != null ? authorName : "-");
+        } else {
+            dto.setAuthorName("-");
+        }
+
+        // Magazine - not available in current schema
+        dto.setMagazine("-");
+
+        // Current chapter
+        dto.setCurrentChapter(chapter.getChapterNumber());
+
+        // Current manuscript version (latest version for this chapter)
+        manga.model.ManuscriptVersion latestVersion = manuscriptVersionRepository.findLatestByChapterId(chapterId);
+        dto.setCurrentVersion(latestVersion != null ? latestVersion.getVersion() : 0);
+
+        // Published chapter count
+        int publishedCount = countPublishedChapters(chapter.getSeriesId());
+        dto.setPublishedChapterCount(publishedCount);
+
+        // Current review chapter (chapter with UNDER_REVIEW manuscript)
+        String reviewChapter = findCurrentReviewChapter(chapter.getSeriesId());
+        dto.setCurrentReviewChapter(reviewChapter != null ? reviewChapter : "-");
+
+        // Total views - not available in current schema
+        dto.setTotalViews(0);
+
+        return dto;
+    }
+
+    private String getUserName(Long userId) {
+        String sql = "SELECT fullName FROM [User] WHERE id = ?";
+        try (java.sql.Connection conn = dataSource.getConnection();
+             java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, userId);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("fullName");
+                }
+            }
+        } catch (java.sql.SQLException ex) {
+            // Return null on error
+        }
+        return null;
+    }
+
+    private int countPublishedChapters(Long seriesId) {
+        String sql = "SELECT COUNT(*) FROM Chapter WHERE seriesId = ? AND status = 'PUBLISHED'";
+        try (java.sql.Connection conn = dataSource.getConnection();
+             java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, seriesId);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+        } catch (java.sql.SQLException ex) {
+            // Return 0 on error
+        }
+        return 0;
+    }
+
+    private String findCurrentReviewChapter(Long seriesId) {
+        String sql = "SELECT TOP 1 'Chapter ' + CAST(c.chapterNumber AS VARCHAR) FROM Chapter c "
+                   + "JOIN ManuscriptVersion mv ON mv.chapterId = c.id "
+                   + "WHERE c.seriesId = ? AND mv.status = 'UNDER_REVIEW' "
+                   + "ORDER BY mv.submittedAt DESC";
+        try (java.sql.Connection conn = dataSource.getConnection();
+             java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, seriesId);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString(1);
+                }
+            }
+        } catch (java.sql.SQLException ex) {
+            // Return null on error
+        }
+        return null;
+    }
 }
