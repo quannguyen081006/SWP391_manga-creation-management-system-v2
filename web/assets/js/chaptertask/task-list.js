@@ -45,7 +45,7 @@
     var viewModalTaskId = null;  // taskId currently open in the detail view modal
     // Buffer between a task's due date and the chapter deadline (BR-34).
     // Must match TASK_REJECT_SERIES_DEADLINE_BUFFER_DAYS in PageTaskRepository.java.
-    var TASK_DUE_BUFFER_DAYS = 0;
+    var TASK_DUE_BUFFER_DAYS = 1;
 
     // ─── 2a. UTILITY: ESCAPE HTML ────────────────────────────────────────────
     function escapeHtml(value) {
@@ -939,11 +939,16 @@
             var results = await Promise.all([
                 callApi('GET', '/api/v1/series'),
                 callApi('GET', '/api/v1/chapters'),
-                callApi('GET', '/api/v1/tasks')
+                callApi('GET', '/api/v1/tasks'),
+                callApi('GET', '/api/v1/settings/deadlines').catch(function () { return null; })
             ]);
             seriesList = results[0].data || [];
             chapters = results[1].data || [];
             tasks = results[2].data || [];
+            var deadlineSettings = results[3] && results[3].data;
+            if (deadlineSettings && typeof deadlineSettings.taskChapterBufferDays === 'number') {
+                TASK_DUE_BUFFER_DAYS = deadlineSettings.taskChapterBufferDays;
+            }
             seriesById = {};
             chapterById = {};
             for (var i = 0; i < seriesList.length; i++) {

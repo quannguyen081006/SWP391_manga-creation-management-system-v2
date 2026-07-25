@@ -60,7 +60,7 @@
     var taskInlineLoaded = {};       // Marks which tasks have finished loading inline
     // Buffer between a task's due date and the chapter deadline (BR-34).
     // Must match TASK_REJECT_SERIES_DEADLINE_BUFFER_DAYS in PageTaskRepository.java.
-    var TASK_DUE_BUFFER_DAYS = 0;
+    var TASK_DUE_BUFFER_DAYS = 1;
 
     // ============================================================
     // 2. UTILITY
@@ -1679,6 +1679,15 @@
                     seriesData = sList[i];
                     break;
                 }
+            }
+            try {
+                var deadlineSettingsRes = await callApi('GET', '/api/v1/settings/deadlines');
+                var deadlineSettings = deadlineSettingsRes.data || {};
+                if (typeof deadlineSettings.taskChapterBufferDays === 'number') {
+                    TASK_DUE_BUFFER_DAYS = deadlineSettings.taskChapterBufferDays;
+                }
+            } catch (settingsErr) {
+                // Non-fatal: keep the built-in default so the date picker still works.
             }
             await Promise.all([loadPages(), loadTasks(), fillAssistantSelect()]);
             renderMeta();

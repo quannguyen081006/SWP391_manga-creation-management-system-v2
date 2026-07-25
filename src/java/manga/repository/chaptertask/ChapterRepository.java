@@ -40,7 +40,8 @@ import org.springframework.stereotype.Repository;
  *
  * Deadline rules:
  *  - submissionDeadline must not be a past date
- *  - submissionDeadline must be at least CHAPTER_SERIES_DEADLINE_BUFFER_DAYS (7 days) before the series deadline
+ *  - submissionDeadline must be at least chapterSeriesDeadlineBufferDays() before the series deadline
+ *    (admin-configurable via Settings > Deadlines, default 7 - see DeadlineSettingsService)
  *  - publicationDate = submissionDeadline + CHAPTER_PUBLICATION_OFFSET_DAYS (14 days), auto-computed on create/update
  */
 @Repository
@@ -48,9 +49,6 @@ public class ChapterRepository {
 
     /** Number of days added to submissionDeadline to compute publicationDate. */
     private static final int CHAPTER_PUBLICATION_OFFSET_DAYS = 14;
-
-    /** Minimum number of days the chapter deadline must be before the series deadline. */
-    private static final int CHAPTER_SERIES_DEADLINE_BUFFER_DAYS = 7;
 
     @Autowired
     private DataSource dataSource;
@@ -63,6 +61,19 @@ public class ChapterRepository {
 
     @Autowired
     private ChapterImageRepository chapterImageRepository;
+
+    @Autowired
+    private manga.repository.SystemSettingRepository systemSettingRepository;
+
+    /** Fallback used only if the setting was never saved; must match DeadlineSettingsService.DEFAULT_CHAPTER_SERIES_BUFFER_DAYS. */
+    private static final int DEFAULT_CHAPTER_SERIES_DEADLINE_BUFFER_DAYS = 7;
+
+    /** Minimum days the chapter deadline must be before the series deadline (admin-configurable via Settings > Deadlines). */
+    private int chapterSeriesDeadlineBufferDays() {
+        return systemSettingRepository.getInt(
+                manga.repository.SystemSettingRepository.CHAPTER_SERIES_DEADLINE_BUFFER_DAYS,
+                DEFAULT_CHAPTER_SERIES_DEADLINE_BUFFER_DAYS);
+    }
 
     private static final String CHAPTER_COLUMNS =
             "id, seriesId, chapterNumber, title, status, submissionDeadline, publicationDate, completionPct, atRisk, totalPages";
@@ -609,14 +620,15 @@ public class ChapterRepository {
         }
     }
 
-    /** Throws an exception if submissionDeadline isn't at least 7 days earlier than seriesDeadline. */
+    /** Throws an exception if submissionDeadline isn't at least chapterSeriesDeadlineBufferDays() earlier than seriesDeadline. */
     private void validateBeforeSeriesDeadline(Date submissionDeadline, Date seriesDeadline) {
         if (seriesDeadline == null) {
             throw new IllegalArgumentException("Series deadline must be set by assigned Tantou before creating or updating chapters");
         }
-        Date latestChapterDeadline = Date.valueOf(seriesDeadline.toLocalDate().minusDays(CHAPTER_SERIES_DEADLINE_BUFFER_DAYS));
+        int bufferDays = chapterSeriesDeadlineBufferDays();
+        Date latestChapterDeadline = Date.valueOf(seriesDeadline.toLocalDate().minusDays(bufferDays));
         if (submissionDeadline.after(latestChapterDeadline)) {
-            throw new IllegalArgumentException("Chapter deadline must be at least 7 days before series deadline");
+            throw new IllegalArgumentException("Chapter deadline must be at least " + bufferDays + " day(s) before series deadline");
         }
     }
 

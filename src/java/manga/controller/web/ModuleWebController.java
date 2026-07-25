@@ -90,6 +90,12 @@ public class ModuleWebController {
     @Autowired
     private TaskTypeRateService taskTypeRateService;
 
+    @Autowired
+    private manga.service.DeadlineSettingsService deadlineSettingsService;
+
+    @Autowired
+    private manga.service.ProgressSettingsService progressSettingsService;
+
     @RequestMapping(value = "/proposals/{id}/edit", method = RequestMethod.GET)
     public String proposalEditPage(@PathVariable("id") long id, HttpSession session, Model model) {
         AuthenticatedUser user = requireUser(session);
@@ -213,6 +219,60 @@ public class ModuleWebController {
         }
         model.addAttribute("settings", proposalSettingsService.getSettings());
         return "settings/proposals";
+    }
+    
+    //Deadline settings
+    @RequestMapping(value = "/settings/deadlines", method = RequestMethod.GET)
+    public String deadlineSettings(HttpSession session, Model model) {
+        AuthenticatedUser user = requireUser(session);
+        requireAdmin(user);
+        model.addAttribute("settings", deadlineSettingsService.getSettings());
+        return "settings/deadlines";
+    }
+    
+    //Deadlnie settings
+    @RequestMapping(value = "/settings/deadlines", method = RequestMethod.POST)
+    public String deadlineSettingsSave(
+            HttpSession session,
+            @RequestParam("taskChapterBufferDays") Integer taskChapterBufferDays,
+            @RequestParam("chapterSeriesBufferDays") Integer chapterSeriesBufferDays,
+            Model model) {
+        AuthenticatedUser user = requireUser(session);
+        try {
+            requireAdmin(user);
+            deadlineSettingsService.updateSettings(taskChapterBufferDays.intValue(), chapterSeriesBufferDays.intValue());
+            model.addAttribute("success", "Deadline settings updated successfully");
+        } catch (RuntimeException ex) {
+            model.addAttribute("error", ex.getMessage());
+        }
+        model.addAttribute("settings", deadlineSettingsService.getSettings());
+        return "settings/deadlines";
+    }
+
+    @RequestMapping(value = "/settings/progress", method = RequestMethod.GET)
+    public String progressSettings(HttpSession session, Model model) {
+        AuthenticatedUser user = requireUser(session);
+        requireAdmin(user);
+        model.addAttribute("settings", progressSettingsService.getSettings());
+        return "settings/progress";
+    }
+
+    @RequestMapping(value = "/settings/progress", method = RequestMethod.POST)
+    public String progressSettingsSave(
+            HttpSession session,
+            @RequestParam("lowThresholdPercent") Integer lowThresholdPercent,
+            @RequestParam("highThresholdPercent") Integer highThresholdPercent,
+            Model model) {
+        AuthenticatedUser user = requireUser(session);
+        try {
+            requireAdmin(user);
+            progressSettingsService.updateSettings(lowThresholdPercent.intValue(), highThresholdPercent.intValue());
+            model.addAttribute("success", "Progress display settings updated successfully");
+        } catch (RuntimeException ex) {
+            model.addAttribute("error", ex.getMessage());
+        }
+        model.addAttribute("settings", progressSettingsService.getSettings());
+        return "settings/progress";
     }
 
     private UploadInfo saveUpload(HttpServletRequest request, String fieldName) throws IOException, ServletException {

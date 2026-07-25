@@ -39,6 +39,14 @@
     var completedVisible = false;                           // whether the "Completed" group is expanded
     var chapterStatusFilter = 'ALL';                        // currently selected status filter
     var serverCanCreateChapter = configScript && configScript.getAttribute('data-can-create-chapter') === 'true';
+    // Buffer between a chapter's deadline and its series deadline; refreshed from
+    // /api/v1/settings/deadlines in loadData(). Must match ChapterRepository's
+    // chapterSeriesDeadlineBufferDays() default.
+    var CHAPTER_SERIES_BUFFER_DAYS = 7;
+    // Red/amber and amber/green thresholds for progress bars; refreshed from
+    // /api/v1/settings/progress in loadData(). Must match ProgressSettingsService defaults.
+    var PROGRESS_LOW_THRESHOLD_PERCENT = 50;
+    var PROGRESS_HIGH_THRESHOLD_PERCENT = 100;
 
     /* ==========================================================
      * 2. HELPER / UTILITY
@@ -203,11 +211,12 @@
     }
 
     /**
-     * The maximum deadline for a chapter = the series' publicationDate - 7 days.
+     * The maximum deadline for a chapter = the series' publicationDate - CHAPTER_SERIES_BUFFER_DAYS.
      * Ensures the chapter is submitted before the series is published.
      */
     function latestChapterDeadline(series) {
-        return series && series.publicationDate ? addDaysIso(series.publicationDate, -7) : '';
+        return series && series.publicationDate
+                ? addDaysIso(series.publicationDate, -CHAPTER_SERIES_BUFFER_DAYS) : '';
     }
 
     /** Checks whether currentUser has a specific role (supports multiple role object shapes). */
@@ -561,8 +570,9 @@
             var overdue = isChapterOverdue(ch);
             var deadlineText = formatDeadlineCell(ch.submissionDeadline, done, overdue);
             var seriesName = (seriesById[String(ch.seriesId)] || {}).title || ('#' + ch.seriesId);
-            // Màu progress bar (class dùng chung với trang Series): xanh 100%, vàng 50-99%, đỏ <50%
-            var progressClass = progress >= 100 ? 'is-done' : (progress >= 50 ? 'is-mid' : 'is-low');
+            // Màu progress bar (class dùng chung với trang Series): xanh >=cao, vàng [thấp,cao), đỏ <thấp
+            var progressClass = progress >= PROGRESS_HIGH_THRESHOLD_PERCENT ? 'is-done'
+                    : (progress >= PROGRESS_LOW_THRESHOLD_PERCENT ? 'is-mid' : 'is-low');
             var seriesCell = showSeries
                 ? '<td class="chapter-series-cell" title="' + escapeHtml(seriesName) + '">' + escapeHtml(seriesName) + '</td>'
                 : '';
@@ -685,10 +695,29 @@
                 callApi('GET', '/api/v1/series'),
                 callApi('GET', filterSeriesId
                     ? ('/api/v1/series/' + encodeURIComponent(filterSeriesId) + '/chapters')
-                    : '/api/v1/chapters')
+                    : '/api/v1/chapters'),
+                callApi('GET', '/api/v1/settings/deadlines').catch(function () { return null; }),
+                callApi('GET', '/api/v1/settings/progress').catch(function () { return null; })
             ]);
             seriesList = results[0].data || [];
             chapters = results[1].data || [];
+            var deadlineSettings = results[2] && results[2].data;
+            if (deadlineSettings && typeof deadlineSettings.chapterSeriesBufferDays === 'number') {
+                CHAPTER_SERIES_BUFFER_DAYS = deadlineSettings.chapterSeriesBufferDays;
+            }
+            var progressSettings = results[3] && results[3].data;
+            if (progressSettings && typeof progressSettings.lowThresholdPercent === 'number') {
+                PROGRESS_LOW_THRESHOLD_PERCENT = progressSettings.lowThresholdPercent;
+            }
+            if (progressSettings && typeof progressSettings.highThresholdPercent === 'number') {
+                PROGRESS_HIGH_THRESHOLD_PERCENT = progressSettings.highThresholdPercent;
+            }
+            var legendLow = document.getElementById('chapterProgressLegendLow');
+            var legendMid = document.getElementById('chapterProgressLegendMid');
+            var legendDone = document.getElementById('chapterProgressLegendDone');
+            if (legendLow) { legendLow.textContent = 'Below ' + PROGRESS_LOW_THRESHOLD_PERCENT + '%'; }
+            if (legendMid) { legendMid.textContent = PROGRESS_LOW_THRESHOLD_PERCENT + '–' + (PROGRESS_HIGH_THRESHOLD_PERCENT - 1) + '%'; }
+            if (legendDone) { legendDone.textContent = PROGRESS_HIGH_THRESHOLD_PERCENT + '% and above'; }
             // Build lookup map để tránh duyệt mảng nhiều lần
             seriesById = {};
             for (var i = 0; i < seriesList.length; i++) {

@@ -18,6 +18,14 @@ public class SystemSettingRepository {
     public static final String SALARY_KPI_BONUS_THRESHOLD = "salary.kpiBonusThreshold";
     public static final String SALARY_BONUS_PERCENT = "salary.bonusPercent";
     public static final String PAGE_TASK_PHASH_THRESHOLD = "pageTask.phashHammingThreshold";
+    /** BR-34: min days between a task's dueDate and its chapter's submissionDeadline (also caps the reject-extension date). */
+    public static final String TASK_CHAPTER_DEADLINE_BUFFER_DAYS = "deadline.taskChapterBufferDays";
+    /** Min days between a chapter's submissionDeadline and its series' publicationDate. */
+    public static final String CHAPTER_SERIES_DEADLINE_BUFFER_DAYS = "deadline.chapterSeriesBufferDays";
+    /** % below which a progress bar/badge renders red instead of amber. */
+    public static final String PROGRESS_LOW_THRESHOLD_PERCENT = "progress.lowThresholdPercent";
+    /** % at/above which a progress bar/badge renders green instead of amber. */
+    public static final String PROGRESS_HIGH_THRESHOLD_PERCENT = "progress.highThresholdPercent";
 
     @Autowired
     private DataSource dataSource;

@@ -48,17 +48,19 @@
         <%-- chapterStatusPills: JS fills in filter pills (All / per series) for quick filtering --%>
         <div id="chapterStatusPills" class="chapter-status-pills"></div>
 
-        <%-- Legend for the Progress column bar colors; thresholds are applied in chapter-list.js --%>
+        <%-- Legend for the Progress column bar colors. Threshold is admin-configurable via
+             Settings > Progress Display; the "50" placeholders here are the fallback default,
+             chapter-list.js overwrites #chapterProgressLegendLow/-Mid with the live value on load. --%>
         <div class="chapter-progress-legend">
             <span class="chapter-progress-legend-title">Progress</span>
             <span class="chapter-progress-legend-item">
-                <span class="chapter-progress-legend-swatch chapter-progress-legend-swatch-low"></span>Below 50%
+                <span class="chapter-progress-legend-swatch chapter-progress-legend-swatch-low"></span><span id="chapterProgressLegendLow">Below 50%</span>
             </span>
             <span class="chapter-progress-legend-item">
-                <span class="chapter-progress-legend-swatch chapter-progress-legend-swatch-mid"></span>50–99%
+                <span class="chapter-progress-legend-swatch chapter-progress-legend-swatch-mid"></span><span id="chapterProgressLegendMid">50–99%</span>
             </span>
             <span class="chapter-progress-legend-item">
-                <span class="chapter-progress-legend-swatch chapter-progress-legend-swatch-done"></span>Completed (100%)
+                <span class="chapter-progress-legend-swatch chapter-progress-legend-swatch-done"></span><span id="chapterProgressLegendDone">100% and above</span>
             </span>
         </div>
 

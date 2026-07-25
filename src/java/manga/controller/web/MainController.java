@@ -60,6 +60,9 @@ public class MainController {
     @Autowired
     private PageTaskService pageTaskService;
 
+    @Autowired
+    private manga.service.ProgressSettingsService progressSettingsService;
+
     // ============================================================
     // [2] COMMON NAVIGATION
     // ============================================================
@@ -105,6 +108,8 @@ public class MainController {
     public String series(HttpSession session, Model model) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
         model.addAttribute("seriesList", productionRepository.listSeries(user));
+        model.addAttribute("progressLowThreshold", progressSettingsService.getLowThresholdPercent());
+        model.addAttribute("progressHighThreshold", progressSettingsService.getHighThresholdPercent());
         return "series/list";
     }
 
