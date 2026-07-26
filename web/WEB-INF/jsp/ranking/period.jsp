@@ -74,13 +74,18 @@
 
             <c:forEach items="${periods}" var="p">
                 <div class="period-card status-${p.status}">
+                    <%-- Left column = who/when, right column = status + time left.
+                         Two real children, otherwise the space-between on
+                         .period-header has nothing to spread apart. --%>
                     <div class="period-header">
-                        <div>
+                        <div class="period-head-main">
                             <div class="period-title">${p.name}</div>
                             <div class="period-meta">
                                 <span>📅 ${p.startDate} → ${p.endDate}</span>
-                                <span class="status-badge ${p.status}">${p.status}</span>
                             </div>
+                        </div>
+                        <div class="period-head-side">
+                            <span class="status-badge ${p.status}">${p.status}</span>
                             <c:if test="${p.status == 'OPEN'}">
                                 <div class="countdown-display" data-end-date="${p.endDate}T23:59:59">Loading...</div>
                                 <div class="period-note">⏰ Time remaining until deadline</div>
@@ -88,50 +93,66 @@
                         </div>
                     </div>
 
-                    <div class="timeline">
-                        <span class="timeline-step ${p.status == 'UPCOMING' || p.status == 'OPEN' || p.status == 'CLOSED' || p.status == 'CALCULATING' || p.status == 'CALCULATED' ? 'completed' : ''}">UPCOMING</span>
-                        <span class="timeline-arrow">→</span>
-                        <span class="timeline-step ${p.status == 'OPEN' || p.status == 'CLOSED' || p.status == 'CALCULATING' || p.status == 'CALCULATED' ? 'completed' : ''} ${p.status == 'OPEN' ? 'active' : ''}">OPEN</span>
-                        <span class="timeline-arrow">→</span>
-                        <span class="timeline-step ${p.status == 'CLOSED' || p.status == 'CALCULATING' || p.status == 'CALCULATED' ? 'completed' : ''} ${p.status == 'CLOSED' ? 'active' : ''}">CLOSED</span>
-                        <span class="timeline-arrow">→</span>
-                        <span class="timeline-step ${p.status == 'CALCULATING' || p.status == 'CALCULATED' ? 'completed' : ''} ${p.status == 'CALCULATING' ? 'active' : ''}">CALCULATING</span>
-                        <span class="timeline-arrow">→</span>
-                        <span class="timeline-step ${p.status == 'CALCULATED' ? 'completed' : ''} ${p.status == 'CALCULATED' ? 'active' : ''}">CALCULATED</span>
-                    </div>
+                    <%-- 'completed' = step reached, 'active' = step the period is
+                         on now. The current step is always both; ranking.css
+                         declares .active after .completed so it wins. --%>
+                    <ol class="timeline">
+                        <li class="timeline-step completed ${p.status == 'UPCOMING' ? 'active' : ''}">
+                            <span class="timeline-marker">1</span><span class="timeline-label">UPCOMING</span>
+                        </li>
+                        <li class="timeline-step ${p.status == 'OPEN' || p.status == 'CLOSED' || p.status == 'CALCULATING' || p.status == 'CALCULATED' ? 'completed' : ''} ${p.status == 'OPEN' ? 'active' : ''}">
+                            <span class="timeline-marker">2</span><span class="timeline-label">OPEN</span>
+                        </li>
+                        <li class="timeline-step ${p.status == 'CLOSED' || p.status == 'CALCULATING' || p.status == 'CALCULATED' ? 'completed' : ''} ${p.status == 'CLOSED' ? 'active' : ''}">
+                            <span class="timeline-marker">3</span><span class="timeline-label">CLOSED</span>
+                        </li>
+                        <li class="timeline-step ${p.status == 'CALCULATING' || p.status == 'CALCULATED' ? 'completed' : ''} ${p.status == 'CALCULATING' ? 'active' : ''}">
+                            <span class="timeline-marker">4</span><span class="timeline-label">CALCULATING</span>
+                        </li>
+                        <li class="timeline-step ${p.status == 'CALCULATED' ? 'completed' : ''} ${p.status == 'CALCULATED' ? 'active' : ''}">
+                            <span class="timeline-marker">5</span><span class="timeline-label">CALCULATED</span>
+                        </li>
+                    </ol>
 
                     <div class="period-actions">
-                        <a class="btn small" href="${pageContext.request.contextPath}/main/ranking/periods/${p.id}/results"><i class="bi bi-bar-chart-fill"></i> Series Ranking</a>
-                        <a class="btn small" href="${pageContext.request.contextPath}/main/ranking/periods/${p.id}/mangaka"><i class="bi bi-trophy-fill"></i> Mangaka Ranking</a>
+                        <div class="period-actions-group">
+                            <a class="btn small" href="${pageContext.request.contextPath}/main/ranking/periods/${p.id}/results"><i class="bi bi-bar-chart-fill"></i> Series Ranking</a>
+                            <a class="btn small" href="${pageContext.request.contextPath}/main/ranking/periods/${p.id}/mangaka"><i class="bi bi-trophy-fill"></i> Mangaka Ranking</a>
+                        </div>
 
-                        <c:if test="${p.status == 'OPEN'}">
-                            <c:if test="${sessionScope.AUTH_USER.hasRole('EDITORIAL_BOARD')}">
-                                <c:choose>
-                                    <c:when test="${submittedRankingPeriodIds.contains(p.id)}">
-                                        <span class="vote-submitted-badge">✓ Vote entry submitted</span>
-                                    </c:when>
-                                    <c:otherwise>
-                                        <form method="post" action="${pageContext.request.contextPath}/main/ranking/periods/${p.id}/upload" enctype="multipart/form-data" class="period-upload-form">
-                                            <div class="upload-zone">
-                                                <label class="upload-label">
-                                                    📤 Upload CSV
-                                                    <input type="file" name="csvFile" accept=".csv" required data-period-id="${p.id}" onchange="handleFileSelect(this)" />
-                                                </label>
-                                                <span id="csv-filename-${p.id}" class="csv-filename"></span>
-                                            </div>
-                                            <button class="btn small" type="submit">Submit</button>
-                                        </form>
-                                    </c:otherwise>
-                                </c:choose>
-                            </c:if>
-                            <c:if test="${sessionScope.AUTH_USER.hasRole('ADMIN')}">
+                        <c:if test="${p.status == 'OPEN' and sessionScope.AUTH_USER.hasRole('ADMIN')}">
+                            <div class="period-actions-group period-actions-admin">
                                 <form method="post" action="${pageContext.request.contextPath}/main/ranking/periods/${p.id}/close" class="inline-form">
                                     <button class="btn small danger-soft" type="submit">🔒 Close Period</button>
                                 </form>
                                 <a class="btn small" href="${pageContext.request.contextPath}/main/ranking/periods/${p.id}/csv-uploads">📄 View CSV Uploads</a>
-                            </c:if>
+                            </div>
                         </c:if>
                     </div>
+
+                    <%-- The board's CSV upload is a task, not a navigation button,
+                         so it gets its own row instead of crowding the link row. --%>
+                    <c:if test="${p.status == 'OPEN' and sessionScope.AUTH_USER.hasRole('EDITORIAL_BOARD')}">
+                        <div class="period-upload-row">
+                            <c:choose>
+                                <c:when test="${submittedRankingPeriodIds.contains(p.id)}">
+                                    <span class="vote-submitted-badge">✓ Vote entry submitted</span>
+                                </c:when>
+                                <c:otherwise>
+                                    <form method="post" action="${pageContext.request.contextPath}/main/ranking/periods/${p.id}/upload" enctype="multipart/form-data" class="period-upload-form">
+                                        <div class="upload-zone">
+                                            <label class="upload-label">
+                                                📤 Upload CSV
+                                                <input type="file" name="csvFile" accept=".csv" required data-period-id="${p.id}" onchange="handleFileSelect(this)" />
+                                            </label>
+                                            <span id="csv-filename-${p.id}" class="csv-filename"></span>
+                                        </div>
+                                        <button class="btn small" type="submit">Submit</button>
+                                    </form>
+                                </c:otherwise>
+                            </c:choose>
+                        </div>
+                    </c:if>
 
                 </div>
             </c:forEach>

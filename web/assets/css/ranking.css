@@ -4,17 +4,9 @@
     padding: 40px;
     margin-bottom: 30px;
     color: #fff;
+    background: #0f172a;
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-md);
-}
-
-.dashboard-hero,
-.ranking-hero {
-    background: linear-gradient(135deg, #667eea, #764ba2);
-}
-
-.prestige-hero {
-    background: linear-gradient(135deg, #f093fb, #f5576c);
 }
 
 .dashboard-hero h1,
@@ -52,42 +44,38 @@
     background: rgba(255, 255, 255, 0.2);
 }
 
+/* The badge is the only place a period's status is coloured (the card border and
+   the timeline steps used to repeat it). Low-saturation tint + same-tone text,
+   same device as .status-chip on the series list. */
 .status-badge.OPEN {
-    border: 2px solid #4ade80;
-    background: rgba(22, 163, 74, 0.3);
+    color: #16794b;
+    background: #ecfdf5;
 }
 .status-badge.CLOSED {
-    border: 2px solid #f87171;
-    background: rgba(220, 38, 38, 0.3);
+    color: #b91c1c;
+    background: #fef2f2;
 }
 .status-badge.CALCULATED {
-    border: 2px solid #60a5fa;
-    background: rgba(37, 99, 235, 0.3);
+    color: #64748b;
+    background: #f1f5f9;
 }
 .status-badge.CALCULATING {
-    border: 2px solid #fbbf24;
-    background: rgba(217, 119, 6, 0.3);
-    animation: ranking-pulse 2s infinite;
-}
-
-@keyframes ranking-pulse {
-    50% {
-        opacity: 0.7;
-    }
+    color: #b45309;
+    background: #fffbeb;
 }
 
 .countdown-display {
     margin-top: 15px;
+    color: #0f172a;
     font-size: 28px;
     font-weight: 700;
 }
 
-.countdown-display.urgent,
+/* One warning level only: the number turns red once the deadline has passed. */
 .countdown-display.is-expired {
-    color: #fecaca;
+    color: #b91c1c;
 }
 
-.period-card,
 .ranking-card,
 .mangaka-card {
     background: var(--surface-color);
@@ -96,97 +84,154 @@
     transition: transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-.period-card:hover,
 .ranking-card:hover,
 .mangaka-card:hover {
     box-shadow: var(--shadow-md);
     transform: translateY(-2px);
 }
 
+/* Plain hairline card. The status accent that used to sit on the left edge is
+   gone on purpose: .status-badge in the header is now the ONLY place a period's
+   status is coloured, so the same fact is not painted three times over. */
 .period-card {
-    padding: 24px;
-    margin-bottom: 20px;
-    border-left: 4px solid #667eea;
+    padding: 22px 24px;
+    margin-bottom: 16px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: var(--radius-md);
+    transition: box-shadow var(--transition-fast);
 }
 
-.period-card.status-OPEN {
-    border-left-color: var(--success-color);
-}
-.period-card.status-CLOSED {
-    border-left-color: var(--danger-color);
-}
-.period-card.status-CALCULATED {
-    border-left-color: var(--info-color);
-}
-.period-card.status-CALCULATING {
-    border-left-color: var(--warning-color);
+.period-card:hover {
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
 
-.period-header,
-.period-meta,
-.period-actions,
-.timeline {
-    display: flex;
-    align-items: center;
-}
-
+/* Two real columns: identity on the left, status + time on the right, so the
+   card fills its width instead of stacking everything against the left edge. */
 .period-header {
+    display: flex;
+    align-items: flex-start;
     justify-content: space-between;
-    margin-bottom: var(--spacing-4);
+    gap: 24px;
+    margin-bottom: 20px;
+}
+
+.period-head-main {
+    min-width: 0;
+}
+
+.period-head-side {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    align-items: flex-end;
+    gap: 4px;
+    text-align: right;
 }
 
 .period-title {
-    color: #2c3e50;
+    color: #0f172a;
     font-size: 20px;
     font-weight: 600;
 }
 
 .period-meta {
+    display: flex;
+    align-items: center;
     gap: 20px;
-    margin-bottom: var(--spacing-4);
-    color: var(--text-muted);
-    font-size: 14px;
-}
-
-.period-note {
     margin-top: var(--spacing-2);
     color: var(--text-muted);
     font-size: 14px;
 }
 
-.period-actions {
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 20px;
+.period-note {
+    color: var(--text-muted);
+    font-size: 13px;
 }
 
+/* Inside the right-hand column the gap does the spacing, so the standalone
+   margins these two carry elsewhere would only double it up. */
+.period-head-side .countdown-display {
+    margin-top: 2px;
+    font-size: 26px;
+    line-height: 1.1;
+}
+
+.period-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.period-actions-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Admin-only actions sit at the far right; the auto margin keeps them there
+   even when the left group is the only other child. */
+.period-actions-admin {
+    margin-left: auto;
+}
+
+.period-upload-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-top: 14px;
+}
+
+/* Capped field widths — on a wide screen a name/date input stretched to half
+   the page says nothing extra, it just unbalances the row. */
 .period-create-form {
     display: grid;
-    grid-template-columns: 2fr 1fr auto;
-    gap: 10px;
+    grid-template-columns: minmax(0, 320px) minmax(0, 200px) auto;
+    justify-content: start;
+    gap: 10px 12px;
     align-items: end;
 }
 
+.period-create-form label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.period-create-form input {
+    width: 100%;
+}
+
+/* The dashed outline stays — it is what says "drop a file here" — but it is the
+   only thing that changes on hover; no tinted fill. Compact padding because it
+   now sits inline in the upload row rather than as a block of its own. */
 .upload-zone {
-    padding: 20px;
-    margin-top: var(--spacing-4);
-    border: 2px dashed #bdc3c7;
+    padding: 12px 18px;
+    border: 1px dashed #cbd5e1;
     border-radius: var(--radius-md);
     text-align: center;
-    transition: border-color var(--transition-fast), background-color var(--transition-fast);
+    transition: border-color var(--transition-fast);
 }
 
 .upload-zone:hover,
 .upload-zone.dragover {
-    background: #eff6ff;
-    border-color: #667eea;
+    border-color: #0f172a;
 }
 
 .upload-zone input[type="file"] {
     display: none;
 }
 .upload-label {
-    color: #667eea;
+    color: #0f172a;
     font-weight: 600;
     cursor: pointer;
 }
@@ -204,30 +249,98 @@
     font-weight: 600;
 }
 
+/* --- Period stepper (period.jsp) ---
+   A real stepper: numbered marker + connector line per step, spread across the
+   full width of the card. Deliberately monochrome apart from ONE accent on the
+   current step — the green/amber pair that used to live here duplicated
+   .status-badge, so the eye had three places telling it the same thing. */
 .timeline {
-    gap: var(--spacing-2);
-    margin-top: var(--spacing-3);
-    font-size: 12px;
+    display: flex;
+    align-items: flex-start;
+    margin: var(--spacing-3) 0 0;
+    padding: 0;
+    list-style: none;
 }
 
 .timeline-step {
-    padding: 4px 12px;
-    color: var(--text-muted);
-    background: var(--neutral-100);
-    border-radius: 999px;
+    position: relative;
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    color: var(--muted, #6b7280);
+    font-size: 11px;
     font-weight: 600;
+    letter-spacing: 0.03em;
+    text-align: center;
 }
 
-.timeline-step.active {
-    color: #fff;
-    background: #667eea;
+/* Connector reaching back to the previous marker. Owning the line on its LEFT
+   means a step can colour it from its own state: the segment is "done" exactly
+   when the step it leads into is done. */
+.timeline-step::before {
+    content: "";
+    position: absolute;
+    top: 10px;
+    right: 50%;
+    left: -50%;
+    height: 2px;
+    background: var(--line, #e5e7eb);
 }
+
+.timeline-step:first-child::before {
+    display: none;
+}
+
+.timeline-marker {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    color: #94a3b8;
+    background: #fff;
+    border: 2px solid var(--line, #e5e7eb);
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.timeline-label {
+    display: block;
+}
+
+/* Already behind us: neutral ink, filled marker, solid connector. */
 .timeline-step.completed {
-    color: #fff;
-    background: var(--success-color);
+    color: #334155;
 }
-.timeline-arrow {
-    color: #bdc3c7;
+.timeline-step.completed::before {
+    background: #0f172a;
+}
+.timeline-step.completed .timeline-marker {
+    color: #fff;
+    background: #0f172a;
+    border-color: #0f172a;
+}
+
+/* Where the period is right now — the one accent on the card.
+   Declared after .completed because a step carries both classes and .active
+   has to win. */
+.timeline-step.active {
+    color: var(--brand, #e11d48);
+    font-weight: 800;
+}
+.timeline-step.active .timeline-marker {
+    color: #fff;
+    background: var(--brand, #e11d48);
+    border-color: var(--brand, #e11d48);
+    box-shadow: 0 0 0 4px rgba(225, 29, 72, 0.15);
 }
 
 .leaderboard,
@@ -400,12 +513,13 @@
 .elite-badge {
     background: linear-gradient(135deg, #667eea, #764ba2);
 }
+/* Flat confirmation text in the action row — the tick already says "done",
+   so it does not need a filled panel of its own inside the card. */
 .vote-submitted-badge {
     display: inline-flex;
-    padding: 8px 16px;
-    color: var(--success-color);
-    background: #f0fdf4;
-    border-radius: var(--radius-sm);
+    align-items: center;
+    padding: 8px 0;
+    color: #64748b;
     font-weight: 600;
 }
 .podium-icon,
@@ -459,6 +573,37 @@
 }
 
 /* --- CSV upload list (csv-uploads.jsp) --- */
+.csv-uploads-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 30px;
+}
+
+.csv-upload-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px;
+    margin-bottom: 15px;
+    background: #fff;
+    border-left: 4px solid #667eea;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.csv-upload-info {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
 .csv-upload-icon {
     font-size: 28px;
 }
@@ -466,6 +611,44 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+}
+
+.csv-upload-filename {
+    color: #2c3e50;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.csv-upload-meta {
+    color: #7f8c8d;
+    font-size: 13px;
+}
+
+.view-btn {
+    display: inline-block;
+    padding: 10px 20px;
+    color: #fff;
+    background: #667eea;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.view-btn:hover {
+    background: #5568d3;
+}
+
+/* The rest of the empty state comes from the global .empty-state in common.css;
+   only these two extra lines are specific to this page. */
+.empty-state-text {
+    margin-bottom: 8px;
+    font-size: 18px;
+}
+
+.empty-state-subtext {
+    font-size: 14px;
 }
 
 /* --- "View Team" modal (results.jsp) --- */
@@ -549,112 +732,6 @@
     color: var(--text-muted);
     font-size: 13px;
 }
-.csv-uploads-container {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 20px;
-    }
-
-    .back-link {
-        display: inline-block;
-        margin-bottom: 20px;
-        color: #667eea;
-        text-decoration: none;
-        font-weight: 600;
-    }
-
-    .back-link:hover {
-        text-decoration: underline;
-    }
-
-    .section-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 30px;
-    }
-
-    .section-title {
-        font-size: 28px;
-        font-weight: 700;
-        color: #2c3e50;
-    }
-
-    .csv-upload-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 20px;
-        background: white;
-        border-radius: 8px;
-        margin-bottom: 15px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-        border-left: 4px solid #667eea;
-    }
-
-    .csv-upload-info {
-        display: flex;
-        align-items: center;
-        gap: 20px;
-    }
-
-    .csv-upload-icon {
-        font-size: 32px;
-    }
-
-    .csv-upload-details {
-        display: flex;
-        flex-direction: column;
-        gap: 5px;
-    }
-
-    .csv-upload-filename {
-        font-weight: 600;
-        font-size: 16px;
-        color: #2c3e50;
-    }
-
-    .csv-upload-meta {
-        font-size: 13px;
-        color: #7f8c8d;
-    }
-
-    .view-btn {
-        background: #667eea;
-        color: white;
-        border: none;
-        padding: 10px 20px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-weight: 600;
-        text-decoration: none;
-        display: inline-block;
-    }
-
-    .view-btn:hover {
-        background: #5568d3;
-    }
-
-    .empty-state {
-        text-align: center;
-        padding: 60px 20px;
-        color: #95a5a6;
-    }
-
-    .empty-state-icon {
-        font-size: 48px;
-        margin-bottom: 16px;
-    }
-
-    .empty-state-text {
-        font-size: 18px;
-        margin-bottom: 8px;
-    }
-
-    .empty-state-subtext {
-        font-size: 14px;
-    }
-
 /* One colored block per role in the team (lead mangaka, tantou editor,
    assistants, editorial board). Same "left border + tinted background"
    language as .period-card and .ranking-card elsewhere in this module. */
@@ -802,6 +879,44 @@
     .ranking-card,
     .mangaka-card {
         grid-template-columns: 1fr;
+    }
+
+    /* Header goes back to one column, but keeps the same reading order. */
+    .period-header {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .period-head-side {
+        align-items: flex-start;
+        text-align: left;
+    }
+
+    /* Five steps still have to fit side by side without a horizontal scroll,
+       so the marker and the labels shrink rather than the row wrapping. */
+    .period-card {
+        padding: 18px 16px;
+    }
+
+    .timeline-step {
+        gap: 6px;
+        font-size: 9px;
+        letter-spacing: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .timeline-step::before {
+        top: 8px;
+    }
+
+    .timeline-marker {
+        width: 18px;
+        height: 18px;
+        font-size: 10px;
+    }
+
+    .period-actions-admin {
+        margin-left: 0;
     }
 
     .rank-number,
