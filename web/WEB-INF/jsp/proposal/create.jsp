@@ -32,7 +32,8 @@
         <textarea name="synopsis" rows="8" required><c:out value="${synopsis}" /></textarea>
 
         <label>Sample File</label>
-        <input type="file" name="sampleFile" id="sampleFile" required />
+        <input type="file" name="sampleFile" id="sampleFile" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required />
+        <p class="form-note">Only PDF (.pdf) or Word (.docx) documents, up to 20 MB. The file must not be identical to a file already submitted on another proposal.</p>
 
         <label>Approximate Chapter</label>
         <input type="number" name="approximateChapter" min="1" value="${approximateChapter}" required />
@@ -41,12 +42,14 @@
     </form>
 </main>
 
-<c:if test="${not empty duplicateFileError}">
+<%-- Same toast for both sample-file rejections: identical content, or wrong format. --%>
+<c:set var="fileToastMessage" value="${not empty duplicateFileError ? duplicateFileError : fileTypeError}" />
+<c:if test="${not empty fileToastMessage}">
     <div id="dupFileToast" class="dup-file-toast" role="alert" aria-live="assertive">
         <span class="dup-file-toast__icon">&#9888;</span>
         <div class="dup-file-toast__body">
-            <span class="dup-file-toast__title">Duplicate file</span>
-            <p class="dup-file-toast__message"><c:out value="${duplicateFileError}" /></p>
+            <span class="dup-file-toast__title">${not empty duplicateFileError ? 'Duplicate file' : 'Invalid file type'}</span>
+            <p class="dup-file-toast__message"><c:out value="${fileToastMessage}" /></p>
         </div>
         <button type="button" class="dup-file-toast__ok" onclick="dismissDupFileToast()">OK</button>
     </div>
@@ -59,6 +62,8 @@
         }
     </script>
 </c:if>
+
+<script src="${pageContext.request.contextPath}/assets/js/proposal-sample-file.js"></script>
 
 <jsp:include page="../common/footer.jsp" />
 </body>

@@ -17,17 +17,15 @@ import manga.service.ProposalService;
 import manga.service.RankingCsvImportService;
 import manga.service.RankingService;
 import manga.dto.SubmitVoteEntryRequest;
-import java.io.File;
-import java.io.IOException;
+import manga.common.util.ProposalSampleFileUploader;
+import manga.common.util.UploadedSampleFile;
 import java.sql.Date;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
-import javax.servlet.http.Part;
 import manga.dto.CreateRankingPeriodRequestDTO;
 import manga.dto.SubmitDecisionVoteRequest;
 import manga.enums.ManuscriptStatus;
@@ -45,8 +43,6 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @Controller
 @RequestMapping("/main")
 public class ModuleWebController {
-
-    private static final long SAMPLE_FILE_MAX_SIZE_BYTES = 20L * 1024L * 1024L;
 
     @Autowired
     private ProposalService proposalService;
@@ -125,27 +121,37 @@ public class ModuleWebController {
             @RequestParam("approximateChapter") Integer approximateChapter,
             Model model) {
         AuthenticatedUser user = requireUser(session);
+        UploadedSampleFile upload = UploadedSampleFile.empty();
         try {
-            UploadInfo upload = saveUpload(request, "sampleFile");
+            upload = ProposalSampleFileUploader.save(request, "sampleFile");
             proposalService.updateDraft(user, id, title, genre, synopsis,
-                    upload.path, upload.originalName, approximateChapter, upload.hash);
+                    upload.getPath(), upload.getOriginalName(), approximateChapter, upload.getHash());
             return "redirect:/main/proposals/" + id;
         } catch (manga.common.exception.DuplicateSampleFileException ex) {
             // Sample file trùng nội dung với proposal khác → hiện toast góc phải, bắt chọn file khác.
-            Proposal proposal = proposalService.getDetail(user, id);
-            model.addAttribute("proposal", proposal);
-            model.addAttribute("duplicateFileError", ex.getMessage());
-            model.addAttribute("genres", proposalService.listGenres());
-            model.addAttribute("lockIdentityFields", "DRAFT".equalsIgnoreCase(proposal.getStatus()) && proposal.getSubmitAttemptCount() == 0);
-            return "proposal/edit";
+            // File vừa lưu bị từ chối nên xoá đi, tránh rác trong /uploads/proposals.
+            ProposalSampleFileUploader.deleteQuietly(request, upload.getPath());
+            return proposalEditWithFileToast(user, id, model, "duplicateFileError", ex.getMessage());
+        } catch (manga.common.exception.InvalidSampleFileTypeException ex) {
+            // Sai định dạng (chỉ nhận .pdf/.docx) → cùng kiểu toast như file trùng.
+            ProposalSampleFileUploader.deleteQuietly(request, upload.getPath());
+            return proposalEditWithFileToast(user, id, model, "fileTypeError", ex.getMessage());
         } catch (Exception ex) {
-            Proposal proposal = proposalService.getDetail(user, id);
-            model.addAttribute("proposal", proposal);
-            model.addAttribute("error", ex.getMessage());
-            model.addAttribute("genres", proposalService.listGenres());
-            model.addAttribute("lockIdentityFields", "DRAFT".equalsIgnoreCase(proposal.getStatus()) && proposal.getSubmitAttemptCount() == 0);
-            return "proposal/edit";
+            ProposalSampleFileUploader.deleteQuietly(request, upload.getPath());
+            return proposalEditWithFileToast(user, id, model, "error", ex.getMessage());
         }
+    }
+
+    /** Renders the edit form again with the proposal reloaded and one error attribute set. */
+    private String proposalEditWithFileToast(AuthenticatedUser user, long id, Model model,
+            String errorAttribute, String message) {
+        Proposal proposal = proposalService.getDetail(user, id);
+        model.addAttribute("proposal", proposal);
+        model.addAttribute(errorAttribute, message);
+        model.addAttribute("genres", proposalService.listGenres());
+        model.addAttribute("lockIdentityFields",
+                "DRAFT".equalsIgnoreCase(proposal.getStatus()) && proposal.getSubmitAttemptCount() == 0);
+        return "proposal/edit";
     }
 
     //Mo trang setting
@@ -284,45 +290,6 @@ public class ModuleWebController {
         }
         model.addAttribute("settings", progressSettingsService.getSettings());
         return "settings/progress";
-    }
-
-    private UploadInfo saveUpload(HttpServletRequest request, String fieldName) throws IOException, ServletException {
-        Part part = request.getPart(fieldName);
-        if (part == null || part.getSize() == 0) {
-            return new UploadInfo(null, null, null);
-        }
-        if (part.getSize() > SAMPLE_FILE_MAX_SIZE_BYTES) {
-            throw new IllegalArgumentException("Sample file must not exceed 20 MB");
-        }
-        String submittedName = part.getSubmittedFileName();
-        String originalName = submittedName == null ? "proposal-file" : new File(submittedName).getName();
-        String safeName = originalName.replaceAll("[^A-Za-z0-9._-]", "_");
-        String storedName = System.currentTimeMillis() + "_" + safeName;
-        String uploadPath = request.getServletContext().getRealPath("/uploads/proposals");
-        if (uploadPath == null) {
-            throw new IOException("Upload directory is not available");
-        }
-        File dir = new File(uploadPath);
-        if (!dir.exists() && !dir.mkdirs()) {
-            throw new IOException("Cannot create upload directory");
-        }
-        File saved = new File(dir, storedName);
-        part.write(saved.getAbsolutePath());
-        String hash = manga.common.util.FileHashUtil.sha256Hex(saved);
-        return new UploadInfo("/uploads/proposals/" + storedName, originalName, hash);
-    }
-
-    private static class UploadInfo {
-
-        private final String path;
-        private final String originalName;
-        private final String hash;
-
-        private UploadInfo(String path, String originalName, String hash) {
-            this.path = path;
-            this.originalName = originalName;
-            this.hash = hash;
-        }
     }
 
     // ============================================================

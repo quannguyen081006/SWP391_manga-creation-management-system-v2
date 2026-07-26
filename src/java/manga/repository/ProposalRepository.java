@@ -1281,6 +1281,46 @@ public class ProposalRepository {
         }
     }
 
+    /**
+     * Proposals that have a sample file but no stored hash yet (rows created before the
+     * duplicate-file check existed). Returned as {@code proposalId -> sampleFilePath} so the
+     * hashes can be backfilled and those older files also take part in duplicate detection.
+     */
+    public Map<Long, String> findSampleFilesMissingHash() {
+        Map<Long, String> rows = new HashMap<>();
+        if (!isSampleFileHashColumnReady()) {
+            return rows;
+        }
+        String sql = "SELECT id, sampleFilePath FROM Proposal "
+                + "WHERE sampleFileHash IS NULL AND sampleFilePath IS NOT NULL AND sampleFilePath <> ''";
+        try ( Connection conn = dataSource.getConnection();
+                PreparedStatement ps = conn.prepareStatement(sql);
+                ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                rows.put(Long.valueOf(rs.getLong("id")), rs.getString("sampleFilePath"));
+            }
+            return rows;
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot list proposals missing sample file hash", ex);
+        }
+    }
+
+    /** Stores the content hash of an existing proposal's sample file (backfill only). */
+    public void updateSampleFileHash(long proposalId, String sampleFileHash) {
+        if (sampleFileHash == null || sampleFileHash.trim().isEmpty() || !isSampleFileHashColumnReady()) {
+            return;
+        }
+        String sql = "UPDATE Proposal SET sampleFileHash = ? WHERE id = ? AND sampleFileHash IS NULL";
+        try ( Connection conn = dataSource.getConnection();
+                PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, sampleFileHash);
+            ps.setLong(2, proposalId);
+            ps.executeUpdate();
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot store sample file hash", ex);
+        }
+    }
+
     private boolean isSampleFileHashColumnReady() {
         if (sampleFileHashColumnReady != null) {
             return sampleFileHashColumnReady.booleanValue();

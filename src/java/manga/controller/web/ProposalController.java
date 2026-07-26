@@ -1,5 +1,7 @@
 package manga.controller.web;
 
+import manga.common.util.ProposalSampleFileUploader;
+import manga.common.util.UploadedSampleFile;
 import manga.model.AuthenticatedUser;
 import manga.model.Proposal;
 import manga.service.ProposalService;
@@ -10,7 +12,6 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-import javax.servlet.http.Part;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -21,8 +22,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 @Controller
 public class ProposalController {
-
-    private static final long SAMPLE_FILE_MAX_SIZE_BYTES = 20L * 1024L * 1024L;
 
     @Autowired
     private ProposalService proposalService;
@@ -62,12 +61,15 @@ public class ProposalController {
             @RequestParam("approximateChapter") Integer approximateChapter,
             Model model) {
         AuthenticatedUser user = (AuthenticatedUser) session.getAttribute("AUTH_USER");
+        UploadedSampleFile upload = UploadedSampleFile.empty();
         try {
-            UploadInfo upload = saveUpload(request, "sampleFile");
+            upload = ProposalSampleFileUploader.save(request, "sampleFile");
             long id = proposalService.createProposal(user, title, genre, synopsis,
-                    upload.path, upload.originalName, approximateChapter, upload.hash);
+                    upload.getPath(), upload.getOriginalName(), approximateChapter, upload.getHash());
             return "redirect:/main/proposals/" + id;
         } catch (manga.common.exception.DuplicateSampleFileException ex) {
+            // The stored file was rejected — drop it so /uploads/proposals keeps no orphans.
+            ProposalSampleFileUploader.deleteQuietly(request, upload.getPath());
             model.addAttribute("duplicateFileError", ex.getMessage());
             model.addAttribute("title", title);
             model.addAttribute("genre", genre);
@@ -75,7 +77,17 @@ public class ProposalController {
             model.addAttribute("approximateChapter", approximateChapter);
             model.addAttribute("genres", proposalService.listGenres());
             return "proposal/create";
+        } catch (manga.common.exception.InvalidSampleFileTypeException ex) {
+            ProposalSampleFileUploader.deleteQuietly(request, upload.getPath());
+            model.addAttribute("fileTypeError", ex.getMessage());
+            model.addAttribute("title", title);
+            model.addAttribute("genre", genre);
+            model.addAttribute("synopsis", synopsis);
+            model.addAttribute("approximateChapter", approximateChapter);
+            model.addAttribute("genres", proposalService.listGenres());
+            return "proposal/create";
         } catch (IllegalArgumentException ex) {
+            ProposalSampleFileUploader.deleteQuietly(request, upload.getPath());
             model.addAttribute("error", ex.getMessage());
             model.addAttribute("title", title);
             model.addAttribute("genre", genre);
@@ -209,43 +221,6 @@ public class ProposalController {
         return "proposal/detail";
     }
 
-    private UploadInfo saveUpload(HttpServletRequest request, String fieldName) throws IOException, ServletException {
-        Part part = request.getPart(fieldName);
-        if (part == null || part.getSize() == 0) {
-            return new UploadInfo(null, null, null);
-        }
-        if (part.getSize() > SAMPLE_FILE_MAX_SIZE_BYTES) {
-            throw new IllegalArgumentException("Sample file must not exceed 20 MB");
-        }
-        String submittedName = part.getSubmittedFileName();
-        String originalName = submittedName == null ? "proposal-file" : new File(submittedName).getName();
-        String safeName = originalName.replaceAll("[^A-Za-z0-9._-]", "_");
-        String storedName = System.currentTimeMillis() + "_" + safeName;
-        String uploadPath = request.getServletContext().getRealPath("/uploads/proposals");
-        if (uploadPath == null) {
-            throw new IOException("Upload directory is not available");
-        }
-        File dir = new File(uploadPath);
-        if (!dir.exists() && !dir.mkdirs()) {
-            throw new IOException("Cannot create upload directory");
-        }
-        File saved = new File(dir, storedName);
-        part.write(saved.getAbsolutePath());
-        String hash = manga.common.util.FileHashUtil.sha256Hex(saved);
-        return new UploadInfo("/uploads/proposals/" + storedName, originalName, hash);
-    }
-
-    private static class UploadInfo {
-        private final String path;
-        private final String originalName;
-        private final String hash;
-
-        private UploadInfo(String path, String originalName, String hash) {
-            this.path = path;
-            this.originalName = originalName;
-            this.hash = hash;
-        }
-    }
 }
 
 
