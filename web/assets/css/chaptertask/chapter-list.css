@@ -38,13 +38,11 @@
 .chapter-section-desc { margin: 6px 0 0; }
 .chapter-status-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .chapter-group { margin-bottom: 20px; }
+/* Group head is text only: the label names the state and the count is the number.
+   No colour dot — that was a third copy of what the label and the table already say. */
 .chapter-group-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.chapter-group-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
-.chapter-group-dot-overdue { background: #ef4444; }
-.chapter-group-dot-progress { background: #f59e0b; }
-.chapter-group-dot-complete { background: #10b981; }
 .chapter-group-label { font-size: 13px; font-weight: 600; color: #6b7280; }
-.chapter-group-count { font-size: 11px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 999px; padding: 1px 8px; color: #6b7280; }
+.chapter-group-count { font-size: 11px; color: #6b7280; }
 .chapter-empty-cell { color: #9ca3af; font-size: 13px; }
 .chapter-empty-muted { color: #9ca3af; }
 .chapter-toggle-completed { margin-left: auto; }
@@ -62,22 +60,47 @@
 .chapter-overview-row-compact { font-size: 13px; margin-bottom: 4px; }
 .chapter-overview-row-last { display: flex; justify-content: space-between; font-size: 13px; }
 .chapter-overview-label { font-size: 13px; color: #6b7280; }
-.chapter-overview-value { font-size: 13px; font-weight: 600; }
-.chapter-overview-value-complete { color: #10b981; font-weight: 500; }
-.chapter-overview-value-progress { color: #f59e0b; font-weight: 500; }
-.chapter-overview-value-overdue { color: #ef4444; font-weight: 500; }
+/* The counts are the information; they are not colour-coded a second time.
+   The -complete/-progress/-overdue suffixes stay so chapter-list.js keeps working. */
+.chapter-overview-value,
+.chapter-overview-value-complete,
+.chapter-overview-value-progress,
+.chapter-overview-value-overdue { font-size: 13px; font-weight: 600; color: #0f172a; }
 .chapter-overview-progress { margin-bottom: 12px; }
+/* Aggregate bar, not a per-chapter signal: neutral flat fill, no accent of its own. */
+.chapter-overview-progress > span { background: #64748b; }
+/*
+ * Deadline cell: plain text, not a pill.
+ * The shared .due-date-* pills in styles.css set white-space:nowrap plus padding and a
+ * border, so "⚠ 2026-06-02 (55 days overdue)" came out ~255px wide. This table is
+ * table-layout:fixed with .col-deadline at 230px and td{overflow:hidden}, so the tail
+ * was silently clipped — worse when ?seriesId=... opens the 280px sidebar.
+ * Flattened here it fits, and can wrap instead of being cut if it still doesn't.
+ * Scoped to this table so the task list and chapter detail keep their pills.
+ */
+.chapter-tracker-table tbody td .due-date-done,
+.chapter-tracker-table tbody td .due-date-active,
+.chapter-tracker-table tbody td .due-date-urgent,
+.chapter-tracker-table tbody td .due-date-overdue {
+    display: inline !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: none !important;
+    box-shadow: none !important;
+    white-space: normal;
+    font-weight: 600 !important;
+    color: #0f172a !important;
+}
 .chapter-series-cell { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chapter-number-cell { color: #9ca3af; }
 .chapter-title-cell { font-weight: 500; }
-/* Legend for the Progress column; swatches mirror the .progress is-* classes in styles.css. */
-.chapter-progress-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-bottom: 16px; font-size: 12px; color: #6b7280; }
-.chapter-progress-legend-title { font-weight: 600; }
-.chapter-progress-legend-item { display: flex; align-items: center; gap: 6px; }
-.chapter-progress-legend-swatch { display: inline-block; width: 22px; height: 8px; border-radius: 999px; }
-.chapter-progress-legend-swatch-low { background: linear-gradient(90deg, #ef4444, #dc2626); }
-.chapter-progress-legend-swatch-mid { background: linear-gradient(90deg, #f59e0b, #f97316); }
-.chapter-progress-legend-swatch-done { background: linear-gradient(90deg, #10b981, #059669); }
+/* Progress: the bar is the only place the level is coloured, and the percentage
+   printed next to it means the colour is never carrying the value on its own.
+   Flat fills scoped to this page's bars so the shared .progress.is-* gradients in
+   styles.css stay intact for the pages that still use them. */
+.chapter-progress-bar.is-low > span { background: #b91c1c; }
+.chapter-progress-bar.is-mid > span { background: #b45309; }
+.chapter-progress-bar.is-done > span { background: #16794b; }
 .chapter-progress-cell { min-width: 140px; }
 .chapter-progress-meta { display: flex; justify-content: space-between; margin-bottom: 4px; }
 .chapter-progress-percent { font-size: 12px; color: #6b7280; }

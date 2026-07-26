@@ -319,6 +319,50 @@ button:disabled {
     font-size: 14px;
 }
 
+/*
+ * Shared page frame. Extracted from the Settings pages so any page can get the
+ * same centred column and title block. .settings-page-head / .settings-page-icon
+ * in styles.css stay as-is so Settings keeps working unchanged.
+ */
+.container {
+    width: min(1180px, 100%);
+    margin-inline: auto;
+}
+
+.page-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-4);
+    margin-bottom: 18px;
+}
+
+.page-header h2 {
+    margin: 0;
+    font-size: 28px;
+    line-height: 1.15;
+}
+
+.page-header p {
+    margin: 5px 0 0;
+    color: #64748b;
+    font-size: 14px;
+}
+
+/* Unlike .settings-page-icon the glyph is not hardcoded - pass it as element content. */
+.page-header-icon {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    color: #fff;
+    background: #0f172a;
+    box-shadow: 4px 4px 0 rgba(225, 29, 72, .18);
+    font-size: 24px;
+    line-height: 1;
+}
+
 .text-success { color: var(--success-color); }
 .text-danger { color: var(--danger-color); }
 .text-muted { color: var(--text-muted); }

@@ -118,11 +118,10 @@
 
     /**
      * Renders the HTML for the deadline cell in the table.
-     * Color classification:
-     *   - Green      → done
-     *   - Red + icon → overdue
-     *   - Orange     → ≤ 3 days left (urgent)
-     *   - Blue       → normal
+     * The state goes into the class (.due-date-done / -overdue / -urgent / -active) and,
+     * more importantly, into the words: "Done", "55 days overdue", "2 days left".
+     * On this page chapter-list.css renders all four as plain dark text — the wording
+     * already says the state, and the boxed version was too wide for the fixed column.
      */
     function formatDeadlineCell(dateValue, isDone, isOverdue) {
         var formatted = formatDate(dateValue);
@@ -174,21 +173,15 @@
     /**
      * Applies the width to the progress bar fill.
      * Uses a data attribute instead of inline style to avoid CSP issues when rendering an HTML string.
-     * Colour normally comes from the shared .progress is-low/is-mid/is-done classes in styles.css;
-     * data-chapter-progress-color is only for bars that opt out of those thresholds (the violet
-     * overall-progress bar, which is an aggregate rather than a per-chapter signal).
+     * Width only — colour is left entirely to CSS (.chapter-progress-bar.is-low/-mid/-done for
+     * per-chapter bars, .chapter-overview-progress for the neutral aggregate bar).
      * Called after every table render.
      */
     function applyChapterProgressStyles(root) {
         var scope = root || document;
         var fills = scope.querySelectorAll('[data-chapter-progress]');
         for (var i = 0; i < fills.length; i++) {
-            var fill = fills[i];
-            var overrideColor = fill.getAttribute('data-chapter-progress-color');
-            fill.style.width = fill.getAttribute('data-chapter-progress') + '%';
-            if (overrideColor) {
-                fill.style.background = overrideColor;
-            }
+            fills[i].style.width = fills[i].getAttribute('data-chapter-progress') + '%';
         }
     }
 
@@ -536,7 +529,7 @@
             + '<div class="chapter-overview-row">'
             + '<span class="chapter-overview-label">Overall progress</span>'
             + '<span class="chapter-overview-value">' + overallPct + '%</span></div>'
-            + '<div class="progress chapter-overview-progress"><span class="chapter-progress-fill" data-chapter-progress="' + overallPct + '" data-chapter-progress-color="#8b5cf6"></span></div>'
+            + '<div class="progress chapter-overview-progress"><span class="chapter-progress-fill" data-chapter-progress="' + overallPct + '"></span></div>'
             + '<div class="chapter-overview-row chapter-overview-row-compact">'
             + '<span class="chapter-overview-label">Completed</span><span class="chapter-overview-value-complete">' + doneCount + '</span></div>'
             + '<div class="chapter-overview-row chapter-overview-row-compact">'
@@ -712,12 +705,8 @@
             if (progressSettings && typeof progressSettings.highThresholdPercent === 'number') {
                 PROGRESS_HIGH_THRESHOLD_PERCENT = progressSettings.highThresholdPercent;
             }
-            var legendLow = document.getElementById('chapterProgressLegendLow');
-            var legendMid = document.getElementById('chapterProgressLegendMid');
-            var legendDone = document.getElementById('chapterProgressLegendDone');
-            if (legendLow) { legendLow.textContent = 'Below ' + PROGRESS_LOW_THRESHOLD_PERCENT + '%'; }
-            if (legendMid) { legendMid.textContent = PROGRESS_LOW_THRESHOLD_PERCENT + '–' + (PROGRESS_HIGH_THRESHOLD_PERCENT - 1) + '%'; }
-            if (legendDone) { legendDone.textContent = PROGRESS_HIGH_THRESHOLD_PERCENT + '% and above'; }
+            // Thresholds only drive the bar class in renderGroup — there is no legend to fill:
+            // mỗi row đã in sẵn phần trăm ngay cạnh thanh progress.
             // Build lookup map để tránh duyệt mảng nhiều lần
             seriesById = {};
             for (var i = 0; i < seriesList.length; i++) {

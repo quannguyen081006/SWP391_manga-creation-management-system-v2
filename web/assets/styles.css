@@ -688,9 +688,10 @@ a { color: inherit; text-decoration: none; }
     background: linear-gradient(90deg, #f59e0b, #f97316);
 }
 /*
- * Shared progress thresholds for chapters and series - keep these three in sync
- * with the legends in chapter/list.jsp and series/list.jsp:
+ * Shared progress thresholds:
  *   is-low  = below 50%   is-mid = 50-99%   is-done = 100%
+ * The chapter and series pages print the percentage next to their bars and override
+ * these fills with flat colours in css/chaptertask/chapter-list.css and css/series.css.
  */
 .progress.is-low > span { background: linear-gradient(90deg, #ef4444, #dc2626); }
 .progress.is-mid > span { background: linear-gradient(90deg, #f59e0b, #f97316); }
