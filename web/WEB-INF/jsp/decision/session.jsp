@@ -57,9 +57,9 @@
                 border-left-color: #f39c12;
             }
 
-            .risk-badge {
+            .status-badge {
                 display: inline-block;
-                padding: 4px 12px;
+                padding: 6px 14px;
                 border-radius: 12px;
                 font-size: 11px;
                 font-weight: 600;
@@ -67,31 +67,29 @@
                 letter-spacing: 0.5px;
             }
 
-            .risk-badge.HIGH {
+            .status-badge.OPEN {
                 background: #e74c3c;
                 color: white;
             }
 
-            .risk-badge.MEDIUM {
-                background: #f39c12;
-                color: white;
-            }
-
-            .risk-badge.LOW {
+            .status-badge.CLOSED {
                 background: #27ae60;
                 color: white;
             }
 
-            .pressure-banner {
-                background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            .status-badge.CONTINUE {
+                background: #27ae60;
                 color: white;
-                padding: 12px 20px;
-                border-radius: 8px;
-                margin-bottom: 16px;
-                font-weight: 600;
-                display: flex;
-                align-items: center;
-                gap: 10px;
+            }
+
+            .status-badge.CANCEL {
+                background: #e74c3c;
+                color: white;
+            }
+
+            .status-badge.CHANGE_TYPE {
+                background: #3498db;
+                color: white;
             }
 
             .vote-btn {
@@ -192,6 +190,19 @@
                 font-size: 48px;
                 margin-bottom: 16px;
             }
+
+            .section-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 20px;
+            }
+
+            .section-header h3 {
+                margin: 0;
+                font-size: 20px;
+                color: #2c3e50;
+            }
         </style>
     </head>
     <body>
@@ -199,9 +210,17 @@
 
         <c:if test="${not empty error}"><div class="alert error"><c:out value="${error}" /></div></c:if>
 
+        <div class="editorial-hero">
+            <h1>Decision Sessions</h1>
+            <div class="subtitle">Editorial Board voting on series continuation, cancellation, or type change</div>
+        </div>
+
         <c:if test="${not empty groupedSessions}">
             <div class="section-card">
-                <h3 class="section-title" style="font-size: 24px; margin-bottom: 24px;">📋 Decision Sessions by Series</h3>
+                <div class="section-header">
+                    <h3>📋 Decision Sessions</h3>
+                    <span style="color: #7f8c8d; font-size: 14px;">Active and completed voting sessions</span>
+                </div>
 
                 <c:forEach items="${groupedSessions}" var="group">
                     <div class="decision-card status-${group.latestStatus}">
@@ -248,11 +267,6 @@
 
         <c:if test="${not empty sessionDetail}">
             <div class="decision-card status-${sessionDetail.status}">
-                <div class="pressure-banner">
-                    <span style="font-size: 24px;">⚠️</span>
-                    <span>Bottom 20% Performance Review Required</span>
-                </div>
-
                 <h3 style="margin: 0 0 20px 0; font-size: 24px; color: #2c3e50;">Decision Session #${sessionDetail.id}</h3>
 
                 <div style="display: grid; grid-template-columns: repeat(4, auto); gap: 20px; margin-bottom: 20px;">
@@ -283,8 +297,7 @@
                 <c:if test="${not empty revenueHistory}">
                     <div style="margin-top:24px;">
                         <h4>📈 Revenue Trend Analysis</h4>
-
-                            <canvas id="revenueChart"></canvas>
+                        <canvas id="revenueChart"></canvas>
                     </div>
                 </c:if>
 
@@ -349,7 +362,7 @@
             <div class="empty-state">
                 <div class="icon">⚖️</div>
                 <div style="font-size: 18px;">No active decision sessions</div>
-                <div style="font-size: 14px;">Decision sessions are triggered for series in the bottom 20% ranking</div>
+                <div style="font-size: 14px;">Decision sessions are created by Administrator from ranking results</div>
             </div>
         </c:if>
 
@@ -372,7 +385,7 @@
                 if (!status) return '';
                 
                 if (status === 'OPEN') {
-                    return 'High Risk';
+                    return 'OPEN - Voting In Progress';
                 }
                 
                 if (status === 'UNDER_REVIEW') {
@@ -381,13 +394,13 @@
                 
                 if (status === 'CLOSED' || status === 'FINALIZED') {
                     if (result === 'CONTINUE') {
-                        return 'Resolved';
+                        return 'RESOLVED - Continue Publication';
                     }
                     if (result === 'CHANGE_TYPE') {
-                        return 'Changed';
+                        return 'RESOLVED - Series Type Changed';
                     }
                     if (result === 'CANCEL') {
-                        return 'Cancelled';
+                        return 'RESOLVED - Series Cancelled';
                     }
                 }
                 
@@ -420,7 +433,6 @@
                 return '#7f8c8d';
             }
             
-            // Initialize status labels on page load
             document.addEventListener('DOMContentLoaded', function() {
                 <c:forEach items="${groupedSessions}" var="group">
                     var statusLabel = document.getElementById('status-label-${group.seriesId}');
@@ -432,7 +444,6 @@
                     }
                 </c:forEach>
                 
-                // Also update session detail status if present
                 <c:if test="${not empty sessionDetail}">
                     var detailStatus = document.querySelector('.decision-detail-status');
                     if (detailStatus) {
@@ -446,7 +457,6 @@
         </script>
 
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
         <script src="${pageContext.request.contextPath}/assets/decision-chart.js"></script>
     </body>
 </html>

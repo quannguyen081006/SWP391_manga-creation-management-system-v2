@@ -17,6 +17,7 @@ import java.sql.Date;
 import java.util.List;
 import java.util.Map;
 import manga.model.RankingCsvUpload;
+import manga.repository.DecisionRepository;
 import manga.repository.RankingCsvUploadRepository;
 
 @Service
@@ -39,6 +40,9 @@ public class RankingService {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private DecisionRepository decisionRepository;
 
     public List<Map<String, Object>> listPeriods() {
         return rankingRepository.listPeriods();
@@ -146,7 +150,18 @@ public class RankingService {
 
     public List<Map<String, Object>> getRankingResults(long periodId) {
         // Any authenticated user can view results
-        return rankingRepository.results(periodId);
+        List<Map<String, Object>> results = rankingRepository.results(periodId);
+        
+        // Add decision session status for each ranking record
+        for (Map<String, Object> result : results) {
+            long rankingRecordId = (Long) result.get("id");
+            Map<String, Object> session = decisionRepository.getSessionByRankingRecord(rankingRecordId);
+            if (session != null) {
+                result.put("decisionSession", session);
+            }
+        }
+        
+        return results;
     }
 
     public List<Map<String,Object>> findCsvByPeriod(long periodId){

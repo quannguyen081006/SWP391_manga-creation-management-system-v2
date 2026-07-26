@@ -66,8 +66,8 @@ public class ClosePeriodPipelineService {
         // PHASE 3: Mangaka Ranking (separate transaction)
         phase3CalculateMangakaRanking(periodId, user);
 
-        // PHASE 4: Decision Engine (separate transaction)
-        phase4RunDecisionEngine(periodId, user);
+        // PHASE 4: REMOVED - Decision Sessions now created manually by Administrator
+        // phase4RunDecisionEngine(periodId, user);
 
         // PHASE 5: Finalize period (separate transaction)
         phase5FinalizePeriod(periodId, user, period.get("name").toString());
@@ -101,8 +101,8 @@ public class ClosePeriodPipelineService {
         // PHASE 3: Mangaka Ranking (separate transaction)
         phase3CalculateMangakaRanking(periodId, null);
 
-        // PHASE 4: Decision Engine (separate transaction)
-        phase4RunDecisionEngine(periodId, null);
+        // PHASE 4: REMOVED - Decision Sessions now created manually by Administrator
+        // phase4RunDecisionEngine(periodId, null);
 
         // PHASE 5: Finalize period (separate transaction)
         phase5FinalizePeriod(periodId, null, period.get("name").toString());

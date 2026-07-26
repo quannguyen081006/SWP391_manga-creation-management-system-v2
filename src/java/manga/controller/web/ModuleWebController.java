@@ -79,6 +79,9 @@ public class ModuleWebController {
     private RankingService rankingService;
 
     @Autowired
+    private manga.repository.RankingRepository rankingRepository;
+
+    @Autowired
     private manga.service.ReviewTaskService reviewTaskService;
 
     @Autowired
@@ -721,6 +724,23 @@ public class ModuleWebController {
             decisionDetail(id, session, model);
             model.addAttribute("error", ex.getMessage());
             return "decision/session";
+        }
+    }
+
+    @RequestMapping(value = "/ranking/records/{rankingRecordId}/create-decision", method = RequestMethod.POST)
+    public String createDecisionFromRankingRecord(
+            @PathVariable("rankingRecordId") long rankingRecordId,
+            @RequestParam("seriesId") long seriesId,
+            HttpSession session,
+            Model model) {
+        AuthenticatedUser user = requireUser(session);
+        try {
+            requireAdmin(user);
+            long sessionId = decisionService.openDecisionSessionFromRankingRecord(rankingRecordId, seriesId, user);
+            return "redirect:/main/decisions/" + sessionId;
+        } catch (RuntimeException ex) {
+            model.addAttribute("error", ex.getMessage());
+            return "redirect:/main/ranking/periods/" + rankingRepository.getPeriodIdByRankingRecordId(rankingRecordId) + "/results";
         }
     }
 

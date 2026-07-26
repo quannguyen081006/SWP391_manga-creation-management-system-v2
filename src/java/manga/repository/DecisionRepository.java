@@ -385,6 +385,51 @@ public class DecisionRepository {
     }
 
     // ------------------------------------------------------------------ //
+    //  hasExistingSessionForRankingRecord — check for duplicate session  //
+    // ------------------------------------------------------------------ //
+    public boolean hasExistingSessionForRankingRecord(long rankingRecordId) {
+        String sql = "SELECT COUNT(1) FROM DecisionSession WHERE rankingRecordId = ?";
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, rankingRecordId);
+            try ( ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0;
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot check for existing decision session", ex);
+        }
+        return false;
+    }
+
+    // ------------------------------------------------------------------ //
+    //  getSessionByRankingRecord — get session for specific ranking record //
+    // ------------------------------------------------------------------ //
+    public Map<String, Object> getSessionByRankingRecord(long rankingRecordId) {
+        String sql = "SELECT ds.id, ds.seriesId, ds.rankingRecordId, ds.status, ds.result, ds.openedAt, ds.closedAt "
+                + "FROM DecisionSession ds WHERE ds.rankingRecordId = ?";
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, rankingRecordId);
+            try ( ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    Map<String, Object> row = new HashMap<String, Object>();
+                    row.put("id", rs.getLong("id"));
+                    row.put("seriesId", rs.getLong("seriesId"));
+                    row.put("rankingRecordId", rs.getLong("rankingRecordId"));
+                    row.put("status", rs.getString("status"));
+                    row.put("result", rs.getString("result"));
+                    row.put("openedAt", rs.getTimestamp("openedAt"));
+                    row.put("closedAt", rs.getTimestamp("closedAt"));
+                    return row;
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot get decision session by ranking record", ex);
+        }
+        return null;
+    }
+
+    // ------------------------------------------------------------------ //
     //  createSession — create new OPEN decision session                    //
     // ------------------------------------------------------------------ //
     public long createSession(long seriesId, long rankingRecordId, String systemSuggestion, String revenueTrendSnapshot, Long actorId) {
