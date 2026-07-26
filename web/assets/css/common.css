@@ -320,9 +320,12 @@ button:disabled {
 }
 
 /*
- * Shared page frame. Extracted from the Settings pages so any page can get the
- * same centred column and title block. .settings-page-head / .settings-page-icon
- * in styles.css stay as-is so Settings keeps working unchanged.
+ * Shared page frame — the single definition of the page title block.
+ * Every page that needs a heading uses .page-header + .page-header-icon; the
+ * per-feature copies (.page-head, .settings-page-head, .series-page-head) were
+ * folded into this one because all three carried identical values.
+ * The icon glyph is NOT hardcoded here — pass it as element content (inline SVG
+ * or a character), or add a modifier class such as .settings-page-icon.
  */
 .container {
     width: min(1180px, 100%);
@@ -332,6 +335,7 @@ button:disabled {
 .page-header {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: var(--spacing-4);
     margin-bottom: 18px;
 }
@@ -348,7 +352,6 @@ button:disabled {
     font-size: 14px;
 }
 
-/* Unlike .settings-page-icon the glyph is not hardcoded - pass it as element content. */
 .page-header-icon {
     display: inline-grid;
     place-items: center;
@@ -361,6 +364,17 @@ button:disabled {
     box-shadow: 4px 4px 0 rgba(225, 29, 72, .18);
     font-size: 24px;
     line-height: 1;
+}
+
+.page-header-icon svg {
+    width: 26px;
+    height: 26px;
+}
+
+@media (max-width: 760px) {
+    .page-header {
+        align-items: flex-start;
+    }
 }
 
 .text-success { color: var(--success-color); }

@@ -11,8 +11,8 @@
 <jsp:include page="../common/header.jsp" />
 
 <main class="container settings-page">
-    <div class="settings-page-head">
-        <div class="settings-page-icon" aria-hidden="true"></div>
+    <div class="page-header">
+        <div class="page-header-icon settings-page-icon" aria-hidden="true"></div>
         <div>
             <h2>Progress Display Settings</h2>
             <p>Control the percentages where chapter/series progress bars and badges switch from red to amber, and from amber to green.</p>

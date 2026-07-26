@@ -13,8 +13,8 @@
 <c:set var="ctx" value="${pageContext.request.contextPath}" />
 
 <main class="container settings-page">
-    <div class="settings-page-head">
-        <div class="settings-page-icon" aria-hidden="true"></div>
+    <div class="page-header">
+        <div class="page-header-icon settings-page-icon" aria-hidden="true"></div>
         <div>
             <h2>Settings</h2>
             <p>System-wide configuration. Admin only.</p>

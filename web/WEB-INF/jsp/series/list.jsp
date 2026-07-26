@@ -34,9 +34,9 @@
 
     <div id="seriesMessage" class="alert series-message is-hidden-initial"></div>
 
-    <%-- Head mirrors .settings-page-head: icon block, title, one line of context. --%>
-    <div class="series-page-head">
-        <div class="series-page-icon" aria-hidden="true">
+    <%-- Head uses the shared .page-header block, title, one line of context. --%>
+    <div class="page-header">
+        <div class="page-header-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 6.7S9.6 4.8 4.2 4.8v12.6c5.4 0 7.8 1.9 7.8 1.9s2.4-1.9 7.8-1.9V4.8c-5.4 0-7.8 1.9-7.8 1.9Z"/>
                 <path d="M12 6.7v12.6"/>

@@ -151,7 +151,7 @@
 <jsp:include page="../../common/header.jsp" />
 
 <main class="container settings-page">
-    <div class="settings-page-head">
+    <div class="page-header">
         <div>
             <h2>Salary &amp; KPI Settings</h2>
             <p>Configure salary rates and the formulas used to calculate KPI, bonus, and deductions.</p>

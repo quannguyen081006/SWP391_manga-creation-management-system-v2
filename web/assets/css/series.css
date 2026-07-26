@@ -2,7 +2,7 @@
  * Series list (/main/series).
  *
  * Typography and surface tokens are deliberately the same ones the Settings pages use
- * (.settings-page-head / .setting-control-card in styles.css):
+ * (.page-header in common.css / .setting-control-card in styles.css):
  *   page title 28px/1.15 · supporting text 14px #64748b · card titles weight 800 #0f172a
  *   labels 11px uppercase #64748b · hairlines #e2e8f0
  * Like the Settings hub cards, a card here carries no nested panels: the only colour
@@ -13,28 +13,7 @@
 
 .series-message { margin-bottom: var(--spacing-4); }
 
-/* ---- Page head: same device as .settings-page-head ---- */
-.series-page-head {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    flex-wrap: wrap;
-    margin-bottom: 18px;
-}
-.series-page-head h2 { margin: 0; font-size: 28px; line-height: 1.15; }
-.series-page-head p { margin: 5px 0 0; color: #64748b; font-size: 14px; }
-.series-page-icon {
-    display: inline-grid;
-    place-items: center;
-    flex: 0 0 auto;
-    width: 48px;
-    height: 48px;
-    border-radius: 8px;
-    color: #fff;
-    background: #0f172a;
-    box-shadow: 4px 4px 0 rgba(225, 29, 72, .18);
-}
-.series-page-icon svg { width: 26px; height: 26px; }
+/* Page head uses the shared .page-header / .page-header-icon from common.css. */
 
 /* ---- Card shell: sections own their padding so every card ends flush ---- */
 .tile.series-tile {
@@ -184,7 +163,3 @@
 }
 .series-empty-title { margin: 0; color: #0f172a; font-size: 17px; font-weight: 800; }
 .series-empty-note { margin: 6px 0 0; color: #64748b; font-size: 13px; line-height: 1.45; }
-
-@media (max-width: 760px) {
-    .series-page-head { align-items: flex-start; }
-}
