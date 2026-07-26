@@ -1054,7 +1054,12 @@ public class ModuleWebController {
         // Build and add workspace enhancement DTOs
         manga.dto.ResponsiblePeopleDTO responsiblePeople = manuscriptVersionService.buildResponsiblePeopleDTO(version.getChapterId());
         model.addAttribute("responsiblePeople", responsiblePeople);
-        
+
+        // Series title for the workspace toolbar breadcrumb
+        java.util.Map<String, Object> series = productionService.getSeriesById(chapter.getSeriesId());
+        String seriesTitle = series != null && series.get("title") != null ? String.valueOf(series.get("title")) : "";
+        model.addAttribute("seriesTitle", seriesTitle);
+
         return "manuscript-version/workspace";
     }
 

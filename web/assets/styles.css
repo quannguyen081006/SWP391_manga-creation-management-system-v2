@@ -2504,11 +2504,18 @@ select,
     border-color: rgba(251, 113, 133, .55);
 }
 
+/* Pinned state: a flat emerald toggle, deliberately unlike the white/red
+   pill used for the active page so the two never look alike. */
 .sidebar-pin[aria-pressed="true"] {
-    background: #ffffff;
-    color: #111827;
-    border-color: #e11d48;
-    box-shadow: 4px 4px 0 rgba(225, 29, 72, .3);
+    background: rgba(16, 185, 129, .16);
+    color: #d1fae5;
+    border-color: rgba(16, 185, 129, .7);
+    box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .3);
+}
+
+.sidebar-pin[aria-pressed="true"]:hover {
+    background: rgba(16, 185, 129, .24);
+    border-color: rgba(16, 185, 129, .85);
 }
 
 .pin-icon {
