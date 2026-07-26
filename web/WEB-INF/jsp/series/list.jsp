@@ -1,18 +1,17 @@
 <%--
   PURPOSE: Series overview cards for every role that can reach /main/series.
-  TYPOGRAPHY: follows the Settings pages (28px page head, 14px sub, 900-weight card
+  TYPOGRAPHY: follows the Settings pages (28px page head, 14px sub, 800-weight card
   titles, #64748b supporting text, #e2e8f0 hairlines) so the admin screens and this
   screen read as one system.
   LAYOUT PER CARD (top to bottom):
-    [0] STRIPE    — 4px progress-state band, lets a whole grid be scanned at a glance
     [1] CHIPS     — status chip (ACTIVE / CANCELLED) + genre chip
     [2] TITLE     — series title
-    [3] STATS     — chapter count and in-progress count as two mini tiles
+    [3] STATS     — one flat line: "N chapters · M in progress"
     [4] PROGRESS  — label + percentage on one row, then the bar
     [5] DEADLINE  — editable form for the owning Tantou Editor, read-only row for everyone else
-    [6] FOOT      — full width link to the chapter list
-  Progress colours (is-low / is-mid / is-done) follow the admin-configurable thresholds
-  in Settings > Progress Display, same as the chapter tracker.
+    [6] FOOT      — outline link to the chapter list
+  Progress level (is-low / is-mid / is-done) follows the admin-configurable thresholds
+  in Settings > Progress Display and is shown by the bar colour only.
   series.js hooks that must stay: #seriesMessage, .series-deadline-form[data-series-id],
   input[name=publicationDate], and the [data-progress-width] span filled in by common.js.
 --%>
@@ -25,8 +24,8 @@
 <head>
     <meta charset="UTF-8">
     <title>Series</title>
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css?v=20260726series2" />
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/series.css?v=20260726series2" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css?v=20260727series3" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/series.css?v=20260727series3" />
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
@@ -45,31 +44,16 @@
         </div>
         <div>
             <h2>Series</h2>
-            <p>${fn:length(seriesList)} series you can access. Progress colours follow Settings &gt; Progress Display.</p>
-        </div>
-        <%-- Legend for the progress colours; thresholds are admin-configurable --%>
-        <div class="series-legend">
-            <span class="series-legend-title">Progress</span>
-            <span class="series-legend-item">
-                <span class="series-legend-dot series-legend-dot-low"></span>Below ${progressLowThreshold}%
-            </span>
-            <span class="series-legend-item">
-                <span class="series-legend-dot series-legend-dot-mid"></span>${progressLowThreshold}–${progressHighThreshold - 1}%
-            </span>
-            <span class="series-legend-item">
-                <span class="series-legend-dot series-legend-dot-done"></span>${progressHighThreshold}% and above
-            </span>
+            <p>${fn:length(seriesList)} series you can access.</p>
         </div>
     </div>
 
     <div class="list-cards">
         <c:forEach items="${seriesList}" var="s">
-            <%-- One state name drives the top stripe, the bar gradient and the percentage colour. --%>
+            <%-- One state name drives the progress bar colour. --%>
             <c:set var="progressState" value="${s.progressPct >= progressHighThreshold ? 'done' : (s.progressPct >= progressLowThreshold ? 'mid' : 'low')}" />
             <c:set var="isCancelled" value="${s.status == 'CANCELLED'}" />
             <article class="tile series-tile ${isCancelled ? 'series-tile-cancelled' : ''}">
-                <span class="series-stripe series-stripe-${progressState}" aria-hidden="true"></span>
-
                 <div class="series-tile-top">
                     <div class="series-chips">
                         <span class="status-chip series-status ${isCancelled ? 'status-rejected' : 'status-approved'}">${s.status}</span>
@@ -78,20 +62,7 @@
                     <h3 class="series-name">${s.title}</h3>
                 </div>
 
-                <div class="series-stats">
-                    <div class="series-stat">
-                        <div class="series-stat-key">
-                            <svg class="series-stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.6A2.6 2.6 0 0 1 6.6 3H20v14.4H6.6A2.6 2.6 0 0 0 4 20V5.6Z"/><path d="M8 3v14.4"/></svg>Chapters
-                        </div>
-                        <div class="series-stat-value">${s.chapterCount}</div>
-                    </div>
-                    <div class="series-stat">
-                        <div class="series-stat-key">
-                            <svg class="series-stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17v3Z"/><path d="M14.5 6.5l3 3"/></svg>In progress
-                        </div>
-                        <div class="series-stat-value">${s.inProgressChapters}</div>
-                    </div>
-                </div>
+                <div class="series-stats">${s.chapterCount} chapters &middot; ${s.inProgressChapters} in progress</div>
 
                 <div class="series-progress-block">
                     <div class="series-progress-row">
@@ -103,18 +74,14 @@
 
                 <c:if test="${sessionScope.AUTH_USER != null && sessionScope.AUTH_USER.hasRole('TANTOU_EDITOR') && sessionScope.AUTH_USER.id == s.tantouEditorId}">
                     <form class="series-deadline-form" data-series-id="${s.id}">
-                        <label for="deadline-${s.id}">
-                            <svg class="series-deadline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Series deadline
-                        </label>
+                        <label for="deadline-${s.id}">Series deadline</label>
                         <input id="deadline-${s.id}" type="date" name="publicationDate" value="${s.publicationDate}" required />
                         <button class="btn small" type="submit">Update</button>
                     </form>
                 </c:if>
                 <c:if test="${sessionScope.AUTH_USER == null || !sessionScope.AUTH_USER.hasRole('TANTOU_EDITOR') || sessionScope.AUTH_USER.id != s.tantouEditorId}">
                     <div class="series-deadline-readonly">
-                        <span>
-                            <svg class="series-deadline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Series deadline
-                        </span>
+                        <span>Series deadline</span>
                         <strong class="${empty s.publicationDate ? 'is-unset' : ''}">${empty s.publicationDate ? 'Not set' : s.publicationDate}</strong>
                     </div>
                 </c:if>

@@ -3,15 +3,17 @@
  *
  * Typography and surface tokens are deliberately the same ones the Settings pages use
  * (.settings-page-head / .setting-control-card in styles.css):
- *   page title 28px/1.15 · supporting text 14px #64748b · card titles weight 900 #0f172a
- *   labels 11px uppercase #64748b · hairlines #e2e8f0 · inset panels #f8fafc, radius 8px
+ *   page title 28px/1.15 · supporting text 14px #64748b · card titles weight 800 #0f172a
+ *   labels 11px uppercase #64748b · hairlines #e2e8f0
+ * Like the Settings hub cards, a card here carries no nested panels: the only colour
+ * accents left are the status chip and the progress bar.
  * Loaded after styles.css, so the .series-* rules here override the generic
  * .tile / .btn / .status-chip defaults for this page only.
  */
 
 .series-message { margin-bottom: var(--spacing-4); }
 
-/* ---- Page head: same device as .settings-page-head, legend pushed to the right ---- */
+/* ---- Page head: same device as .settings-page-head ---- */
 .series-page-head {
     display: flex;
     align-items: center;
@@ -34,27 +36,6 @@
 }
 .series-page-icon svg { width: 26px; height: 26px; }
 
-/* Legend dots mirror the .progress is-* gradients in styles.css. */
-.series-legend {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px 14px;
-    margin-left: auto;
-    padding: 9px 14px;
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 999px;
-    font-size: 13px;
-    color: #64748b;
-}
-.series-legend-title { font-weight: 900; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #0f172a; }
-.series-legend-item { display: flex; align-items: center; gap: 6px; }
-.series-legend-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
-.series-legend-dot-low { background: #dc2626; }
-.series-legend-dot-mid { background: #f59e0b; }
-.series-legend-dot-done { background: #059669; }
-
 /* ---- Card shell: sections own their padding so every card ends flush ---- */
 .tile.series-tile {
     padding: 0;
@@ -63,15 +44,10 @@
     overflow: hidden;
     border-color: #e2e8f0;
 }
-/* Severity band: makes a whole grid of series scannable without reading a number. */
-.series-stripe { display: block; height: 4px; }
-.series-stripe-low { background: linear-gradient(90deg, #ef4444, #dc2626); }
-.series-stripe-mid { background: linear-gradient(90deg, #f59e0b, #f97316); }
-.series-stripe-done { background: linear-gradient(90deg, #10b981, #059669); }
 
 .series-tile-top { padding: 16px 18px 0; }
 .series-chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.series-status { letter-spacing: .06em; text-transform: uppercase; font-size: 11px; font-weight: 900; padding: 4px 10px; }
+.series-status { letter-spacing: .06em; text-transform: uppercase; font-size: 11px; font-weight: 800; padding: 4px 10px; }
 .series-genre-chip {
     border: 1px solid #e2e8f0;
     border-radius: 999px;
@@ -83,41 +59,19 @@
     margin: 11px 0 0;
     color: #0f172a;
     font-size: 17px;
-    font-weight: 900;
+    font-weight: 800;
     line-height: 1.3;
 }
 
 /* Cancelled series stay readable but stop competing with active production. */
 .series-tile-cancelled { background: #fcfcfd; }
-.series-tile-cancelled .series-stripe { background: #cbd5e1; }
 .series-tile-cancelled .series-name { color: #64748b; }
 
-/* ---- Chapter counts as two comparable tiles instead of one grey line ---- */
+/* ---- Chapter counts as one flat supporting line, no nested tiles ---- */
 .series-stats {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
     padding: 14px 18px 0;
-}
-.series-stat { background: #f8fafc; border: 1px solid #eef2f7; border-radius: 8px; padding: 10px 12px; }
-.series-stat-key {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    font-weight: 900;
-    letter-spacing: .06em;
-    text-transform: uppercase;
+    font-size: 13px;
     color: #64748b;
-}
-.series-stat-icon { width: 13px; height: 13px; flex: none; }
-.series-stat-value {
-    margin-top: 4px;
-    color: #0f172a;
-    font-size: 20px;
-    font-weight: 900;
-    line-height: 1.15;
-    font-variant-numeric: tabular-nums;
 }
 
 /* ---- Progress: percentage sits next to its label, not above the title ---- */
@@ -131,18 +85,24 @@
 }
 .series-progress-key {
     font-size: 11px;
-    font-weight: 900;
+    font-weight: 800;
     letter-spacing: .06em;
     text-transform: uppercase;
     color: #64748b;
 }
-.series-progress-value { font-size: 18px; font-weight: 900; font-variant-numeric: tabular-nums; }
-.series-progress-value-low { color: #dc2626; }
-.series-progress-value-mid { color: #d97706; }
-.series-progress-value-done { color: #059669; }
+/* The bar is the only place progress level is coloured, so the number stays neutral.
+   The -low/-mid/-done suffixes are kept so the JSP markup does not have to change. */
+.series-progress-value,
+.series-progress-value-low,
+.series-progress-value-mid,
+.series-progress-value-done { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; color: #0f172a; }
 .series-progress-block .progress { margin-top: 0; height: 10px; background: #eef1f5; }
+/* Flat fills, scoped to this page so the shared .progress.is-* gradients stay intact. */
+.series-page .progress.is-low > span { background: #b91c1c; }
+.series-page .progress.is-mid > span { background: #b45309; }
+.series-page .progress.is-done > span { background: #16794b; }
 
-/* ---- Deadline: flat bordered field, same markup hooks series.js expects ---- */
+/* ---- Deadline: a hairline separator only, no enclosing panel ---- */
 .series-deadline-form,
 .series-deadline-readonly {
     display: grid;
@@ -150,10 +110,8 @@
     align-items: center;
     gap: 8px;
     margin: 14px 18px 0;
-    padding: 11px 12px;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    background: #f8fafc;
+    padding: 11px 0 0;
+    border-top: 1px solid #e2e8f0;
     box-shadow: none;
 }
 .series-deadline-form label,
@@ -165,12 +123,11 @@
     margin-bottom: 3px;
     color: #64748b;
     font-size: 11px;
-    font-weight: 900;
+    font-weight: 800;
     letter-spacing: .06em;
     text-transform: uppercase;
     white-space: nowrap;
 }
-.series-deadline-icon { width: 13px; height: 13px; flex: none; }
 .series-deadline-form input[type="date"] {
     width: 100%;
     height: 36px;
@@ -194,14 +151,15 @@
     grid-column: 1 / -1;
     color: #0f172a;
     font-size: 15px;
-    font-weight: 900;
+    font-weight: 800;
     font-variant-numeric: tabular-nums;
 }
 .series-deadline-readonly strong.is-unset { color: #94a3b8; font-weight: 700; }
 
 /* ---- Foot pinned to the bottom so buttons line up across the grid ---- */
 .series-tile-foot { margin-top: auto; padding: 16px 18px 18px; }
-/* .btn.primary in styles.css is two classes deep, so this selector has to match it. */
+/* .btn.primary in styles.css is two classes deep, so this selector has to match it.
+   Outlined, not filled: one solid dark block per card added up to a black column. */
 .btn.primary.series-view-btn {
     width: 100%;
     justify-content: center;
@@ -210,6 +168,9 @@
     border-radius: 8px;
     font-size: 14px;
     font-weight: 700;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    color: #0f172a;
 }
 .series-view-icon { width: 15px; height: 15px; }
 
@@ -221,10 +182,9 @@
     padding: 34px;
     text-align: center;
 }
-.series-empty-title { margin: 0; color: #0f172a; font-size: 17px; font-weight: 900; }
+.series-empty-title { margin: 0; color: #0f172a; font-size: 17px; font-weight: 800; }
 .series-empty-note { margin: 6px 0 0; color: #64748b; font-size: 13px; line-height: 1.45; }
 
 @media (max-width: 760px) {
     .series-page-head { align-items: flex-start; }
-    .series-legend { margin-left: 0; border-radius: 8px; }
 }
