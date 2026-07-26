@@ -26,7 +26,7 @@
     <meta charset="UTF-8">
     <title>Tasks</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css?v=20260525" />
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/chaptertask/task-list.css?v=20260605fix3" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/chaptertask/task-list.css?v=20260727grid5" />
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
@@ -38,7 +38,7 @@
     Active = IN_PROGRESS | Submitted = SUBMITTED | Delayed = late but not yet OVERDUE
     Overdue = past deadline | Completed = APPROVED
 --%>
-<section class="metric-grid">
+<section class="metric-grid task-metric-grid">
     <article class="metric-card"><div id="activeTasks" class="metric-value">0</div><div class="metric-label">Active</div></article>
     <article class="metric-card"><div id="submittedTasks" class="metric-value metric-violet">0</div><div class="metric-label">Submitted</div></article>
     <article class="metric-card"><div id="delayedTasks" class="metric-value metric-amber">0</div><div class="metric-label">Delayed</div></article>
@@ -106,7 +106,10 @@
 
 <%--
     [6] ALL TASKS TABLE: task list rendered server-side with JSTL
-    Status chip color changes by status: OVERDUE=red, IN_PROGRESS=yellow, PENDING=gray, APPROVED=green, others=draft
+    The status chip is the only place a task's state is coloured on its row — the row
+    background, the left accent bar and the due-date pill are all flattened in
+    css/chaptertask/task-list.css. Tones: OVERDUE/REJECTED red, IN_PROGRESS/Delayed amber,
+    APPROVED green, everything else neutral (the chip text names the state).
     Action column (last td) is left EMPTY — JS fills in buttons based on role and task.status:
       - Mangaka + SUBMITTED → Approve / Reject buttons
       - Assistant + IN_PROGRESS → View button (goes to task detail to upload)
