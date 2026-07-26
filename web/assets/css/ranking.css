@@ -507,7 +507,8 @@
 
 .team-modal-panel {
     position: relative;
-    max-width: 600px;
+    width: 90%;
+    max-width: 880px;
     max-height: 80vh;
     padding: 32px;
     overflow-y: auto;

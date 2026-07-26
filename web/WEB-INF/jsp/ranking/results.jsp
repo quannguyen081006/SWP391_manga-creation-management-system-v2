@@ -62,19 +62,18 @@
             background: linear-gradient(to right, #fff4e6, white);
         }
         
+        /* Medal icon + placing sit side by side, same as the Top Creators board.
+           Wide enough that a 40px rank-1 trophy and its number stay on one line;
+           the gold/silver/bronze colours come from .rank-icon in ranking.css. */
         .rank-number {
-            font-size: 32px;
+            font-size: 36px;
             font-weight: 700;
             color: #2c3e50;
-            width: 60px;
+            width: 110px;
             text-align: center;
             margin-right: 20px;
         }
-        
-        .rank-number .icon {
-            font-size: 24px;
-        }
-        
+
         .series-info {
             flex: 1;
         }
@@ -256,10 +255,10 @@
             <c:forEach items="${results}" var="r" varStatus="status">
                 <div class="ranking-card rank-${r.rankPosition}">
                     <div class="rank-number">
-                        <c:if test="${r.rankPosition == 1}"><i class="bi bi-trophy-fill icon gold"></i></c:if>
-                        <c:if test="${r.rankPosition == 2}"><i class="bi bi-award-fill icon silver"></i></c:if>
-                        <c:if test="${r.rankPosition == 3}"><i class="bi bi-award-fill icon bronze"></i></c:if>
-                        <c:if test="${r.rankPosition > 3}">${r.rankPosition}</c:if>
+                        <c:if test="${r.rankPosition == 1}"><i class="bi bi-trophy-fill rank-icon gold"></i></c:if>
+                        <c:if test="${r.rankPosition == 2}"><i class="bi bi-award-fill rank-icon silver"></i></c:if>
+                        <c:if test="${r.rankPosition == 3}"><i class="bi bi-award-fill rank-icon bronze"></i></c:if>
+                        ${r.rankPosition}
                     </div>
                     <div class="series-info">
                         <h3>${r.seriesTitle}</h3>
