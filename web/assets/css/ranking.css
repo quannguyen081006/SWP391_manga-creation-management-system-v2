@@ -52,13 +52,28 @@
     background: rgba(255, 255, 255, 0.2);
 }
 
-.status-badge.OPEN { border: 2px solid #4ade80; background: rgba(22, 163, 74, 0.3); }
-.status-badge.CLOSED { border: 2px solid #f87171; background: rgba(220, 38, 38, 0.3); }
-.status-badge.CALCULATED { border: 2px solid #60a5fa; background: rgba(37, 99, 235, 0.3); }
-.status-badge.CALCULATING { border: 2px solid #fbbf24; background: rgba(217, 119, 6, 0.3); animation: ranking-pulse 2s infinite; }
+.status-badge.OPEN {
+    border: 2px solid #4ade80;
+    background: rgba(22, 163, 74, 0.3);
+}
+.status-badge.CLOSED {
+    border: 2px solid #f87171;
+    background: rgba(220, 38, 38, 0.3);
+}
+.status-badge.CALCULATED {
+    border: 2px solid #60a5fa;
+    background: rgba(37, 99, 235, 0.3);
+}
+.status-badge.CALCULATING {
+    border: 2px solid #fbbf24;
+    background: rgba(217, 119, 6, 0.3);
+    animation: ranking-pulse 2s infinite;
+}
 
 @keyframes ranking-pulse {
-    50% { opacity: 0.7; }
+    50% {
+        opacity: 0.7;
+    }
 }
 
 .countdown-display {
@@ -94,10 +109,18 @@
     border-left: 4px solid #667eea;
 }
 
-.period-card.status-OPEN { border-left-color: var(--success-color); }
-.period-card.status-CLOSED { border-left-color: var(--danger-color); }
-.period-card.status-CALCULATED { border-left-color: var(--info-color); }
-.period-card.status-CALCULATING { border-left-color: var(--warning-color); }
+.period-card.status-OPEN {
+    border-left-color: var(--success-color);
+}
+.period-card.status-CLOSED {
+    border-left-color: var(--danger-color);
+}
+.period-card.status-CALCULATED {
+    border-left-color: var(--info-color);
+}
+.period-card.status-CALCULATING {
+    border-left-color: var(--warning-color);
+}
 
 .period-header,
 .period-meta,
@@ -159,10 +182,27 @@
     border-color: #667eea;
 }
 
-.upload-zone input[type="file"] { display: none; }
-.upload-label { color: #667eea; font-weight: 600; cursor: pointer; }
-.period-upload-form { display: inline-flex; align-items: center; gap: 10px; }
-.period-closed-label { display: inline-flex; padding: 8px 16px; color: var(--success-color); background: #f0fdf4; border-radius: var(--radius-sm); font-weight: 600; }
+.upload-zone input[type="file"] {
+    display: none;
+}
+.upload-label {
+    color: #667eea;
+    font-weight: 600;
+    cursor: pointer;
+}
+.period-upload-form {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+.period-closed-label {
+    display: inline-flex;
+    padding: 8px 16px;
+    color: var(--success-color);
+    background: #f0fdf4;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+}
 
 .timeline {
     gap: var(--spacing-2);
@@ -178,9 +218,17 @@
     font-weight: 600;
 }
 
-.timeline-step.active { color: #fff; background: #667eea; }
-.timeline-step.completed { color: #fff; background: var(--success-color); }
-.timeline-arrow { color: #bdc3c7; }
+.timeline-step.active {
+    color: #fff;
+    background: #667eea;
+}
+.timeline-step.completed {
+    color: #fff;
+    background: var(--success-color);
+}
+.timeline-arrow {
+    color: #bdc3c7;
+}
 
 .leaderboard,
 .mangaka-leaderboard {
@@ -199,28 +247,33 @@
     overflow: hidden;
 }
 
-.ranking-card { grid-template-columns: 70px 1fr auto; }
-.mangaka-card { grid-template-columns: 90px 1fr auto; padding: 28px; }
+.ranking-card {
+    grid-template-columns: 70px 1fr auto;
+}
+.mangaka-card {
+    grid-template-columns: 90px 1fr auto;
+    padding: 28px;
+}
 .ranking-card.rank-1,
-.mangaka-card.rank-1 { 
-    border-left-color: #ffd700; 
+.mangaka-card.rank-1 {
+    border-left-color: #ffd700;
     background: linear-gradient(135deg, #fff9e6 0%, #fff 100%);
     box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
 }
 .ranking-card.rank-2,
-.mangaka-card.rank-2 { 
-    border-left-color: #c0c0c0; 
+.mangaka-card.rank-2 {
+    border-left-color: #c0c0c0;
     background: linear-gradient(135deg, #f5f5f5 0%, #fff 100%);
     box-shadow: 0 4px 15px rgba(192, 192, 192, 0.3);
 }
 .ranking-card.rank-3,
-.mangaka-card.rank-3 { 
-    border-left-color: #cd7f32; 
+.mangaka-card.rank-3 {
+    border-left-color: #cd7f32;
     background: linear-gradient(135deg, #fff5e6 0%, #fff 100%);
     box-shadow: 0 4px 15px rgba(205, 127, 50, 0.3);
 }
-.ranking-card.bottom-twenty { 
-    border-left-color: var(--danger-color); 
+.ranking-card.bottom-twenty {
+    border-left-color: var(--danger-color);
     background: linear-gradient(135deg, #fef2f2 0%, #fff 100%);
     box-shadow: 0 4px 15px rgba(231, 76, 60, 0.2);
 }
@@ -253,14 +306,28 @@
     color: #cd7f32;
 }
 
-.mangaka-rank { color: #f5576c; font-size: 36px; }
+.mangaka-rank {
+    color: #f5576c;
+    font-size: 36px;
+}
 .rank-1 .rank-number,
-.rank-1 .mangaka-rank { color: #d4af00; font-size: 40px; }
+.rank-1 .mangaka-rank {
+    color: #d4af00;
+    font-size: 40px;
+}
 .rank-2 .rank-number,
-.rank-2 .mangaka-rank { color: #9ca3af; font-size: 36px; }
+.rank-2 .mangaka-rank {
+    color: #9ca3af;
+    font-size: 36px;
+}
 .rank-3 .rank-number,
-.rank-3 .mangaka-rank { color: #b45309; font-size: 34px; }
-.bottom-twenty .rank-number { color: var(--danger-color); }
+.rank-3 .mangaka-rank {
+    color: #b45309;
+    font-size: 34px;
+}
+.bottom-twenty .rank-number {
+    color: var(--danger-color);
+}
 
 .series-info h3,
 .mangaka-info h3 {
@@ -288,14 +355,32 @@
     text-align: right;
 }
 
-.mangaka-stats { grid-template-columns: repeat(3, auto); gap: 20px; }
+.mangaka-stats {
+    grid-template-columns: repeat(3, auto);
+    gap: 20px;
+}
 .stat-item,
-.mangaka-stat-item { display: flex; align-items: flex-end; flex-direction: column; }
+.mangaka-stat-item {
+    display: flex;
+    align-items: flex-end;
+    flex-direction: column;
+}
 .stat-value,
-.mangaka-stat-value { color: #2c3e50; font-size: 20px; font-weight: 700; }
-.stat-value-sm { font-size: 14px; }
+.mangaka-stat-value {
+    color: #2c3e50;
+    font-size: 20px;
+    font-weight: 700;
+}
+.stat-value-sm {
+    font-size: 14px;
+}
 .stat-label,
-.mangaka-stat-label { color: #95a5a6; font-size: 12px; letter-spacing: 0.5px; text-transform: uppercase; }
+.mangaka-stat-label {
+    color: #95a5a6;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
 
 .bottom-twenty-badge,
 .elite-badge {
@@ -309,8 +394,12 @@
     text-transform: uppercase;
 }
 
-.bottom-twenty-badge { background: var(--danger-color); }
-.elite-badge { background: linear-gradient(135deg, #667eea, #764ba2); }
+.bottom-twenty-badge {
+    background: var(--danger-color);
+}
+.elite-badge {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+}
 .vote-submitted-badge {
     display: inline-flex;
     padding: 8px 16px;
@@ -320,12 +409,18 @@
     font-weight: 600;
 }
 .podium-icon,
-.trophy-icon { font-size: 24px; }
-.entries-section { margin-top: 40px; }
+.trophy-icon {
+    font-size: 24px;
+}
+.entries-section {
+    margin-top: 40px;
+}
 
 /* Gold/silver/bronze accent reused on any empty-state icon, e.g. the mangaka
    leaderboard's trophy placeholder, so it doesn't need an inline style. */
-.empty-state-icon.gold { color: #ffd700; }
+.empty-state-icon.gold {
+    color: #ffd700;
+}
 
 /* --- CSV preview modal (opened from the upload form on period.jsp) --- */
 .csv-preview-modal {
@@ -364,8 +459,14 @@
 }
 
 /* --- CSV upload list (csv-uploads.jsp) --- */
-.csv-upload-icon { font-size: 28px; }
-.csv-upload-details { display: flex; flex-direction: column; gap: 4px; }
+.csv-upload-icon {
+    font-size: 28px;
+}
+.csv-upload-details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
 
 /* --- "View Team" modal (results.jsp) --- */
 .btn-view-team {
@@ -378,7 +479,9 @@
     font-size: 12px;
     cursor: pointer;
 }
-.btn-view-team:hover { background: #5568d3; }
+.btn-view-team:hover {
+    background: #5568d3;
+}
 
 .team-modal {
     display: none;
@@ -392,8 +495,14 @@
 }
 
 @keyframes team-modal-pop-in {
-    from { opacity: 0; transform: translateY(8px) scale(0.98); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
+    from {
+        opacity: 0;
+        transform: translateY(8px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }
 
 .team-modal-panel {
@@ -439,6 +548,111 @@
     color: var(--text-muted);
     font-size: 13px;
 }
+.csv-uploads-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .back-link {
+        display: inline-block;
+        margin-bottom: 20px;
+        color: #667eea;
+        text-decoration: none;
+        font-weight: 600;
+    }
+
+    .back-link:hover {
+        text-decoration: underline;
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+    }
+
+    .section-title {
+        font-size: 28px;
+        font-weight: 700;
+        color: #2c3e50;
+    }
+
+    .csv-upload-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px;
+        background: white;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        border-left: 4px solid #667eea;
+    }
+
+    .csv-upload-info {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+    }
+
+    .csv-upload-icon {
+        font-size: 32px;
+    }
+
+    .csv-upload-details {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .csv-upload-filename {
+        font-weight: 600;
+        font-size: 16px;
+        color: #2c3e50;
+    }
+
+    .csv-upload-meta {
+        font-size: 13px;
+        color: #7f8c8d;
+    }
+
+    .view-btn {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-block;
+    }
+
+    .view-btn:hover {
+        background: #5568d3;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #95a5a6;
+    }
+
+    .empty-state-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+    }
+
+    .empty-state-text {
+        font-size: 18px;
+        margin-bottom: 8px;
+    }
+
+    .empty-state-subtext {
+        font-size: 14px;
+    }
 
 /* One colored block per role in the team (lead mangaka, tantou editor,
    assistants, editorial board). Same "left border + tinted background"
@@ -451,14 +665,20 @@
     background: var(--neutral-100);
     box-shadow: var(--shadow-sm);
 }
-.team-role-block:last-child { margin-bottom: 0; }
+.team-role-block:last-child {
+    margin-bottom: 0;
+}
 
 .team-role-block.lead {
     border-left-color: #ffd700;
     background: linear-gradient(to right, #fff9e6, #fff);
 }
-.team-role-block.assistants { border-left-color: var(--success-color); }
-.team-role-block.board { border-left-color: #9b59b6; }
+.team-role-block.assistants {
+    border-left-color: var(--success-color);
+}
+.team-role-block.board {
+    border-left-color: #9b59b6;
+}
 
 .team-role-heading {
     display: flex;
@@ -469,9 +689,15 @@
     font-weight: 700;
     color: #667eea;
 }
-.team-role-block.lead .team-role-heading { color: #d4af00; }
-.team-role-block.assistants .team-role-heading { color: var(--success-color); }
-.team-role-block.board .team-role-heading { color: #9b59b6; }
+.team-role-block.lead .team-role-heading {
+    color: #d4af00;
+}
+.team-role-block.assistants .team-role-heading {
+    color: var(--success-color);
+}
+.team-role-block.board .team-role-heading {
+    color: #9b59b6;
+}
 
 .team-role-count {
     padding: 1px 9px;
@@ -490,8 +716,12 @@
     border-radius: var(--radius-sm);
     transition: background-color var(--transition-fast, 0.15s);
 }
-.team-member-row:not(:last-child) { border-bottom: 1px solid rgba(15, 23, 42, 0.06); }
-.team-member-row:hover { background: rgba(255, 255, 255, 0.7); }
+.team-member-row:not(:last-child) {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+.team-member-row:hover {
+    background: rgba(255, 255, 255, 0.7);
+}
 
 .team-avatar {
     display: flex;
@@ -506,12 +736,24 @@
     font-size: 13px;
     font-weight: 700;
 }
-.team-role-block.lead .team-avatar { background: #d4af00; }
-.team-role-block.assistants .team-avatar { background: var(--success-color); }
-.team-role-block.board .team-avatar { background: #9b59b6; }
+.team-role-block.lead .team-avatar {
+    background: #d4af00;
+}
+.team-role-block.assistants .team-avatar {
+    background: var(--success-color);
+}
+.team-role-block.board .team-avatar {
+    background: #9b59b6;
+}
 
-.team-member-name { font-weight: 600; }
-.team-member-meta { display: block; color: var(--text-muted); font-size: 12px; }
+.team-member-name {
+    font-weight: 600;
+}
+.team-member-meta {
+    display: block;
+    color: var(--text-muted);
+    font-size: 12px;
+}
 
 /* --- CSV viewer (csv-view.jsp) --- */
 .csv-meta {
@@ -526,8 +768,15 @@
     font-size: 14px;
 }
 
-.csv-meta-item { display: flex; flex-direction: column; gap: 5px; }
-.csv-meta-label { color: #2c3e50; font-weight: 600; }
+.csv-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.csv-meta-label {
+    color: #2c3e50;
+    font-weight: 600;
+}
 
 .csv-content {
     max-height: 600px;
