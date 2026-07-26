@@ -79,6 +79,9 @@ public class ModuleWebController {
     private RankingService rankingService;
 
     @Autowired
+    private manga.repository.RankingRepository rankingRepository;
+
+    @Autowired
     private manga.service.ReviewTaskService reviewTaskService;
 
     @Autowired
@@ -89,6 +92,12 @@ public class ModuleWebController {
 
     @Autowired
     private TaskTypeRateService taskTypeRateService;
+
+    @Autowired
+    private manga.service.DeadlineSettingsService deadlineSettingsService;
+
+    @Autowired
+    private manga.service.ProgressSettingsService progressSettingsService;
 
     @RequestMapping(value = "/proposals/{id}/edit", method = RequestMethod.GET)
     public String proposalEditPage(@PathVariable("id") long id, HttpSession session, Model model) {
@@ -119,8 +128,16 @@ public class ModuleWebController {
         try {
             UploadInfo upload = saveUpload(request, "sampleFile");
             proposalService.updateDraft(user, id, title, genre, synopsis,
-                    upload.path, upload.originalName, approximateChapter);
+                    upload.path, upload.originalName, approximateChapter, upload.hash);
             return "redirect:/main/proposals/" + id;
+        } catch (manga.common.exception.DuplicateSampleFileException ex) {
+            // Sample file trùng nội dung với proposal khác → hiện toast góc phải, bắt chọn file khác.
+            Proposal proposal = proposalService.getDetail(user, id);
+            model.addAttribute("proposal", proposal);
+            model.addAttribute("duplicateFileError", ex.getMessage());
+            model.addAttribute("genres", proposalService.listGenres());
+            model.addAttribute("lockIdentityFields", "DRAFT".equalsIgnoreCase(proposal.getStatus()) && proposal.getSubmitAttemptCount() == 0);
+            return "proposal/edit";
         } catch (Exception ex) {
             Proposal proposal = proposalService.getDetail(user, id);
             model.addAttribute("proposal", proposal);
@@ -214,11 +231,65 @@ public class ModuleWebController {
         model.addAttribute("settings", proposalSettingsService.getSettings());
         return "settings/proposals";
     }
+    
+    //Deadline settings
+    @RequestMapping(value = "/settings/deadlines", method = RequestMethod.GET)
+    public String deadlineSettings(HttpSession session, Model model) {
+        AuthenticatedUser user = requireUser(session);
+        requireAdmin(user);
+        model.addAttribute("settings", deadlineSettingsService.getSettings());
+        return "settings/deadlines";
+    }
+    
+    //Deadlnie settings
+    @RequestMapping(value = "/settings/deadlines", method = RequestMethod.POST)
+    public String deadlineSettingsSave(
+            HttpSession session,
+            @RequestParam("taskChapterBufferDays") Integer taskChapterBufferDays,
+            @RequestParam("chapterSeriesBufferDays") Integer chapterSeriesBufferDays,
+            Model model) {
+        AuthenticatedUser user = requireUser(session);
+        try {
+            requireAdmin(user);
+            deadlineSettingsService.updateSettings(taskChapterBufferDays.intValue(), chapterSeriesBufferDays.intValue());
+            model.addAttribute("success", "Deadline settings updated successfully");
+        } catch (RuntimeException ex) {
+            model.addAttribute("error", ex.getMessage());
+        }
+        model.addAttribute("settings", deadlineSettingsService.getSettings());
+        return "settings/deadlines";
+    }
+
+    @RequestMapping(value = "/settings/progress", method = RequestMethod.GET)
+    public String progressSettings(HttpSession session, Model model) {
+        AuthenticatedUser user = requireUser(session);
+        requireAdmin(user);
+        model.addAttribute("settings", progressSettingsService.getSettings());
+        return "settings/progress";
+    }
+
+    @RequestMapping(value = "/settings/progress", method = RequestMethod.POST)
+    public String progressSettingsSave(
+            HttpSession session,
+            @RequestParam("lowThresholdPercent") Integer lowThresholdPercent,
+            @RequestParam("highThresholdPercent") Integer highThresholdPercent,
+            Model model) {
+        AuthenticatedUser user = requireUser(session);
+        try {
+            requireAdmin(user);
+            progressSettingsService.updateSettings(lowThresholdPercent.intValue(), highThresholdPercent.intValue());
+            model.addAttribute("success", "Progress display settings updated successfully");
+        } catch (RuntimeException ex) {
+            model.addAttribute("error", ex.getMessage());
+        }
+        model.addAttribute("settings", progressSettingsService.getSettings());
+        return "settings/progress";
+    }
 
     private UploadInfo saveUpload(HttpServletRequest request, String fieldName) throws IOException, ServletException {
         Part part = request.getPart(fieldName);
         if (part == null || part.getSize() == 0) {
-            return new UploadInfo(null, null);
+            return new UploadInfo(null, null, null);
         }
         if (part.getSize() > SAMPLE_FILE_MAX_SIZE_BYTES) {
             throw new IllegalArgumentException("Sample file must not exceed 20 MB");
@@ -235,18 +306,22 @@ public class ModuleWebController {
         if (!dir.exists() && !dir.mkdirs()) {
             throw new IOException("Cannot create upload directory");
         }
-        part.write(new File(dir, storedName).getAbsolutePath());
-        return new UploadInfo("/uploads/proposals/" + storedName, originalName);
+        File saved = new File(dir, storedName);
+        part.write(saved.getAbsolutePath());
+        String hash = manga.common.util.FileHashUtil.sha256Hex(saved);
+        return new UploadInfo("/uploads/proposals/" + storedName, originalName, hash);
     }
 
     private static class UploadInfo {
 
         private final String path;
         private final String originalName;
+        private final String hash;
 
-        private UploadInfo(String path, String originalName) {
+        private UploadInfo(String path, String originalName, String hash) {
             this.path = path;
             this.originalName = originalName;
+            this.hash = hash;
         }
     }
 
@@ -356,7 +431,7 @@ public class ModuleWebController {
     // POST /main/tasks/{id}/assistant-status
     // - Param: status (string)
     // - Goi pageTaskService.updateStatusByAssistant(id, user, status)
-    // - Flow hop le: Pending -> In-Progress -> Submitted (service enforce)
+    // - Flow hop le: In-Progress -> Submitted (service enforce)
     // - Thanh cong: redirect task detail
     // - Loi: render lai task/detail kem error
     // ============================================================
@@ -649,6 +724,23 @@ public class ModuleWebController {
             decisionDetail(id, session, model);
             model.addAttribute("error", ex.getMessage());
             return "decision/session";
+        }
+    }
+
+    @RequestMapping(value = "/ranking/records/{rankingRecordId}/create-decision", method = RequestMethod.POST)
+    public String createDecisionFromRankingRecord(
+            @PathVariable("rankingRecordId") long rankingRecordId,
+            @RequestParam("seriesId") long seriesId,
+            HttpSession session,
+            Model model) {
+        AuthenticatedUser user = requireUser(session);
+        try {
+            requireAdmin(user);
+            long sessionId = decisionService.openDecisionSessionFromRankingRecord(rankingRecordId, seriesId, user);
+            return "redirect:/main/decisions/" + sessionId;
+        } catch (RuntimeException ex) {
+            model.addAttribute("error", ex.getMessage());
+            return "redirect:/main/ranking/periods/" + rankingRepository.getPeriodIdByRankingRecordId(rankingRecordId) + "/results";
         }
     }
 
@@ -1059,6 +1151,15 @@ public class ModuleWebController {
         java.util.Map<String, Object> series = productionService.getSeriesById(chapter.getSeriesId());
         String seriesTitle = series != null && series.get("title") != null ? String.valueOf(series.get("title")) : "";
         model.addAttribute("seriesTitle", seriesTitle);
+
+        // Build and add series information
+        try {
+            manga.dto.workspace.SeriesInformationDTO seriesInformation = manuscriptVersionService.buildSeriesInformation(version.getChapterId());
+            model.addAttribute("seriesInformation", seriesInformation);
+        } catch (Exception ex) {
+            // If series information fails to load, workspace should still render
+            model.addAttribute("seriesInformation", null);
+        }
 
         return "manuscript-version/workspace";
     }

@@ -10,6 +10,7 @@ public class Proposal {
     private String synopsis;
     private String sampleFilePath;
     private String originalFileName;
+    private String sampleFileHash;
     private Integer approximateChapter;
     private String status;
     private Timestamp submittedAt;
@@ -48,6 +49,9 @@ public class Proposal {
 
     public String getOriginalFileName() { return originalFileName; }
     public void setOriginalFileName(String originalFileName) { this.originalFileName = originalFileName; }
+
+    public String getSampleFileHash() { return sampleFileHash; }
+    public void setSampleFileHash(String sampleFileHash) { this.sampleFileHash = sampleFileHash; }
 
     public Integer getApproximateChapter() { return approximateChapter; }
     public void setApproximateChapter(Integer approximateChapter) { this.approximateChapter = approximateChapter; }

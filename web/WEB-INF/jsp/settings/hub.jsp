@@ -34,6 +34,16 @@
             <div class="settings-hub-card-desc">Task rates, bonus threshold, bonus percentage, and late-task penalty.</div>
             </div>
         </a>
+
+        <a class="settings-hub-card section-card" href="${ctx}/main/settings/deadlines">
+            <div class="settings-hub-card-title">Deadline Settings</div>
+            <div class="settings-hub-card-desc">Buffer between task/chapter deadlines and chapter/series deadlines.</div>
+        </a>
+
+        <a class="settings-hub-card section-card" href="${ctx}/main/settings/progress">
+            <div class="settings-hub-card-title">Progress Display Settings</div>
+            <div class="settings-hub-card-desc">Red/amber threshold for chapter and series progress bars.</div>
+        </a>
     </div>
 </main>
 

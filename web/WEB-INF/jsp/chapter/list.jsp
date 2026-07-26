@@ -25,8 +25,8 @@
 <head>
     <meta charset="UTF-8">
     <title>Chapters</title>
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css?v=20260525" />
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/chaptertask/chapter-list.css?v=20260605fix3" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css?v=20260717legend" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/chaptertask/chapter-list.css?v=20260717legend" />
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
@@ -47,6 +47,22 @@
         </div>
         <%-- chapterStatusPills: JS fills in filter pills (All / per series) for quick filtering --%>
         <div id="chapterStatusPills" class="chapter-status-pills"></div>
+
+        <%-- Legend for the Progress column bar colors. Threshold is admin-configurable via
+             Settings > Progress Display; the "50" placeholders here are the fallback default,
+             chapter-list.js overwrites #chapterProgressLegendLow/-Mid with the live value on load. --%>
+        <div class="chapter-progress-legend">
+            <span class="chapter-progress-legend-title">Progress</span>
+            <span class="chapter-progress-legend-item">
+                <span class="chapter-progress-legend-swatch chapter-progress-legend-swatch-low"></span><span id="chapterProgressLegendLow">Below 50%</span>
+            </span>
+            <span class="chapter-progress-legend-item">
+                <span class="chapter-progress-legend-swatch chapter-progress-legend-swatch-mid"></span><span id="chapterProgressLegendMid">50–99%</span>
+            </span>
+            <span class="chapter-progress-legend-item">
+                <span class="chapter-progress-legend-swatch chapter-progress-legend-swatch-done"></span><span id="chapterProgressLegendDone">100% and above</span>
+            </span>
+        </div>
 
         <%-- [4a] OVERDUE GROUP: chapters past deadline — always shown, JS counts and fills in countOverdue --%>
         <div id="groupOverdue" class="chapter-group">

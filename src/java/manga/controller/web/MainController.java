@@ -60,6 +60,9 @@ public class MainController {
     @Autowired
     private PageTaskService pageTaskService;
 
+    @Autowired
+    private manga.service.ProgressSettingsService progressSettingsService;
+
     // ============================================================
     // [2] COMMON NAVIGATION
     // ============================================================
@@ -105,6 +108,8 @@ public class MainController {
     public String series(HttpSession session, Model model) {
         AuthenticatedUser user = SessionUserUtil.requireUser(session);
         model.addAttribute("seriesList", productionRepository.listSeries(user));
+        model.addAttribute("progressLowThreshold", progressSettingsService.getLowThresholdPercent());
+        model.addAttribute("progressHighThreshold", progressSettingsService.getHighThresholdPercent());
         return "series/list";
     }
 
@@ -273,8 +278,17 @@ public class MainController {
         try {
             UploadInfo upload = saveUpload(request, "sampleFile");
             long id = proposalService.createProposal(user, title, genre, synopsis,
-                    upload.path, upload.originalName, approximateChapter);
+                    upload.path, upload.originalName, approximateChapter, upload.hash);
             return "redirect:/main/proposals/" + id;
+        } catch (manga.common.exception.DuplicateSampleFileException ex) {
+            // Sample file trùng nội dung với proposal khác → hiện toast góc phải, bắt chọn file khác.
+            model.addAttribute("duplicateFileError", ex.getMessage());
+            model.addAttribute("title", title);
+            model.addAttribute("genre", genre);
+            model.addAttribute("synopsis", synopsis);
+            model.addAttribute("approximateChapter", approximateChapter);
+            model.addAttribute("genres", proposalService.listGenres());
+            return "proposal/create";
         } catch (IllegalArgumentException ex) {
             // Validation từ service (thiếu field, genre không hợp lệ, v.v.)
             model.addAttribute("error", ex.getMessage());
@@ -460,7 +474,7 @@ public class MainController {
     private UploadInfo saveUpload(HttpServletRequest request, String fieldName) throws IOException, ServletException {
         Part part = request.getPart(fieldName);
         if (part == null || part.getSize() == 0) {
-            return new UploadInfo(null, null);
+            return new UploadInfo(null, null, null);
         }
         if (part.getSize() > SAMPLE_FILE_MAX_SIZE_BYTES) {
             throw new IllegalArgumentException("Sample file must not exceed 20 MB");
@@ -479,18 +493,23 @@ public class MainController {
         if (!dir.exists() && !dir.mkdirs()) {
             throw new IOException("Cannot create upload directory");
         }
-        part.write(new File(dir, storedName).getAbsolutePath());
+        File saved = new File(dir, storedName);
+        part.write(saved.getAbsolutePath());
+        // Hash nội dung file để phát hiện sample file trùng với proposal khác.
+        String hash = manga.common.util.FileHashUtil.sha256Hex(saved);
         // Trả về đường dẫn relative để lưu vào DB
-        return new UploadInfo("/uploads/proposals/" + storedName, originalName);
+        return new UploadInfo("/uploads/proposals/" + storedName, originalName, hash);
     }
 
     private static class UploadInfo {
         private final String path;         // Đường dẫn relative trên server (lưu vào DB)
         private final String originalName; // Tên file gốc từ client (dùng khi download)
+        private final String hash;         // SHA-256 nội dung file (dùng để chống trùng)
 
-        private UploadInfo(String path, String originalName) {
+        private UploadInfo(String path, String originalName, String hash) {
             this.path = path;
             this.originalName = originalName;
+            this.hash = hash;
         }
     }
 }

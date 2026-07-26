@@ -18,40 +18,6 @@ EXEC sp_executesql @sql;
 GO
 /* ==== End cleanup block ==== */
 
-/****** Object:  Database [MangaEditorialDB]    Script Date: 6/5/2026 4:22:06 AM ******/
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
-GO
 /****** Object:  Table [dbo].[Annotation]    Script Date: 6/11/2026 10:09:13 PM ******/
 SET ANSI_NULLS ON
 GO
@@ -422,6 +388,7 @@ CREATE TABLE [dbo].[Proposal](
 	[synopsis] [nvarchar](max) NOT NULL,
 	[sampleFilePath] [varchar](512) NOT NULL,
 	[originalFileName] [nvarchar](255) NOT NULL,
+	[sampleFileHash] [varchar](64) NULL,
 	[approximateChapter] [int] NOT NULL,
 	[status] [varchar](20) NOT NULL,
 	[submittedAt] [datetime] NULL,
@@ -1960,9 +1927,3 @@ BEGIN
     REFERENCES [dbo].[User] ([id]);
     ALTER TABLE [dbo].[AssistantSalaryRecord] CHECK CONSTRAINT [FK_ASR_Assistant];
 END
-GO
-
-
-
-GO
-GO

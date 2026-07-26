@@ -6,20 +6,34 @@
 <head>
     <meta charset="UTF-8">
     <title>Series</title>
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css" />
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/series.css" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css?v=20260717legend" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/series.css?v=20260717legend" />
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
 
 <div id="seriesMessage" class="alert series-message is-hidden-initial"></div>
 
+<%-- Legend for the progress colours; threshold is admin-configurable via Settings > Progress Display --%>
+<div class="series-legend">
+    <span class="series-legend-title">Progress</span>
+    <span class="series-legend-item">
+        <span class="series-legend-swatch series-legend-swatch-low"></span>Below ${progressLowThreshold}%
+    </span>
+    <span class="series-legend-item">
+        <span class="series-legend-swatch series-legend-swatch-mid"></span>${progressLowThreshold}–${progressHighThreshold - 1}%
+    </span>
+    <span class="series-legend-item">
+        <span class="series-legend-swatch series-legend-swatch-done"></span>${progressHighThreshold}% and above
+    </span>
+</div>
+
 <div class="list-cards">
     <c:forEach items="${seriesList}" var="s">
         <article class="tile">
             <div class="section-head series-card-head">
                 <h3>${s.title}</h3>
-                <div class="score ${s.progressPct >= 70 ? 'metric-ok' : (s.progressPct >= 45 ? 'metric-amber' : 'metric-danger')}"><fmt:formatNumber value="${s.progressPct}" maxFractionDigits="0" />%</div>
+                <div class="score ${s.progressPct >= progressHighThreshold ? 'metric-ok' : (s.progressPct >= progressLowThreshold ? 'metric-amber' : 'metric-danger')}"><fmt:formatNumber value="${s.progressPct}" maxFractionDigits="0" />%</div>
             </div>
             <div class="genre">${s.genre}</div>
             <div class="inline-meta">
@@ -28,7 +42,7 @@
             </div>
 
             <div class="metric-label series-progress-label">Current chapter progress</div>
-            <div class="progress ${s.progressPct < 40 ? 'red' : ''}"><span data-progress-width="${s.progressPct}"></span></div>
+            <div class="progress ${s.progressPct >= progressHighThreshold ? 'is-done' : (s.progressPct >= progressLowThreshold ? 'is-mid' : 'is-low')}"><span data-progress-width="${s.progressPct}"></span></div>
 
             <c:if test="${sessionScope.AUTH_USER != null && sessionScope.AUTH_USER.hasRole('TANTOU_EDITOR') && sessionScope.AUTH_USER.id == s.tantouEditorId}">
                 <form class="series-deadline-form" data-series-id="${s.id}">

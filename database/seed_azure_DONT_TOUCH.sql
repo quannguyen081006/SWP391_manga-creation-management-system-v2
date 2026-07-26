@@ -1,70 +1,4 @@
-﻿SET ANSI_NULLS ON
-SET QUOTED_IDENTIFIER ON
-GO
-
--- ============================================================
--- CLEANUP (Azure-compatible): sp_MSForEachTable does not exist on
--- Azure SQL Database, so disable/re-enable FK checks and reseed
--- identities via dynamic SQL instead. Safe to run against a
--- freshly-created (empty) schema from schema_azure_DONT_TOUCH.sql.
--- ============================================================
-DECLARE @sql NVARCHAR(MAX);
-
-SET @sql = N'';
-SELECT @sql += 'ALTER TABLE ' + QUOTENAME(s.name) + '.' + QUOTENAME(t.name) + ' NOCHECK CONSTRAINT ALL;' + CHAR(10)
-FROM sys.tables t JOIN sys.schemas s ON t.schema_id = s.schema_id;
-EXEC sp_executesql @sql;
-
-DELETE FROM [dbo].[Annotation]
-DELETE FROM [dbo].[AuditLog]
-DELETE FROM [dbo].[Chapter]
-DELETE FROM [dbo].[ChapterImage]
-DELETE FROM [dbo].[DecisionSession]
-DELETE FROM [dbo].[DecisionVote]
-DELETE FROM [dbo].[MangakaAssistant]
-DELETE FROM [dbo].[MangakaRankingRecord]
-DELETE FROM [dbo].[Manuscript]
-DELETE FROM [dbo].[ManuscriptPage]
-DELETE FROM [dbo].[ManuscriptProductionLock]
-DELETE FROM [dbo].[ManuscriptVersion]
-DELETE FROM [dbo].[Notification]
-DELETE FROM [dbo].[Page]
-DELETE FROM [dbo].[PageTask]
-DELETE FROM [dbo].[Proposal]
-DELETE FROM [dbo].[ProposalBoardRound]
-DELETE FROM [dbo].[SystemSetting]
-DELETE FROM [dbo].[ProposalBoardRoundVoter]
-DELETE FROM [dbo].[ProposalHistory]
-DELETE FROM [dbo].[RankingPeriod]
-DELETE FROM [dbo].[RankingRecord]
-DELETE FROM [dbo].[ReviewDecision]
-DELETE FROM [dbo].[ReviewTask]
-DELETE FROM [dbo].[Role]
-DELETE FROM [dbo].[Series]
-DELETE FROM [dbo].[SeriesAssistant]
-DELETE FROM [dbo].[User]
-DELETE FROM [dbo].[UserRole]
-DELETE FROM [dbo].[VoteEntry]
-DELETE FROM [dbo].[TaskType]
-DELETE FROM [dbo].[PageTaskStage]
-DELETE FROM [dbo].[PageTaskPageStage]
-DELETE FROM [dbo].[SalaryPeriod]
-DELETE FROM [dbo].[AssistantSalaryRecord]
-DELETE FROM [dbo].[RankingCsvUpload]
-
-SET @sql = N'';
-SELECT @sql += 'ALTER TABLE ' + QUOTENAME(s.name) + '.' + QUOTENAME(t.name) + ' WITH CHECK CHECK CONSTRAINT ALL;' + CHAR(10)
-FROM sys.tables t JOIN sys.schemas s ON t.schema_id = s.schema_id;
-EXEC sp_executesql @sql;
-
-SET @sql = N'';
-SELECT @sql += 'DBCC CHECKIDENT (''' + s.name + '.' + t.name + ''', RESEED, 0);' + CHAR(10)
-FROM sys.tables t
-JOIN sys.schemas s ON t.schema_id = s.schema_id
-WHERE OBJECTPROPERTY(t.object_id, 'TableHasIdentity') = 1;
-EXEC sp_executesql @sql;
-GO
-SET IDENTITY_INSERT [dbo].[User] ON 
+﻿SET IDENTITY_INSERT [dbo].[User] ON 
 
 INSERT [dbo].[User] ([id], [username], [passwordHash], [fullName], [email], [status], [createdAt], [updatedAt], [avatarUrl]) VALUES (0, N'admin', N'12345', N'System Admin', N'admin@mangaflow.local', N'ACTIVE', CAST(N'2026-05-27T03:09:39.237' AS DateTime), CAST(N'2026-05-27T03:09:39.237' AS DateTime), NULL)
 INSERT [dbo].[User] ([id], [username], [passwordHash], [fullName], [email], [status], [createdAt], [updatedAt], [avatarUrl]) VALUES (1, N'mangaka1', N'12345', N'Yuki Tanaka', N'mangaka1@mangaflow.local', N'ACTIVE', CAST(N'2026-05-27T03:09:39.237' AS DateTime), CAST(N'2026-05-27T03:09:39.237' AS DateTime), NULL)
@@ -246,6 +180,7 @@ INSERT [dbo].[Page] ([id], [chapterId], [pageNumber], [imageUrl], [uploadedBy], 
 INSERT [dbo].[Page] ([id], [chapterId], [pageNumber], [imageUrl], [uploadedBy], [uploadedAt], [status], [createdAt], [completedStage]) VALUES (137, 21, 7, N'/img/chapter/demo/sketching_3.jpg', 1, CAST(N'2026-06-17T15:00:00.000' AS DateTime), N'APPROVED', CAST(N'2026-06-01T09:05:00.000' AS DateTime), N'LETTERING')
 INSERT [dbo].[Page] ([id], [chapterId], [pageNumber], [imageUrl], [uploadedBy], [uploadedAt], [status], [createdAt], [completedStage]) VALUES (138, 21, 8, N'/img/chapter/demo/sketching_4.jpg', 1, CAST(N'2026-06-11T16:00:00.000' AS DateTime), N'APPROVED', CAST(N'2026-06-01T09:05:00.000' AS DateTime), N'LETTERING')
 INSERT [dbo].[Page] ([id], [chapterId], [pageNumber], [imageUrl], [uploadedBy], [uploadedAt], [status], [createdAt], [completedStage]) VALUES (139, 21, 9, N'/img/chapter/demo/sketching_5.jpg', 1, CAST(N'2026-06-11T17:00:00.000' AS DateTime), N'APPROVED', CAST(N'2026-06-01T09:05:00.000' AS DateTime), N'LETTERING')
+GO
 INSERT [dbo].[Page] ([id], [chapterId], [pageNumber], [imageUrl], [uploadedBy], [uploadedAt], [status], [createdAt], [completedStage]) VALUES (140, 21, 10, N'/img/chapter/demo/sketching_6.jpg', 1, CAST(N'2026-06-12T18:00:00.000' AS DateTime), N'APPROVED', CAST(N'2026-06-01T09:05:00.000' AS DateTime), N'LETTERING')
 INSERT [dbo].[Page] ([id], [chapterId], [pageNumber], [imageUrl], [uploadedBy], [uploadedAt], [status], [createdAt], [completedStage]) VALUES (141, 21, 11, N'/img/chapter/demo/sketching_8.jpg', 1, CAST(N'2026-06-13T19:00:00.000' AS DateTime), N'APPROVED', CAST(N'2026-06-01T09:05:00.000' AS DateTime), N'LETTERING')
 INSERT [dbo].[Page] ([id], [chapterId], [pageNumber], [imageUrl], [uploadedBy], [uploadedAt], [status], [createdAt], [completedStage]) VALUES (142, 21, 12, N'/img/chapter/demo/sketching_9.jpg', 1, CAST(N'2026-06-14T08:00:00.000' AS DateTime), N'APPROVED', CAST(N'2026-06-01T09:05:00.000' AS DateTime), N'LETTERING')
@@ -308,6 +243,9 @@ SET IDENTITY_INSERT [dbo].[RankingPeriod] ON
 INSERT [dbo].[RankingPeriod] ([id], [name], [startDate], [endDate], [status], [calculatedAt]) VALUES (1, N'period1', CAST(N'2026-07-17' AS Date), CAST(N'2026-07-18' AS Date), N'CALCULATED', CAST(N'2026-07-17T13:33:38.497' AS DateTime))
 INSERT [dbo].[RankingPeriod] ([id], [name], [startDate], [endDate], [status], [calculatedAt]) VALUES (2, N'period2', CAST(N'2026-07-17' AS Date), CAST(N'2026-07-18' AS Date), N'CALCULATED', CAST(N'2026-07-17T13:34:56.767' AS DateTime))
 INSERT [dbo].[RankingPeriod] ([id], [name], [startDate], [endDate], [status], [calculatedAt]) VALUES (3, N'period3', CAST(N'2026-07-17' AS Date), CAST(N'2026-07-18' AS Date), N'CALCULATED', CAST(N'2026-07-17T13:39:26.033' AS DateTime))
+INSERT [dbo].[RankingPeriod] ([id], [name], [startDate], [endDate], [status], [calculatedAt]) VALUES (4, N'period4', CAST(N'2026-07-18' AS Date), CAST(N'2026-07-19' AS Date), N'CALCULATED', CAST(N'2026-07-18T12:21:00.820' AS DateTime))
+INSERT [dbo].[RankingPeriod] ([id], [name], [startDate], [endDate], [status], [calculatedAt]) VALUES (5, N'period5', CAST(N'2026-07-18' AS Date), CAST(N'2026-07-19' AS Date), N'CALCULATED', CAST(N'2026-07-18T12:22:22.860' AS DateTime))
+INSERT [dbo].[RankingPeriod] ([id], [name], [startDate], [endDate], [status], [calculatedAt]) VALUES (6, N'period6', CAST(N'2026-07-18' AS Date), CAST(N'2026-07-19' AS Date), N'CALCULATED', CAST(N'2026-07-18T12:24:34.633' AS DateTime))
 SET IDENTITY_INSERT [dbo].[RankingPeriod] OFF
 GO
 SET IDENTITY_INSERT [dbo].[RankingRecord] ON 
@@ -326,6 +264,19 @@ INSERT [dbo].[RankingRecord] ([id], [periodId], [seriesId], [rankScore], [rankPo
 INSERT [dbo].[RankingRecord] ([id], [periodId], [seriesId], [rankScore], [rankPosition], [isBottomTwenty], [calculatedAt], [totalLikes], [totalReads]) VALUES (12, 3, 1, CAST(30.00 AS Decimal(6, 2)), 3, 0, CAST(N'2026-07-17T13:39:25.777' AS DateTime), 2400, 8000)
 INSERT [dbo].[RankingRecord] ([id], [periodId], [seriesId], [rankScore], [rankPosition], [isBottomTwenty], [calculatedAt], [totalLikes], [totalReads]) VALUES (13, 3, 2, CAST(25.00 AS Decimal(6, 2)), 4, 0, CAST(N'2026-07-17T13:39:25.777' AS DateTime), 4500, 18000)
 INSERT [dbo].[RankingRecord] ([id], [periodId], [seriesId], [rankScore], [rankPosition], [isBottomTwenty], [calculatedAt], [totalLikes], [totalReads]) VALUES (14, 3, 3, CAST(9.47 AS Decimal(6, 2)), 5, 1, CAST(N'2026-07-17T13:39:25.777' AS DateTime), 900, 9500)
+INSERT [dbo].[RankingRecord] ([id], [periodId], [seriesId], [rankScore], [rankPosition], [isBottomTwenty], [calculatedAt], [totalLikes], [totalReads]) VALUES (15, 4, 2, CAST(25.00 AS Decimal(6, 2)), 1, 0, CAST(N'2026-07-18T12:21:00.537' AS DateTime), 1500, 6000)
+INSERT [dbo].[RankingRecord] ([id], [periodId], [seriesId], [rankScore], [rankPosition], [isBottomTwenty], [calculatedAt], [totalLikes], [totalReads]) VALUES (16, 4, 0, CAST(24.00 AS Decimal(6, 2)), 2, 0, CAST(N'2026-07-18T12:21:00.537' AS DateTime), 1200, 5000)
+INSERT [dbo].[RankingRecord] ([id], [periodId], [seriesId], [rankScore], [rankPosition], [isBottomTwenty], [calculatedAt], [totalLikes], [totalReads]) VALUES (17, 4, 1, CAST(20.00 AS Decimal(6, 2)), 3, 0, CAST(N'2026-07-18T12:21:00.537' AS DateTime), 800, 4000)
+INSERT [dbo].[RankingRecord] ([id], [periodId], [seriesId], [rankScore], [rankPosition], [isBottomTwenty], [calculatedAt], [totalLikes], [totalReads]) VALUES (18, 4, 3, CAST(12.66 AS Decimal(6, 2)), 4, 1, CAST(N'2026-07-18T12:21:00.537' AS DateTime), 443, 3500)
+INSERT [dbo].[RankingRecord] ([id], [periodId], [seriesId], [rankScore], [rankPosition], [isBottomTwenty], [calculatedAt], [totalLikes], [totalReads]) VALUES (19, 5, 4, CAST(66.30 AS Decimal(6, 2)), 1, 0, CAST(N'2026-07-18T12:22:22.623' AS DateTime), 663, 1000)
+INSERT [dbo].[RankingRecord] ([id], [periodId], [seriesId], [rankScore], [rankPosition], [isBottomTwenty], [calculatedAt], [totalLikes], [totalReads]) VALUES (20, 5, 0, CAST(30.00 AS Decimal(6, 2)), 2, 0, CAST(N'2026-07-18T12:22:22.623' AS DateTime), 2400, 8000)
+INSERT [dbo].[RankingRecord] ([id], [periodId], [seriesId], [rankScore], [rankPosition], [isBottomTwenty], [calculatedAt], [totalLikes], [totalReads]) VALUES (21, 5, 1, CAST(26.67 AS Decimal(6, 2)), 3, 0, CAST(N'2026-07-18T12:22:22.623' AS DateTime), 1600, 6000)
+INSERT [dbo].[RankingRecord] ([id], [periodId], [seriesId], [rankScore], [rankPosition], [isBottomTwenty], [calculatedAt], [totalLikes], [totalReads]) VALUES (22, 5, 2, CAST(25.00 AS Decimal(6, 2)), 4, 0, CAST(N'2026-07-18T12:22:22.623' AS DateTime), 3000, 12000)
+INSERT [dbo].[RankingRecord] ([id], [periodId], [seriesId], [rankScore], [rankPosition], [isBottomTwenty], [calculatedAt], [totalLikes], [totalReads]) VALUES (23, 5, 3, CAST(10.61 AS Decimal(6, 2)), 5, 1, CAST(N'2026-07-18T12:22:22.623' AS DateTime), 743, 7000)
+INSERT [dbo].[RankingRecord] ([id], [periodId], [seriesId], [rankScore], [rankPosition], [isBottomTwenty], [calculatedAt], [totalLikes], [totalReads]) VALUES (24, 6, 2, CAST(25.00 AS Decimal(6, 2)), 1, 0, CAST(N'2026-07-18T12:24:34.373' AS DateTime), 1500, 6000)
+INSERT [dbo].[RankingRecord] ([id], [periodId], [seriesId], [rankScore], [rankPosition], [isBottomTwenty], [calculatedAt], [totalLikes], [totalReads]) VALUES (25, 6, 0, CAST(24.00 AS Decimal(6, 2)), 2, 0, CAST(N'2026-07-18T12:24:34.373' AS DateTime), 1200, 5000)
+INSERT [dbo].[RankingRecord] ([id], [periodId], [seriesId], [rankScore], [rankPosition], [isBottomTwenty], [calculatedAt], [totalLikes], [totalReads]) VALUES (26, 6, 1, CAST(20.00 AS Decimal(6, 2)), 3, 0, CAST(N'2026-07-18T12:24:34.373' AS DateTime), 800, 4000)
+INSERT [dbo].[RankingRecord] ([id], [periodId], [seriesId], [rankScore], [rankPosition], [isBottomTwenty], [calculatedAt], [totalLikes], [totalReads]) VALUES (27, 6, 3, CAST(12.66 AS Decimal(6, 2)), 4, 1, CAST(N'2026-07-18T12:24:34.373' AS DateTime), 443, 3500)
 SET IDENTITY_INSERT [dbo].[RankingRecord] OFF
 GO
 SET IDENTITY_INSERT [dbo].[DecisionSession] ON 
@@ -333,6 +284,9 @@ SET IDENTITY_INSERT [dbo].[DecisionSession] ON
 INSERT [dbo].[DecisionSession] ([id], [seriesId], [rankingRecordId], [status], [result], [systemSuggestion], [openedAt], [closedAt], [revenueTrendSnapshot]) VALUES (1, 3, 4, N'CLOSED', N'CONTINUE', NULL, CAST(N'2026-07-17T13:33:38.353' AS DateTime), CAST(N'2026-07-17T13:34:42.097' AS DateTime), N'[{"periodId":1,"periodName":"period1","revenue":900.00}]')
 INSERT [dbo].[DecisionSession] ([id], [seriesId], [rankingRecordId], [status], [result], [systemSuggestion], [openedAt], [closedAt], [revenueTrendSnapshot]) VALUES (2, 3, 9, N'CLOSED', N'CONTINUE', N'CONTINUE', CAST(N'2026-07-17T13:34:56.673' AS DateTime), CAST(N'2026-07-17T13:38:54.150' AS DateTime), N'[{"periodId":2,"periodName":"period2","revenue":900.00},{"periodId":1,"periodName":"period1","revenue":900.00}]')
 INSERT [dbo].[DecisionSession] ([id], [seriesId], [rankingRecordId], [status], [result], [systemSuggestion], [openedAt], [closedAt], [revenueTrendSnapshot]) VALUES (3, 3, 14, N'CLOSED', N'CONTINUE', N'REVIEW', CAST(N'2026-07-17T13:39:25.930' AS DateTime), CAST(N'2026-07-17T13:44:01.997' AS DateTime), N'[{"periodId":3,"periodName":"period3","revenue":2700.00},{"periodId":2,"periodName":"period2","revenue":900.00},{"periodId":1,"periodName":"period1","revenue":900.00}]')
+INSERT [dbo].[DecisionSession] ([id], [seriesId], [rankingRecordId], [status], [result], [systemSuggestion], [openedAt], [closedAt], [revenueTrendSnapshot]) VALUES (4, 3, 18, N'CLOSED', N'CONTINUE', N'CONTINUE', CAST(N'2026-07-18T12:21:00.707' AS DateTime), CAST(N'2026-07-18T12:22:09.543' AS DateTime), N'[{"periodId":4,"periodName":"period4","revenue":2900.00},{"periodId":3,"periodName":"period3","revenue":2700.00},{"periodId":2,"periodName":"period2","revenue":900.00},{"periodId":1,"periodName":"period1","revenue":900.00}]')
+INSERT [dbo].[DecisionSession] ([id], [seriesId], [rankingRecordId], [status], [result], [systemSuggestion], [openedAt], [closedAt], [revenueTrendSnapshot]) VALUES (5, 3, 23, N'CLOSED', N'CONTINUE', N'CONTINUE', CAST(N'2026-07-18T12:22:22.760' AS DateTime), CAST(N'2026-07-18T12:24:06.593' AS DateTime), N'[{"periodId":5,"periodName":"period5","revenue":3800.00},{"periodId":4,"periodName":"period4","revenue":2900.00},{"periodId":3,"periodName":"period3","revenue":2700.00},{"periodId":2,"periodName":"period2","revenue":900.00},{"periodId":1,"periodName":"period1","revenue":900.00}]')
+INSERT [dbo].[DecisionSession] ([id], [seriesId], [rankingRecordId], [status], [result], [systemSuggestion], [openedAt], [closedAt], [revenueTrendSnapshot]) VALUES (6, 3, 27, N'CLOSED', N'CONTINUE', N'REVIEW', CAST(N'2026-07-18T12:24:34.527' AS DateTime), CAST(N'2026-07-18T12:26:59.850' AS DateTime), N'[{"periodId":6,"periodName":"period6","revenue":2900.00},{"periodId":5,"periodName":"period5","revenue":3800.00},{"periodId":4,"periodName":"period4","revenue":2900.00},{"periodId":3,"periodName":"period3","revenue":2700.00},{"periodId":2,"periodName":"period2","revenue":900.00},{"periodId":1,"periodName":"period1","revenue":900.00}]')
 SET IDENTITY_INSERT [dbo].[DecisionSession] OFF
 GO
 SET IDENTITY_INSERT [dbo].[DecisionVote] ON 
@@ -346,6 +300,16 @@ INSERT [dbo].[DecisionVote] ([id], [sessionId], [voterId], [decision], [justific
 INSERT [dbo].[DecisionVote] ([id], [sessionId], [voterId], [decision], [justification], [votedAt]) VALUES (7, 3, 7, N'CONTINUE', N'', CAST(N'2026-07-17T13:40:18.960' AS DateTime))
 INSERT [dbo].[DecisionVote] ([id], [sessionId], [voterId], [decision], [justification], [votedAt]) VALUES (8, 3, 8, N'CONTINUE', N'', CAST(N'2026-07-17T13:42:33.820' AS DateTime))
 INSERT [dbo].[DecisionVote] ([id], [sessionId], [voterId], [decision], [justification], [votedAt]) VALUES (9, 3, 10, N'CHANGE_TYPE', N'', CAST(N'2026-07-17T13:44:01.947' AS DateTime))
+INSERT [dbo].[DecisionVote] ([id], [sessionId], [voterId], [decision], [justification], [votedAt]) VALUES (10, 4, 7, N'CONTINUE', N'', CAST(N'2026-07-18T12:21:37.057' AS DateTime))
+INSERT [dbo].[DecisionVote] ([id], [sessionId], [voterId], [decision], [justification], [votedAt]) VALUES (11, 4, 8, N'CONTINUE', N'', CAST(N'2026-07-18T12:21:58.440' AS DateTime))
+INSERT [dbo].[DecisionVote] ([id], [sessionId], [voterId], [decision], [justification], [votedAt]) VALUES (12, 4, 9, N'CONTINUE', N'', CAST(N'2026-07-18T12:22:09.487' AS DateTime))
+INSERT [dbo].[DecisionVote] ([id], [sessionId], [voterId], [decision], [justification], [votedAt]) VALUES (13, 5, 7, N'CONTINUE', N'', CAST(N'2026-07-18T12:23:00.230' AS DateTime))
+INSERT [dbo].[DecisionVote] ([id], [sessionId], [voterId], [decision], [justification], [votedAt]) VALUES (14, 5, 8, N'CONTINUE', N'', CAST(N'2026-07-18T12:23:49.080' AS DateTime))
+INSERT [dbo].[DecisionVote] ([id], [sessionId], [voterId], [decision], [justification], [votedAt]) VALUES (15, 5, 9, N'CONTINUE', N'', CAST(N'2026-07-18T12:24:06.547' AS DateTime))
+INSERT [dbo].[DecisionVote] ([id], [sessionId], [voterId], [decision], [justification], [votedAt]) VALUES (16, 6, 7, N'CONTINUE', N'', CAST(N'2026-07-18T12:25:30.173' AS DateTime))
+INSERT [dbo].[DecisionVote] ([id], [sessionId], [voterId], [decision], [justification], [votedAt]) VALUES (17, 6, 8, N'CANCEL', N'revenue at risk', CAST(N'2026-07-18T12:26:35.797' AS DateTime))
+INSERT [dbo].[DecisionVote] ([id], [sessionId], [voterId], [decision], [justification], [votedAt]) VALUES (18, 6, 9, N'CONTINUE', N'', CAST(N'2026-07-18T12:26:49.293' AS DateTime))
+INSERT [dbo].[DecisionVote] ([id], [sessionId], [voterId], [decision], [justification], [votedAt]) VALUES (19, 6, 10, N'CONTINUE', N'', CAST(N'2026-07-18T12:26:59.807' AS DateTime))
 SET IDENTITY_INSERT [dbo].[DecisionVote] OFF
 GO
 SET IDENTITY_INSERT [dbo].[TaskType] ON 
@@ -385,6 +349,8 @@ INSERT [dbo].[PageTaskStage] ([taskId], [taskTypeCode]) VALUES (23, N'MIXED')
 INSERT [dbo].[PageTaskStage] ([taskId], [taskTypeCode]) VALUES (24, N'MIXED')
 INSERT [dbo].[PageTaskStage] ([taskId], [taskTypeCode]) VALUES (25, N'MIXED')
 INSERT [dbo].[PageTaskStage] ([taskId], [taskTypeCode]) VALUES (26, N'MIXED')
+INSERT [dbo].[PageTaskStage] ([taskId], [taskTypeCode]) VALUES (27, N'SKETCHING')
+INSERT [dbo].[PageTaskStage] ([taskId], [taskTypeCode]) VALUES (28, N'SKETCHING')
 GO
 INSERT [dbo].[PageTaskPageStage] ([taskId], [pageNumber], [taskTypeCode]) VALUES (21, 1, N'SKETCHING')
 INSERT [dbo].[PageTaskPageStage] ([taskId], [pageNumber], [taskTypeCode]) VALUES (21, 2, N'INKING')
@@ -401,8 +367,6 @@ INSERT [dbo].[PageTaskPageStage] ([taskId], [pageNumber], [taskTypeCode]) VALUES
 INSERT [dbo].[PageTaskPageStage] ([taskId], [pageNumber], [taskTypeCode]) VALUES (25, 1, N'SCREENTONE')
 INSERT [dbo].[PageTaskPageStage] ([taskId], [pageNumber], [taskTypeCode]) VALUES (25, 2, N'LETTERING')
 INSERT [dbo].[PageTaskPageStage] ([taskId], [pageNumber], [taskTypeCode]) VALUES (26, 5, N'COLORING')
-INSERT [dbo].[PageTaskStage] ([taskId], [taskTypeCode]) VALUES (27, N'SKETCHING')
-INSERT [dbo].[PageTaskStage] ([taskId], [taskTypeCode]) VALUES (28, N'SKETCHING')
 INSERT [dbo].[PageTaskPageStage] ([taskId], [pageNumber], [taskTypeCode]) VALUES (27, 7, N'SKETCHING')
 INSERT [dbo].[PageTaskPageStage] ([taskId], [pageNumber], [taskTypeCode]) VALUES (27, 8, N'SKETCHING')
 INSERT [dbo].[PageTaskPageStage] ([taskId], [pageNumber], [taskTypeCode]) VALUES (27, 9, N'SKETCHING')
@@ -578,6 +542,31 @@ INSERT [dbo].[RankingCsvUpload] ([id], [periodId], [boardMemberId], [csvFileName
 3,Shadows of Tokyo,12,300,3500,900
 4,Cyber Ronin,1,663,1000,2000
 ', CAST(N'2026-07-17T13:37:11.963' AS DateTime))
+INSERT [dbo].[RankingCsvUpload] ([id], [periodId], [boardMemberId], [csvFileName], [csvContent], [uploadedAt]) VALUES (6, 4, 7, N'board1_data.csv', N'series_id,series_name,mangaka_id,likes,reads,revenue
+0,Shadows of Edo,1,1200,5000,5200
+1,Celestial Kitchen,12,800,4000,3500
+2,Neon Lotus High,13,1500,6000,7000
+3,Shadows of Tokyo,12,443,3500,2900
+', CAST(N'2026-07-18T12:20:47.660' AS DateTime))
+INSERT [dbo].[RankingCsvUpload] ([id], [periodId], [boardMemberId], [csvFileName], [csvContent], [uploadedAt]) VALUES (7, 5, 7, N'board1_data.csv', N'series_id,series_name,mangaka_id,likes,reads,revenue
+0,Shadows of Edo,1,1200,5000,5200
+1,Celestial Kitchen,12,800,4000,3500
+2,Neon Lotus High,13,1500,6000,7000
+3,Shadows of Tokyo,12,443,3500,2900
+', CAST(N'2026-07-18T12:21:32.350' AS DateTime))
+INSERT [dbo].[RankingCsvUpload] ([id], [periodId], [boardMemberId], [csvFileName], [csvContent], [uploadedAt]) VALUES (8, 5, 8, N'board2_data.csv', N'series_id,series_name,mangaka_id,likes,reads,revenue
+0,Shadows of Edo,1,1200,3000,5200
+1,Celestial Kitchen,12,800,2000,2500
+2,Neon Lotus High,13,1500,6000,5000
+3,Shadows of Tokyo,12,300,3500,900
+4,Cyber Ronin,1,663,1000,2000
+', CAST(N'2026-07-18T12:21:54.290' AS DateTime))
+INSERT [dbo].[RankingCsvUpload] ([id], [periodId], [boardMemberId], [csvFileName], [csvContent], [uploadedAt]) VALUES (9, 6, 7, N'board1_data.csv', N'series_id,series_name,mangaka_id,likes,reads,revenue
+0,Shadows of Edo,1,1200,5000,5200
+1,Celestial Kitchen,12,800,4000,3500
+2,Neon Lotus High,13,1500,6000,7000
+3,Shadows of Tokyo,12,443,3500,2900
+', CAST(N'2026-07-18T12:23:16.587' AS DateTime))
 SET IDENTITY_INSERT [dbo].[RankingCsvUpload] OFF
 GO
 SET IDENTITY_INSERT [dbo].[MangakaRankingRecord] ON 
@@ -591,6 +580,15 @@ INSERT [dbo].[MangakaRankingRecord] ([id], [periodId], [mangakaId], [totalReads]
 INSERT [dbo].[MangakaRankingRecord] ([id], [periodId], [mangakaId], [totalReads], [totalRevenue], [totalLikes], [rankPosition], [calculatedAt]) VALUES (7, 3, 13, 18000, CAST(15000.00 AS Decimal(15, 2)), 4500, 1, CAST(N'2026-07-17T13:39:25.820' AS DateTime))
 INSERT [dbo].[MangakaRankingRecord] ([id], [periodId], [mangakaId], [totalReads], [totalRevenue], [totalLikes], [rankPosition], [calculatedAt]) VALUES (8, 3, 12, 17500, CAST(7200.00 AS Decimal(15, 2)), 3300, 2, CAST(N'2026-07-17T13:39:25.820' AS DateTime))
 INSERT [dbo].[MangakaRankingRecord] ([id], [periodId], [mangakaId], [totalReads], [totalRevenue], [totalLikes], [rankPosition], [calculatedAt]) VALUES (9, 3, 1, 13000, CAST(13600.00 AS Decimal(15, 2)), 4926, 3, CAST(N'2026-07-17T13:39:25.820' AS DateTime))
+INSERT [dbo].[MangakaRankingRecord] ([id], [periodId], [mangakaId], [totalReads], [totalRevenue], [totalLikes], [rankPosition], [calculatedAt]) VALUES (10, 4, 12, 7500, CAST(6400.00 AS Decimal(15, 2)), 1243, 1, CAST(N'2026-07-18T12:21:00.583' AS DateTime))
+INSERT [dbo].[MangakaRankingRecord] ([id], [periodId], [mangakaId], [totalReads], [totalRevenue], [totalLikes], [rankPosition], [calculatedAt]) VALUES (11, 4, 13, 6000, CAST(7000.00 AS Decimal(15, 2)), 1500, 2, CAST(N'2026-07-18T12:21:00.583' AS DateTime))
+INSERT [dbo].[MangakaRankingRecord] ([id], [periodId], [mangakaId], [totalReads], [totalRevenue], [totalLikes], [rankPosition], [calculatedAt]) VALUES (12, 4, 1, 5000, CAST(5200.00 AS Decimal(15, 2)), 1200, 3, CAST(N'2026-07-18T12:21:00.583' AS DateTime))
+INSERT [dbo].[MangakaRankingRecord] ([id], [periodId], [mangakaId], [totalReads], [totalRevenue], [totalLikes], [rankPosition], [calculatedAt]) VALUES (13, 5, 12, 13000, CAST(9800.00 AS Decimal(15, 2)), 2343, 1, CAST(N'2026-07-18T12:22:22.667' AS DateTime))
+INSERT [dbo].[MangakaRankingRecord] ([id], [periodId], [mangakaId], [totalReads], [totalRevenue], [totalLikes], [rankPosition], [calculatedAt]) VALUES (14, 5, 13, 12000, CAST(12000.00 AS Decimal(15, 2)), 3000, 2, CAST(N'2026-07-18T12:22:22.667' AS DateTime))
+INSERT [dbo].[MangakaRankingRecord] ([id], [periodId], [mangakaId], [totalReads], [totalRevenue], [totalLikes], [rankPosition], [calculatedAt]) VALUES (15, 5, 1, 9000, CAST(12400.00 AS Decimal(15, 2)), 3063, 3, CAST(N'2026-07-18T12:22:22.667' AS DateTime))
+INSERT [dbo].[MangakaRankingRecord] ([id], [periodId], [mangakaId], [totalReads], [totalRevenue], [totalLikes], [rankPosition], [calculatedAt]) VALUES (16, 6, 12, 7500, CAST(6400.00 AS Decimal(15, 2)), 1243, 1, CAST(N'2026-07-18T12:24:34.423' AS DateTime))
+INSERT [dbo].[MangakaRankingRecord] ([id], [periodId], [mangakaId], [totalReads], [totalRevenue], [totalLikes], [rankPosition], [calculatedAt]) VALUES (17, 6, 13, 6000, CAST(7000.00 AS Decimal(15, 2)), 1500, 2, CAST(N'2026-07-18T12:24:34.423' AS DateTime))
+INSERT [dbo].[MangakaRankingRecord] ([id], [periodId], [mangakaId], [totalReads], [totalRevenue], [totalLikes], [rankPosition], [calculatedAt]) VALUES (18, 6, 1, 5000, CAST(5200.00 AS Decimal(15, 2)), 1200, 3, CAST(N'2026-07-18T12:24:34.423' AS DateTime))
 SET IDENTITY_INSERT [dbo].[MangakaRankingRecord] OFF
 GO
 SET IDENTITY_INSERT [dbo].[VoteEntry] ON 
@@ -618,6 +616,23 @@ INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCo
 INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCount], [readerCount], [revenue], [submittedAt]) VALUES (21, 3, 2, 9, 1500, 6000, CAST(5000.00 AS Decimal(15, 2)), CAST(N'2026-07-17T13:37:11.930' AS DateTime))
 INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCount], [readerCount], [revenue], [submittedAt]) VALUES (22, 3, 3, 9, 300, 3500, CAST(900.00 AS Decimal(15, 2)), CAST(N'2026-07-17T13:37:11.930' AS DateTime))
 INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCount], [readerCount], [revenue], [submittedAt]) VALUES (23, 3, 4, 9, 663, 1000, CAST(2000.00 AS Decimal(15, 2)), CAST(N'2026-07-17T13:37:11.930' AS DateTime))
+INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCount], [readerCount], [revenue], [submittedAt]) VALUES (24, 4, 0, 7, 1200, 5000, CAST(5200.00 AS Decimal(15, 2)), CAST(N'2026-07-18T12:20:47.607' AS DateTime))
+INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCount], [readerCount], [revenue], [submittedAt]) VALUES (25, 4, 1, 7, 800, 4000, CAST(3500.00 AS Decimal(15, 2)), CAST(N'2026-07-18T12:20:47.607' AS DateTime))
+INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCount], [readerCount], [revenue], [submittedAt]) VALUES (26, 4, 2, 7, 1500, 6000, CAST(7000.00 AS Decimal(15, 2)), CAST(N'2026-07-18T12:20:47.610' AS DateTime))
+INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCount], [readerCount], [revenue], [submittedAt]) VALUES (27, 4, 3, 7, 443, 3500, CAST(2900.00 AS Decimal(15, 2)), CAST(N'2026-07-18T12:20:47.610' AS DateTime))
+INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCount], [readerCount], [revenue], [submittedAt]) VALUES (28, 5, 0, 7, 1200, 5000, CAST(5200.00 AS Decimal(15, 2)), CAST(N'2026-07-18T12:21:32.300' AS DateTime))
+INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCount], [readerCount], [revenue], [submittedAt]) VALUES (29, 5, 1, 7, 800, 4000, CAST(3500.00 AS Decimal(15, 2)), CAST(N'2026-07-18T12:21:32.303' AS DateTime))
+INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCount], [readerCount], [revenue], [submittedAt]) VALUES (30, 5, 2, 7, 1500, 6000, CAST(7000.00 AS Decimal(15, 2)), CAST(N'2026-07-18T12:21:32.303' AS DateTime))
+INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCount], [readerCount], [revenue], [submittedAt]) VALUES (31, 5, 3, 7, 443, 3500, CAST(2900.00 AS Decimal(15, 2)), CAST(N'2026-07-18T12:21:32.303' AS DateTime))
+INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCount], [readerCount], [revenue], [submittedAt]) VALUES (32, 5, 0, 8, 1200, 3000, CAST(5200.00 AS Decimal(15, 2)), CAST(N'2026-07-18T12:21:54.233' AS DateTime))
+INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCount], [readerCount], [revenue], [submittedAt]) VALUES (33, 5, 1, 8, 800, 2000, CAST(2500.00 AS Decimal(15, 2)), CAST(N'2026-07-18T12:21:54.233' AS DateTime))
+INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCount], [readerCount], [revenue], [submittedAt]) VALUES (34, 5, 2, 8, 1500, 6000, CAST(5000.00 AS Decimal(15, 2)), CAST(N'2026-07-18T12:21:54.233' AS DateTime))
+INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCount], [readerCount], [revenue], [submittedAt]) VALUES (35, 5, 3, 8, 300, 3500, CAST(900.00 AS Decimal(15, 2)), CAST(N'2026-07-18T12:21:54.233' AS DateTime))
+INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCount], [readerCount], [revenue], [submittedAt]) VALUES (36, 5, 4, 8, 663, 1000, CAST(2000.00 AS Decimal(15, 2)), CAST(N'2026-07-18T12:21:54.233' AS DateTime))
+INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCount], [readerCount], [revenue], [submittedAt]) VALUES (37, 6, 0, 7, 1200, 5000, CAST(5200.00 AS Decimal(15, 2)), CAST(N'2026-07-18T12:23:16.530' AS DateTime))
+INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCount], [readerCount], [revenue], [submittedAt]) VALUES (38, 6, 1, 7, 800, 4000, CAST(3500.00 AS Decimal(15, 2)), CAST(N'2026-07-18T12:23:16.533' AS DateTime))
+INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCount], [readerCount], [revenue], [submittedAt]) VALUES (39, 6, 2, 7, 1500, 6000, CAST(7000.00 AS Decimal(15, 2)), CAST(N'2026-07-18T12:23:16.533' AS DateTime))
+INSERT [dbo].[VoteEntry] ([id], [periodId], [seriesId], [boardMemberId], [voteCount], [readerCount], [revenue], [submittedAt]) VALUES (40, 6, 3, 7, 443, 3500, CAST(2900.00 AS Decimal(15, 2)), CAST(N'2026-07-18T12:23:16.533' AS DateTime))
 SET IDENTITY_INSERT [dbo].[VoteEntry] OFF
 GO
 INSERT [dbo].[Role] ([id], [name]) VALUES (1, N'ADMIN')
@@ -723,6 +738,28 @@ INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [d
 INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (44, 8, N'DECISION_VOTE_SUBMITTED', N'DECISION', 3, N'Voter 8 submitted decision: CONTINUE', CAST(N'2026-07-17T13:42:33.870' AS DateTime))
 INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (45, 10, N'DECISION_VOTE_SUBMITTED', N'DECISION', 3, N'Voter 10 submitted decision: CHANGE_TYPE', CAST(N'2026-07-17T13:44:01.987' AS DateTime))
 INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (46, 10, N'DECISION_SESSION_RESOLVED', N'DECISION', 3, N'Decision session 3 resolved with result: CONTINUE', CAST(N'2026-07-17T13:44:02.030' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (47, 0, N'DECISION_SESSION_OPENED', N'DECISION', 4, N'Decision session 4 opened for series 3', CAST(N'2026-07-18T12:21:00.777' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (48, 0, N'RANKING_CALCULATED', N'RANKING_PERIOD', 4, N'Ranking period 4 calculation completed', CAST(N'2026-07-18T12:21:00.863' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (49, 0, N'RANKING_RESULT_ARCHIVED', N'RANKING_PERIOD', 4, N'Ranking period 4 result archived', CAST(N'2026-07-18T12:21:00.903' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (50, 7, N'DECISION_VOTE_SUBMITTED', N'DECISION', 4, N'Voter 7 submitted decision: CONTINUE', CAST(N'2026-07-18T12:21:37.100' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (51, 8, N'DECISION_VOTE_SUBMITTED', N'DECISION', 4, N'Voter 8 submitted decision: CONTINUE', CAST(N'2026-07-18T12:21:58.473' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (52, 9, N'DECISION_VOTE_SUBMITTED', N'DECISION', 4, N'Voter 9 submitted decision: CONTINUE', CAST(N'2026-07-18T12:22:09.530' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (53, 9, N'DECISION_SESSION_RESOLVED', N'DECISION', 4, N'Decision session 4 resolved with result: CONTINUE', CAST(N'2026-07-18T12:22:09.580' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (54, 0, N'DECISION_SESSION_OPENED', N'DECISION', 5, N'Decision session 5 opened for series 3', CAST(N'2026-07-18T12:22:22.813' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (55, 0, N'RANKING_CALCULATED', N'RANKING_PERIOD', 5, N'Ranking period 5 calculation completed', CAST(N'2026-07-18T12:22:22.897' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (56, 0, N'RANKING_RESULT_ARCHIVED', N'RANKING_PERIOD', 5, N'Ranking period 5 result archived', CAST(N'2026-07-18T12:22:22.930' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (57, 7, N'DECISION_VOTE_SUBMITTED', N'DECISION', 5, N'Voter 7 submitted decision: CONTINUE', CAST(N'2026-07-18T12:23:00.267' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (58, 8, N'DECISION_VOTE_SUBMITTED', N'DECISION', 5, N'Voter 8 submitted decision: CONTINUE', CAST(N'2026-07-18T12:23:49.113' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (59, 9, N'DECISION_VOTE_SUBMITTED', N'DECISION', 5, N'Voter 9 submitted decision: CONTINUE', CAST(N'2026-07-18T12:24:06.580' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (60, 9, N'DECISION_SESSION_RESOLVED', N'DECISION', 5, N'Decision session 5 resolved with result: CONTINUE', CAST(N'2026-07-18T12:24:06.633' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (61, 0, N'DECISION_SESSION_OPENED', N'DECISION', 6, N'Decision session 6 opened for series 3', CAST(N'2026-07-18T12:24:34.583' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (62, 0, N'RANKING_CALCULATED', N'RANKING_PERIOD', 6, N'Ranking period 6 calculation completed', CAST(N'2026-07-18T12:24:34.673' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (63, 0, N'RANKING_RESULT_ARCHIVED', N'RANKING_PERIOD', 6, N'Ranking period 6 result archived', CAST(N'2026-07-18T12:24:34.717' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (64, 7, N'DECISION_VOTE_SUBMITTED', N'DECISION', 6, N'Voter 7 submitted decision: CONTINUE', CAST(N'2026-07-18T12:25:30.210' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (65, 8, N'DECISION_VOTE_SUBMITTED', N'DECISION', 6, N'Voter 8 submitted decision: CANCEL', CAST(N'2026-07-18T12:26:35.837' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (66, 9, N'DECISION_VOTE_SUBMITTED', N'DECISION', 6, N'Voter 9 submitted decision: CONTINUE', CAST(N'2026-07-18T12:26:49.333' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (67, 10, N'DECISION_VOTE_SUBMITTED', N'DECISION', 6, N'Voter 10 submitted decision: CONTINUE', CAST(N'2026-07-18T12:26:59.840' AS DateTime))
+INSERT [dbo].[AuditLog] ([id], [actorId], [action], [entityType], [entityId], [detail], [performedAt]) VALUES (68, 10, N'DECISION_SESSION_RESOLVED', N'DECISION', 6, N'Decision session 6 resolved with result: CONTINUE', CAST(N'2026-07-18T12:26:59.880' AS DateTime))
 SET IDENTITY_INSERT [dbo].[AuditLog] OFF
 GO
 INSERT [dbo].[MangakaAssistant] ([mangakaId], [assistantId], [enrolledAt]) VALUES (1, 2, CAST(N'2026-05-27T03:09:39.257' AS DateTime))
@@ -834,6 +871,37 @@ INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [refere
 INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (83, 9, N'DECISION_RESOLVED', N'Decision finalized', N'A decision session has been finalized with result: CONTINUE.', 3, N'DECISION', N'/main/decisions/3', 0, CAST(N'2026-07-17T13:44:02.043' AS DateTime))
 INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (84, 10, N'DECISION_RESOLVED', N'Decision finalized', N'A decision session has been finalized with result: CONTINUE.', 3, N'DECISION', N'/main/decisions/3', 0, CAST(N'2026-07-17T13:44:02.043' AS DateTime))
 INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (85, 11, N'DECISION_RESOLVED', N'Decision finalized', N'A decision session has been finalized with result: CONTINUE.', 3, N'DECISION', N'/main/decisions/3', 0, CAST(N'2026-07-17T13:44:02.043' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (86, 7, N'DECISION_SESSION_OPENED', N'Decision session opened', N'A new decision session is open for series #3.', 4, N'DECISION', N'/main/decisions/4', 0, CAST(N'2026-07-18T12:21:00.723' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (87, 8, N'DECISION_SESSION_OPENED', N'Decision session opened', N'A new decision session is open for series #3.', 4, N'DECISION', N'/main/decisions/4', 0, CAST(N'2026-07-18T12:21:00.723' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (88, 9, N'DECISION_SESSION_OPENED', N'Decision session opened', N'A new decision session is open for series #3.', 4, N'DECISION', N'/main/decisions/4', 0, CAST(N'2026-07-18T12:21:00.723' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (89, 10, N'DECISION_SESSION_OPENED', N'Decision session opened', N'A new decision session is open for series #3.', 4, N'DECISION', N'/main/decisions/4', 0, CAST(N'2026-07-18T12:21:00.723' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (90, 11, N'DECISION_SESSION_OPENED', N'Decision session opened', N'A new decision session is open for series #3.', 4, N'DECISION', N'/main/decisions/4', 0, CAST(N'2026-07-18T12:21:00.723' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (91, 7, N'DECISION_RESOLVED', N'Decision finalized', N'A decision session has been finalized with result: CONTINUE.', 4, N'DECISION', N'/main/decisions/4', 0, CAST(N'2026-07-18T12:22:09.597' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (92, 8, N'DECISION_RESOLVED', N'Decision finalized', N'A decision session has been finalized with result: CONTINUE.', 4, N'DECISION', N'/main/decisions/4', 0, CAST(N'2026-07-18T12:22:09.597' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (93, 9, N'DECISION_RESOLVED', N'Decision finalized', N'A decision session has been finalized with result: CONTINUE.', 4, N'DECISION', N'/main/decisions/4', 0, CAST(N'2026-07-18T12:22:09.597' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (94, 10, N'DECISION_RESOLVED', N'Decision finalized', N'A decision session has been finalized with result: CONTINUE.', 4, N'DECISION', N'/main/decisions/4', 0, CAST(N'2026-07-18T12:22:09.597' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (95, 11, N'DECISION_RESOLVED', N'Decision finalized', N'A decision session has been finalized with result: CONTINUE.', 4, N'DECISION', N'/main/decisions/4', 0, CAST(N'2026-07-18T12:22:09.597' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (96, 7, N'DECISION_SESSION_OPENED', N'Decision session opened', N'A new decision session is open for series #3.', 5, N'DECISION', N'/main/decisions/5', 0, CAST(N'2026-07-18T12:22:22.773' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (97, 8, N'DECISION_SESSION_OPENED', N'Decision session opened', N'A new decision session is open for series #3.', 5, N'DECISION', N'/main/decisions/5', 0, CAST(N'2026-07-18T12:22:22.773' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (98, 9, N'DECISION_SESSION_OPENED', N'Decision session opened', N'A new decision session is open for series #3.', 5, N'DECISION', N'/main/decisions/5', 0, CAST(N'2026-07-18T12:22:22.773' AS DateTime))
+GO
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (99, 10, N'DECISION_SESSION_OPENED', N'Decision session opened', N'A new decision session is open for series #3.', 5, N'DECISION', N'/main/decisions/5', 0, CAST(N'2026-07-18T12:22:22.773' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (100, 11, N'DECISION_SESSION_OPENED', N'Decision session opened', N'A new decision session is open for series #3.', 5, N'DECISION', N'/main/decisions/5', 0, CAST(N'2026-07-18T12:22:22.773' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (101, 7, N'DECISION_RESOLVED', N'Decision finalized', N'A decision session has been finalized with result: CONTINUE.', 5, N'DECISION', N'/main/decisions/5', 0, CAST(N'2026-07-18T12:24:06.643' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (102, 8, N'DECISION_RESOLVED', N'Decision finalized', N'A decision session has been finalized with result: CONTINUE.', 5, N'DECISION', N'/main/decisions/5', 0, CAST(N'2026-07-18T12:24:06.643' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (103, 9, N'DECISION_RESOLVED', N'Decision finalized', N'A decision session has been finalized with result: CONTINUE.', 5, N'DECISION', N'/main/decisions/5', 0, CAST(N'2026-07-18T12:24:06.643' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (104, 10, N'DECISION_RESOLVED', N'Decision finalized', N'A decision session has been finalized with result: CONTINUE.', 5, N'DECISION', N'/main/decisions/5', 0, CAST(N'2026-07-18T12:24:06.643' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (105, 11, N'DECISION_RESOLVED', N'Decision finalized', N'A decision session has been finalized with result: CONTINUE.', 5, N'DECISION', N'/main/decisions/5', 0, CAST(N'2026-07-18T12:24:06.643' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (106, 7, N'DECISION_SESSION_OPENED', N'Decision session opened', N'A new decision session is open for series #3.', 6, N'DECISION', N'/main/decisions/6', 0, CAST(N'2026-07-18T12:24:34.540' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (107, 8, N'DECISION_SESSION_OPENED', N'Decision session opened', N'A new decision session is open for series #3.', 6, N'DECISION', N'/main/decisions/6', 0, CAST(N'2026-07-18T12:24:34.540' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (108, 9, N'DECISION_SESSION_OPENED', N'Decision session opened', N'A new decision session is open for series #3.', 6, N'DECISION', N'/main/decisions/6', 0, CAST(N'2026-07-18T12:24:34.540' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (109, 10, N'DECISION_SESSION_OPENED', N'Decision session opened', N'A new decision session is open for series #3.', 6, N'DECISION', N'/main/decisions/6', 0, CAST(N'2026-07-18T12:24:34.540' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (110, 11, N'DECISION_SESSION_OPENED', N'Decision session opened', N'A new decision session is open for series #3.', 6, N'DECISION', N'/main/decisions/6', 0, CAST(N'2026-07-18T12:24:34.540' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (111, 7, N'DECISION_RESOLVED', N'Decision finalized', N'A decision session has been finalized with result: CONTINUE.', 6, N'DECISION', N'/main/decisions/6', 0, CAST(N'2026-07-18T12:26:59.890' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (112, 8, N'DECISION_RESOLVED', N'Decision finalized', N'A decision session has been finalized with result: CONTINUE.', 6, N'DECISION', N'/main/decisions/6', 0, CAST(N'2026-07-18T12:26:59.890' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (113, 9, N'DECISION_RESOLVED', N'Decision finalized', N'A decision session has been finalized with result: CONTINUE.', 6, N'DECISION', N'/main/decisions/6', 0, CAST(N'2026-07-18T12:26:59.890' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (114, 10, N'DECISION_RESOLVED', N'Decision finalized', N'A decision session has been finalized with result: CONTINUE.', 6, N'DECISION', N'/main/decisions/6', 0, CAST(N'2026-07-18T12:26:59.890' AS DateTime))
+INSERT [dbo].[Notification] ([id], [userId], [type], [title], [message], [referenceId], [referenceType], [viewUrl], [isRead], [createdAt]) VALUES (115, 11, N'DECISION_RESOLVED', N'Decision finalized', N'A decision session has been finalized with result: CONTINUE.', 6, N'DECISION', N'/main/decisions/6', 0, CAST(N'2026-07-18T12:26:59.890' AS DateTime))
 SET IDENTITY_INSERT [dbo].[Notification] OFF
 GO
 SET IDENTITY_INSERT [dbo].[PageRevision] ON 
@@ -855,4 +923,8 @@ SET IDENTITY_INSERT [dbo].[PageRevision] OFF
 GO
 INSERT [dbo].[SystemSetting] ([settingKey], [settingValue], [updatedAt]) VALUES (N'proposal.maxSubmitAttempts', N'2', CAST(N'2026-07-17T13:32:57.017' AS DateTime))
 INSERT [dbo].[SystemSetting] ([settingKey], [settingValue], [updatedAt]) VALUES (N'proposal.minimumVoteQuorum', N'3', CAST(N'2026-07-17T13:32:57.017' AS DateTime))
+INSERT [dbo].[SystemSetting] ([settingKey], [settingValue], [updatedAt]) VALUES (N'deadline.taskChapterBufferDays', N'1', GETDATE())
+INSERT [dbo].[SystemSetting] ([settingKey], [settingValue], [updatedAt]) VALUES (N'deadline.chapterSeriesBufferDays', N'7', GETDATE())
+INSERT [dbo].[SystemSetting] ([settingKey], [settingValue], [updatedAt]) VALUES (N'progress.lowThresholdPercent', N'50', GETDATE())
+INSERT [dbo].[SystemSetting] ([settingKey], [settingValue], [updatedAt]) VALUES (N'progress.highThresholdPercent', N'100', GETDATE())
 GO

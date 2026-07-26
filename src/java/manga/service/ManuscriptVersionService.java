@@ -999,4 +999,59 @@ public class ManuscriptVersionService {
 
         return dto;
     }
+
+    /**
+     * Build SeriesInformationDTO for manuscript workspace.
+     * Aggregates series metadata for quick reference.
+     */
+    public manga.dto.workspace.SeriesInformationDTO buildSeriesInformation(Long chapterId) {
+        manga.model.chaptertask.ChapterSummary chapter = chapterRepository.findById(chapterId);
+        if (chapter == null) {
+            throw new BusinessRuleException("Chapter not found");
+        }
+
+        java.util.Map<String, Object> series = productionRepository.getSeriesById(chapter.getSeriesId());
+        if (series == null) {
+            return null;
+        }
+
+        manga.dto.workspace.SeriesInformationDTO dto = new manga.dto.workspace.SeriesInformationDTO();
+
+        // Series basic information
+        dto.setSeriesTitle((String) series.get("title"));
+        dto.setStatus((String) series.get("status"));
+        dto.setGenre((String) series.get("genre"));
+
+        // Author name (mangaka)
+        Long mangakaId = (Long) series.get("mangakaId");
+        if (mangakaId != null) {
+            String authorName = manuscriptVersionRepository.getUserName(mangakaId);
+            dto.setAuthorName(authorName != null ? authorName : "-");
+        } else {
+            dto.setAuthorName("-");
+        }
+
+        // Magazine - not available in current schema
+        dto.setMagazine("-");
+
+        // Current chapter
+        dto.setCurrentChapter(chapter.getChapterNumber());
+
+        // Current manuscript version (latest version for this chapter)
+        manga.model.ManuscriptVersion latestVersion = manuscriptVersionRepository.findLatestByChapterId(chapterId);
+        dto.setCurrentVersion(latestVersion != null ? latestVersion.getVersion() : 0);
+
+        // Published chapter count
+        int publishedCount = manuscriptVersionRepository.countPublishedChapters(chapter.getSeriesId());
+        dto.setPublishedChapterCount(publishedCount);
+
+        // Current review chapter (chapter with UNDER_REVIEW manuscript)
+        String reviewChapter = manuscriptVersionRepository.findCurrentReviewChapter(chapter.getSeriesId());
+        dto.setCurrentReviewChapter(reviewChapter != null ? reviewChapter : "-");
+
+        // Total views - not available in current schema
+        dto.setTotalViews(0);
+
+        return dto;
+    }
 }

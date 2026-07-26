@@ -71,8 +71,23 @@ public class PageTaskRepository {
     // [1] HẰNG SỐ & TRẠNG THÁI
     // ============================================================
 
-    /** Số ngày buffer tối thiểu giữa dueDate của task và submissionDeadline của chapter (BR-34) */
-    private static final int TASK_REJECT_SERIES_DEADLINE_BUFFER_DAYS = 3;
+    /** Fallback used only if the setting was never saved; must match DeadlineSettingsService.DEFAULT_TASK_CHAPTER_BUFFER_DAYS. */
+    private static final int DEFAULT_TASK_CHAPTER_DEADLINE_BUFFER_DAYS = 1;
+
+    /**
+     * Số ngày buffer tối thiểu giữa dueDate của task và submissionDeadline của chapter (BR-34).
+     * Admin-configurable via Settings > Deadlines (DeadlineSettingsService). Giữ >= 1 để Mangaka
+     * luôn có ít nhất 1 ngày riêng để review/approve task trước khi chapter tới hạn, kể cả khi
+     * assistant nộp sát dueDate của task.
+     * Lưu ý: cũng là trần khi gia hạn dueDate lúc reject (xem extendedRejectDueDate).
+     * Nếu đổi setting, giá trị mới được JS đọc động qua GET /api/v1/settings/deadlines
+     * (xem chapter-detail.js và task-list.js) - không cần sửa code JS.
+     */
+    private int taskChapterDeadlineBufferDays() {
+        return systemSettingRepository.getInt(
+                manga.repository.SystemSettingRepository.TASK_CHAPTER_DEADLINE_BUFFER_DAYS,
+                DEFAULT_TASK_CHAPTER_DEADLINE_BUFFER_DAYS);
+    }
 
     /** Các trạng thái "đã đóng" — task ở các trạng thái này không còn block việc tái sử dụng page range */
     private static final String SQL_CLOSED_TASK_STATUSES = "'APPROVED','DELETED','REASSIGNED','CANCELLED'";
@@ -113,6 +128,9 @@ public class PageTaskRepository {
 
     @Autowired
     private manga.repository.NotificationRepository notificationRepository;
+
+    @Autowired
+    private manga.repository.SystemSettingRepository systemSettingRepository;
 
     // ============================================================
     // [2] SCHEMA GUARD - Kiểm tra & tự cập nhật cấu trúc DB
@@ -1171,14 +1189,14 @@ public class PageTaskRepository {
 
     /**
      * Tính dueDate mới sau khi reject: cộng thêm 1 ngày, nhưng không vượt quá
-     * (seriesDeadline - 3 ngày). Nếu không còn đủ buffer, giữ nguyên dueDate cũ.
+     * (seriesDeadline trừ đi số ngày buffer). Nếu không còn đủ buffer, giữ nguyên dueDate cũ.
      */
     private Date extendedRejectDueDate(Date currentDueDate, Date seriesDeadline) {
         if (currentDueDate == null || seriesDeadline == null) {
             return currentDueDate;
         }
         LocalDate proposed = currentDueDate.toLocalDate().plusDays(1);
-        LocalDate latestAllowed = seriesDeadline.toLocalDate().minusDays(TASK_REJECT_SERIES_DEADLINE_BUFFER_DAYS);
+        LocalDate latestAllowed = seriesDeadline.toLocalDate().minusDays(taskChapterDeadlineBufferDays());
         if (proposed.isAfter(latestAllowed)) {
             return currentDueDate;
         }
@@ -1415,11 +1433,12 @@ public class PageTaskRepository {
         }
         Date latestDueDate = findLatestTaskDueDate(chapterId);
         if (dueDate.after(latestDueDate)) {
-            throw new IllegalArgumentException("Task dueDate must be at least 3 days before chapter submissionDeadline (BR-34)");
+            // Nêu thẳng ngày tối đa thay vì số ngày buffer, để thông báo không lệch khi buffer đổi
+            throw new IllegalArgumentException("Task dueDate must not be after " + latestDueDate + " (BR-34)");
         }
     }
 
-    /** Trả về ngày tối đa cho dueDate của task: submissionDeadline - 3 ngày */
+    /** Trả về ngày tối đa cho dueDate của task: submissionDeadline trừ đi số ngày buffer */
     private Date findLatestTaskDueDate(long chapterId) {
         String sql = "SELECT submissionDeadline FROM Chapter WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -1430,7 +1449,7 @@ public class PageTaskRepository {
                     throw new IllegalArgumentException("Chapter not found");
                 }
                 Date submissionDeadline = rs.getDate("submissionDeadline");
-                return Date.valueOf(submissionDeadline.toLocalDate().minusDays(TASK_REJECT_SERIES_DEADLINE_BUFFER_DAYS));
+                return Date.valueOf(submissionDeadline.toLocalDate().minusDays(taskChapterDeadlineBufferDays()));
             }
         } catch (SQLException ex) {
             throw new RuntimeException("Cannot validate task due date", ex);

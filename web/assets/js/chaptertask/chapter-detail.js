@@ -58,6 +58,9 @@
     var activeOverdueTaskId = null;  // Task ID in the overdue decision modal
     var taskImagesCache = {};        // Image cache by taskId: { taskId: [imgObjects] }
     var taskInlineLoaded = {};       // Marks which tasks have finished loading inline
+    // Buffer between a task's due date and the chapter deadline (BR-34).
+    // Must match TASK_REJECT_SERIES_DEADLINE_BUFFER_DAYS in PageTaskRepository.java.
+    var TASK_DUE_BUFFER_DAYS = 1;
 
     // ============================================================
     // 2. UTILITY
@@ -1602,11 +1605,13 @@
     }
 
     /**
-     * Tính ngày due tối đa cho task: deadline chapter - 3 ngày.
-     * Đảm bảo task xong trước khi chapter đến hạn submit.
+     * Tính ngày due tối đa cho task: deadline chapter trừ đi TASK_DUE_BUFFER_DAYS.
+     * Phải khớp TASK_REJECT_SERIES_DEADLINE_BUFFER_DAYS trong PageTaskRepository.java,
+     * nếu không input date sẽ chặn ngày mà backend vẫn chấp nhận (hoặc ngược lại).
      */
     function latestTaskDueDate() {
-        return chapter && chapter.submissionDeadline ? addDaysIso(chapter.submissionDeadline, -3) : '';
+        return chapter && chapter.submissionDeadline
+                ? addDaysIso(chapter.submissionDeadline, -TASK_DUE_BUFFER_DAYS) : '';
     }
 
     /** Cập nhật min/max cho input assignDueDate và hint text */
@@ -1674,6 +1679,15 @@
                     seriesData = sList[i];
                     break;
                 }
+            }
+            try {
+                var deadlineSettingsRes = await callApi('GET', '/api/v1/settings/deadlines');
+                var deadlineSettings = deadlineSettingsRes.data || {};
+                if (typeof deadlineSettings.taskChapterBufferDays === 'number') {
+                    TASK_DUE_BUFFER_DAYS = deadlineSettings.taskChapterBufferDays;
+                }
+            } catch (settingsErr) {
+                // Non-fatal: keep the built-in default so the date picker still works.
             }
             await Promise.all([loadPages(), loadTasks(), fillAssistantSelect()]);
             renderMeta();
