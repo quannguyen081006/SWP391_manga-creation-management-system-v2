@@ -64,8 +64,11 @@
                         </c:choose>
                     </td>
                     <td class="add-role-cell">
-                        <c:set var="canAddRole" value="false" />
-                        <%-- Only editor/board accounts can accept the one valid dual-role pairing. --%>
+                        <%-- A user with no role at all can always accept a fresh single role, and an
+                             editor/board account can accept the one valid dual-role pairing. Everyone
+                             else (MANGAKA/ASSISTANT single-role accounts) would fail
+                             RoleCombinationValidator on any addition, so the panel stays hidden for them. --%>
+                        <c:set var="canAddRole" value="${empty u.roles}" />
                         <c:forEach items="${u.roles}" var="existingRole">
                             <c:if test="${existingRole eq 'TANTOU_EDITOR' || existingRole eq 'EDITORIAL_BOARD'}">
                                 <c:set var="canAddRole" value="true" />
