@@ -1,5 +1,6 @@
-﻿<%@page contentType="text/html" pageEncoding="UTF-8"%>
+<%@page contentType="text/html" pageEncoding="UTF-8"%>
 <%@taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
+<%@taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
 <!DOCTYPE html>
 <html>
     <head>
@@ -7,121 +8,256 @@
         <title>Decision Sessions</title>
         <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css" />
         <style>
-            .editorial-hero {
-                background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
-                color: white;
-                padding: 40px;
-                border-radius: 12px;
-                margin-bottom: 30px;
-                box-shadow: 0 10px 30px rgba(44, 62, 80, 0.4);
+            /* Page-local styles for the decision list + detail.
+               Palette is the project one only: navy #0f172a, red #b91c1c,
+               amber #b45309, green #16794b, slate #64748b / #e2e8f0 / #f8fafc.
+               The page head comes from the shared .page-header in common.css,
+               so there is no hero block defined here any more. */
+
+            /* Content column. A one-per-row list has nothing to fill the middle of a
+               1400px shell, so it is capped here and centred. */
+            .decision-page {
+                width: min(1040px, 100%);
+                margin-inline: auto;
             }
 
-            .editorial-hero h1 {
-                margin: 0 0 10px 0;
-                font-size: 32px;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: 2px;
+            .decision-back {
+                margin-top: 30px;
             }
 
-            .editorial-hero .subtitle {
-                font-size: 16px;
-                opacity: 0.8;
-            }
-
+            /* One card per series, sitting straight on the page background — there is no
+               wrapping panel, so a card is never a white box inside another white box. */
             .decision-card {
-                background: white;
-                border-radius: 12px;
-                padding: 24px;
-                margin-bottom: 20px;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-                transition: transform 0.2s, box-shadow 0.2s;
-                border-left: 4px solid #2c3e50;
+                padding: 26px 28px;
+                margin-bottom: 18px;
+                background: #fff;
+                border: 1px solid #e2e8f0;
+                border-left: 6px solid #64748b;
+                border-radius: 10px;
             }
 
-            .decision-card:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+            /* Coloured edge lets you scan the column at a glance; the chip next to each
+               title spells the same status out in words. */
+            .decision-card.status-OPEN { border-left-color: #b91c1c; }
+            .decision-card.status-UNDER_REVIEW { border-left-color: #b45309; }
+            .decision-card.status-PENDING { border-left-color: #b45309; }
+            .decision-card.status-CLOSED,
+            .decision-card.status-FINALIZED { border-left-color: #16794b; }
+
+            /* Identity left, actions right, both vertically centred. */
+            .decision-card-head {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                flex-wrap: wrap;
+                gap: 12px 24px;
             }
 
-            .decision-card.status-OPEN {
-                border-left-color: #e74c3c;
-                background: linear-gradient(to right, #ffe6e6, white);
+            .decision-card-main {
+                flex: 1 1 320px;
+                min-width: 0;
             }
 
-            .decision-card.status-CLOSED {
-                border-left-color: #27ae60;
+            .decision-title-row {
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 10px;
             }
 
-            .decision-card.status-PENDING {
-                border-left-color: #f39c12;
+            .decision-series-title {
+                margin: 0;
+                color: #0f172a;
+                font-size: 22px;
+                font-weight: 800;
+                line-height: 1.25;
             }
 
-            .status-badge {
-                display: inline-block;
-                padding: 6px 14px;
-                border-radius: 12px;
-                font-size: 11px;
-                font-weight: 600;
+            .decision-series-id {
+                color: #94a3b8;
+                font-size: 16px;
+                font-weight: 400;
+            }
+
+            /* Sits next to the title it describes, not across the card. Text, fill and
+               border are all written by the status script so a CLOSED session can be
+               green for CONTINUE and red for CANCEL; these are the fallbacks. */
+            .decision-status-chip {
+                padding: 5px 14px;
+                border: 1px solid #e2e8f0;
+                border-radius: 999px;
+                color: #64748b;
+                background: #f8fafc;
+                font-size: 12px;
+                font-weight: 800;
+                letter-spacing: .04em;
                 text-transform: uppercase;
-                letter-spacing: 0.5px;
+                white-space: nowrap;
             }
 
-            .status-badge.OPEN {
-                background: #e74c3c;
-                color: white;
+            .decision-meta-row {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 8px 14px;
+                margin-top: 14px;
             }
 
-            .status-badge.CLOSED {
-                background: #27ae60;
-                color: white;
+            .decision-count {
+                padding: 5px 14px;
+                color: #b45309;
+                background: #fffbeb;
+                border: 1px solid #fde68a;
+                border-radius: 999px;
+                font-size: 13px;
+                font-weight: 700;
             }
 
-            .status-badge.CONTINUE {
-                background: #27ae60;
-                color: white;
-            }
-
-            .status-badge.CANCEL {
-                background: #e74c3c;
-                color: white;
-            }
-
-            .status-badge.CHANGE_TYPE {
-                background: #3498db;
-                color: white;
-            }
-
-            .vote-btn {
-                padding: 12px 24px;
-                border: none;
-                border-radius: 8px;
-                font-weight: 600;
+            .decision-timestamp {
+                color: #64748b;
                 font-size: 14px;
+            }
+
+            .decision-card-actions {
+                display: flex;
+                flex-shrink: 0;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+
+            /* Slightly taller than the global .btn.small so the buttons carry the
+               weight of the bigger card instead of floating in it. */
+            .decision-card-actions .btn.small {
+                min-height: 42px;
+                padding: 10px 18px;
+                font-size: 14px;
+                font-weight: 700;
+            }
+
+            .decision-btn-outline {
+                color: #0f172a;
+                background: #fff;
+                border: 1px solid #cbd5e1;
                 cursor: pointer;
-                transition: transform 0.2s, box-shadow 0.2s;
+            }
+
+            .decision-btn-solid {
+                color: #fff;
+                background: #0f172a;
+                border: 1px solid #0f172a;
+            }
+
+            .decision-history {
+                margin-top: 20px;
+                padding: 16px;
+                background: #f8fafc;
+                border-radius: 8px;
+            }
+
+            .decision-history-title {
+                margin: 0 0 12px;
+                color: #0f172a;
+                font-size: 14px;
+            }
+
+            .decision-history-item {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+                padding: 10px 0;
+            }
+
+            .decision-history-item:not(:last-child) {
+                border-bottom: 1px solid #e2e8f0;
+            }
+
+            .decision-history-when {
+                color: #0f172a;
+                font-weight: 600;
+            }
+
+            .decision-history-status {
+                margin-left: 12px;
+                color: #64748b;
+                font-size: 13px;
+            }
+
+            .decision-history-link {
+                color: #0f172a;
+                font-size: 13px;
+                font-weight: 600;
+                text-decoration: none;
+            }
+
+            .decision-detail-title {
+                margin: 0 0 20px;
+                color: #0f172a;
+                font-size: 24px;
+            }
+
+            .decision-detail-grid {
+                display: grid;
+                grid-template-columns: repeat(4, auto);
+                gap: 20px;
+                margin-bottom: 20px;
+            }
+
+            .decision-field-label {
+                color: #64748b;
+                font-size: 12px;
+                letter-spacing: 0.05em;
                 text-transform: uppercase;
-                letter-spacing: 0.5px;
             }
 
-            .vote-btn:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            .decision-field-value {
+                color: #0f172a;
+                font-weight: 600;
             }
 
-            .vote-btn-continue {
-                background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
-                color: white;
+            .system-suggestion {
+                padding: 16px;
+                margin: 16px 0;
+                background: #f8fafc;
+                border-left: 4px solid #0f172a;
+                border-radius: 4px;
             }
 
-            .vote-btn-change {
-                background: linear-gradient(135deg, #3498db 0%, #5dade2 100%);
-                color: white;
+            .system-suggestion strong {
+                color: #0f172a;
             }
 
-            .vote-btn-cancel {
-                background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
-                color: white;
+            .decision-vote-panel {
+                margin-top: 24px;
+                padding-top: 24px;
+                border-top: 1px solid #e2e8f0;
+            }
+
+            .decision-vote-panel h4 {
+                margin: 0 0 16px;
+                color: #0f172a;
+                font-size: 18px;
+            }
+
+            .decision-vote-field {
+                margin-bottom: 16px;
+            }
+
+            .decision-vote-field label {
+                display: block;
+                margin-bottom: 8px;
+                color: #0f172a;
+                font-weight: 600;
+            }
+
+            .decision-vote-field select,
+            .decision-vote-field input {
+                width: 100%;
+                padding: 12px;
+                border: 1px solid #cbd5e1;
+                border-radius: 8px;
+                font-size: 14px;
             }
 
             .vote-buttons {
@@ -130,16 +266,31 @@
                 margin-top: 20px;
             }
 
-            .system-suggestion {
-                background: #f8f9fa;
-                border-left: 4px solid #3498db;
-                padding: 16px;
-                margin: 16px 0;
-                border-radius: 4px;
+            /* Flat fills, no gradients and no lift on hover. */
+            .vote-btn {
+                padding: 12px 24px;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 600;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                cursor: pointer;
             }
 
-            .system-suggestion strong {
-                color: #3498db;
+            .vote-btn-continue {
+                color: #fff;
+                background: #16794b;
+            }
+
+            .vote-btn-change {
+                color: #fff;
+                background: #0f172a;
+            }
+
+            .vote-btn-cancel {
+                color: #fff;
+                background: #b91c1c;
             }
 
             .vote-table {
@@ -148,174 +299,171 @@
             }
 
             .vote-table th {
-                background: #f8f9fa;
                 padding: 12px;
-                text-align: left;
+                color: #0f172a;
+                background: #f8fafc;
+                border-bottom: 1px solid #e2e8f0;
                 font-weight: 600;
-                color: #2c3e50;
-                border-bottom: 2px solid #e9ecef;
+                text-align: left;
             }
 
             .vote-table td {
                 padding: 12px;
-                border-bottom: 1px solid #e9ecef;
+                border-bottom: 1px solid #e2e8f0;
             }
 
             .vote-table tr:hover {
-                background: #f8f9fa;
+                background: #f8fafc;
             }
 
             .decision-continue {
-                color: #27ae60;
+                color: #16794b;
                 font-weight: 600;
             }
 
             .decision-cancel {
-                color: #e74c3c;
+                color: #b91c1c;
                 font-weight: 600;
             }
 
             .decision-change {
-                color: #3498db;
+                color: #0f172a;
                 font-weight: 600;
             }
 
-            .empty-state {
-                text-align: center;
-                padding: 60px;
-                color: #95a5a6;
+            /* .empty-state itself comes from common.css; only the SVG sizing is
+               specific to this page. */
+            .empty-state-icon svg {
+                width: 44px;
+                height: 44px;
             }
 
-            .empty-state .icon {
-                font-size: 48px;
-                margin-bottom: 16px;
-            }
-
-            .section-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 20px;
-            }
-
-            .section-header h3 {
-                margin: 0;
-                font-size: 20px;
-                color: #2c3e50;
+            @media (max-width: 900px) {
+                .decision-detail-grid {
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                }
             }
         </style>
     </head>
     <body>
         <jsp:include page="../common/header.jsp" />
 
+        <%-- Single-column list, so the content column is capped and centred instead of
+             stretching the full shell width; the head is inside it so both line up. --%>
+        <div class="decision-page">
+
         <c:if test="${not empty error}"><div class="alert error"><c:out value="${error}" /></div></c:if>
 
-        <div class="editorial-hero">
-            <h1>Decision Sessions</h1>
-            <div class="subtitle">Editorial Board voting on series continuation, cancellation, or type change</div>
+        <%-- Shared page head block (common.css), same structure as series/list.jsp. --%>
+        <div class="page-header">
+            <div class="page-header-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 4.5v15"/>
+                    <path d="M7.5 19.5h9"/>
+                    <path d="M4.5 7.5h15"/>
+                    <path d="M4.5 7.5 1.8 13.2h5.4L4.5 7.5Z"/>
+                    <path d="M19.5 7.5l-2.7 5.7h5.4l-2.7-5.7Z"/>
+                </svg>
+            </div>
+            <div>
+                <h2>Decision Sessions</h2>
+                <p>Editorial Board voting on series continuation, cancellation, or type change.</p>
+            </div>
         </div>
 
         <c:if test="${not empty groupedSessions}">
-            <div class="section-card">
-                <div class="section-header">
-                    <h3>📋 Decision Sessions</h3>
-                    <span style="color: #7f8c8d; font-size: 14px;">Active and completed voting sessions</span>
-                </div>
-
-                <c:forEach items="${groupedSessions}" var="group">
-                    <div class="decision-card status-${group.latestStatus}">
-                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 16px;">
-                            <div>
-                                <h3 style="margin: 0 0 8px 0; font-size: 18px; color: #2c3e50;"><c:out value="${group.seriesTitle}" /> <span style="font-size: 14px; color: #95a5a6;">(#<c:out value="${group.seriesId}" />)</span></h3>
-                                <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-                                    <span style="background: #f39c12; color: white; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase;">Entered Bottom 20: ${group.sessionCount} times</span>
-                                    <span style="color: #7f8c8d; font-size: 14px;">Latest: ${group.latestOpenedAt}</span>
-                                </div>
+            <c:forEach items="${groupedSessions}" var="group">
+                <div class="decision-card status-${group.latestStatus}">
+                    <%-- One row: identity on the left, actions on the right, so a full-width
+                         card is filled on both edges instead of stacking everything left. --%>
+                    <div class="decision-card-head">
+                        <div class="decision-card-main">
+                            <div class="decision-title-row">
+                                <h3 class="decision-series-title"><c:out value="${group.seriesTitle}" /> <span class="decision-series-id">#<c:out value="${group.seriesId}" /></span></h3>
+                                <span id="status-label-${group.seriesId}" class="decision-status-chip"></span>
                             </div>
-                            <div style="text-align: right;">
-                                <div style="font-size: 12px; color: #95a5a6; text-transform: uppercase; letter-spacing: 0.5px;">Latest Status</div>
-                                <div id="status-label-${group.seriesId}" style="font-weight: 600; color: #2c3e50;">Loading...</div>
+                            <div class="decision-meta-row">
+                                <span class="decision-count">Entered Bottom 20 &middot; ${group.sessionCount} <c:choose><c:when test="${group.sessionCount == 1}">time</c:when><c:otherwise>times</c:otherwise></c:choose></span>
+                                <span class="decision-timestamp">Latest <fmt:formatDate value="${group.latestOpenedAt}" pattern="dd/MM/yyyy HH:mm" /></span>
                             </div>
                         </div>
 
-                        <div style="display: flex; gap: 12px; margin-top: 16px;">
-                            <button class="btn small" onclick="toggleHistory('${group.seriesId}')" style="background: #667eea; color: white; border: none; cursor: pointer;">View History</button>
+                        <div class="decision-card-actions">
+                            <button class="btn small decision-btn-outline" onclick="toggleHistory('${group.seriesId}')">View History</button>
                             <c:if test="${not empty group.sessions}">
-                                <a class="btn small" href="${pageContext.request.contextPath}/main/decisions/${group.sessions[0].id}" style="background: #2c3e50; color: white;">Review Latest →</a>
+                                <a class="btn small decision-btn-solid" href="${pageContext.request.contextPath}/main/decisions/${group.sessions[0].id}">Review Latest &rarr;</a>
                             </c:if>
                         </div>
-
-                        <div id="history-${group.seriesId}" style="display: none; margin-top: 20px; padding: 16px; background: #f8f9fa; border-radius: 8px;">
-                            <h4 style="margin: 0 0 12px 0; font-size: 14px; color: #2c3e50;">Decision History</h4>
-                            <c:forEach items="${group.sessions}" var="s">
-                                <div style="padding: 10px; background: white; border-radius: 4px; margin-bottom: 8px; border-left: 3px solid #667eea;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <div>
-                                            <span style="font-weight: 600; color: #2c3e50;">${s.openedAt}</span>
-                                            <span style="margin-left: 12px; color: #7f8c8d; font-size: 13px;">Status: ${s.status}</span>
-                                        </div>
-                                        <span class="decision-${s.result.toLowerCase()}" style="font-weight: 600;">${s.result}</span>
-                                    </div>
-                                    <a href="${pageContext.request.contextPath}/main/decisions/${s.id}" style="display: inline-block; margin-top: 8px; font-size: 13px; color: #667eea; text-decoration: none;">View Details →</a>
-                                </div>
-                            </c:forEach>
-                        </div>
                     </div>
-                </c:forEach>
-            </div>
+
+                    <div id="history-${group.seriesId}" class="decision-history" style="display: none;">
+                        <h4 class="decision-history-title">Decision History</h4>
+                        <c:forEach items="${group.sessions}" var="s">
+                            <div class="decision-history-item">
+                                <div>
+                                    <span class="decision-history-when"><fmt:formatDate value="${s.openedAt}" pattern="dd/MM/yyyy HH:mm" /></span>
+                                    <span class="decision-history-status">Status: ${s.status}</span>
+                                </div>
+                                <span class="decision-${s.result.toLowerCase()}">${s.result}</span>
+                                <a href="${pageContext.request.contextPath}/main/decisions/${s.id}" class="decision-history-link">View Details &rarr;</a>
+                            </div>
+                        </c:forEach>
+                    </div>
+                </div>
+            </c:forEach>
         </c:if>
 
         <c:if test="${not empty sessionDetail}">
             <div class="decision-card status-${sessionDetail.status}">
-                <h3 style="margin: 0 0 20px 0; font-size: 24px; color: #2c3e50;">Decision Session #${sessionDetail.id}</h3>
+                <h3 class="decision-detail-title">Decision Session #${sessionDetail.id}</h3>
 
-                <div style="display: grid; grid-template-columns: repeat(4, auto); gap: 20px; margin-bottom: 20px;">
+                <div class="decision-detail-grid">
                     <div>
-                        <div style="font-size: 12px; color: #95a5a6; text-transform: uppercase; letter-spacing: 0.5px;">Series</div>
-                        <div style="font-weight: 600; color: #2c3e50;"><c:out value="${sessionDetail.seriesTitle}" /> <span style="font-size: 14px; color: #95a5a6;">(#<c:out value="${sessionDetail.seriesId}" />)</span></div>
+                        <div class="decision-field-label">Series</div>
+                        <div class="decision-field-value"><c:out value="${sessionDetail.seriesTitle}" /> <span class="decision-series-id">(#<c:out value="${sessionDetail.seriesId}" />)</span></div>
                     </div>
                     <div>
-                        <div style="font-size: 12px; color: #95a5a6; text-transform: uppercase; letter-spacing: 0.5px;">Status</div>
-                        <div class="decision-detail-status" style="font-weight: 600; color: #2c3e50;"><c:out value="${sessionDetail.status}" /></div>
+                        <div class="decision-field-label">Status</div>
+                        <div class="decision-detail-status decision-field-value"><c:out value="${sessionDetail.status}" /></div>
                     </div>
                     <div>
-                        <div style="font-size: 12px; color: #95a5a6; text-transform: uppercase; letter-spacing: 0.5px;">Result</div>
-                        <div style="font-weight: 600; color: #2c3e50;">${sessionDetail.result}</div>
+                        <div class="decision-field-label">Result</div>
+                        <div class="decision-field-value">${sessionDetail.result}</div>
                     </div>
                     <div>
-                        <div style="font-size: 12px; color: #95a5a6; text-transform: uppercase; letter-spacing: 0.5px;">Opened</div>
-                        <div style="font-weight: 600; color: #2c3e50;">${sessionDetail.openedAt}</div>
+                        <div class="decision-field-label">Opened</div>
+                        <div class="decision-field-value"><fmt:formatDate value="${sessionDetail.openedAt}" pattern="dd/MM/yyyy HH:mm" /></div>
                     </div>
                 </div>
 
                 <c:if test="${not empty sessionDetail.systemSuggestion}">
                     <div class="system-suggestion">
-                        <strong>🤖 System Recommendation:</strong> ${sessionDetail.systemSuggestion}
+                        <strong>System Recommendation:</strong> ${sessionDetail.systemSuggestion}
                     </div>
                 </c:if>
 
                 <c:if test="${not empty revenueHistory}">
                     <div style="margin-top:24px;">
-                        <h4>📈 Revenue Trend Analysis</h4>
+                        <h4>Revenue Trend Analysis</h4>
                         <canvas id="revenueChart"></canvas>
                     </div>
                 </c:if>
 
                 <c:if test="${sessionScope.AUTH_USER.hasRole('EDITORIAL_BOARD') && sessionDetail.status == 'OPEN'}">
-                    <div style="margin-top: 24px; padding-top: 24px; border-top: 2px solid #e9ecef;">
-                        <h4 style="margin: 0 0 16px 0; font-size: 18px; color: #2c3e50;">🗳️ Cast Your Vote</h4>
+                    <div class="decision-vote-panel">
+                        <h4>Cast Your Vote</h4>
                         <form method="post" action="${pageContext.request.contextPath}/main/decisions/${sessionDetail.id}/votes">
-                            <div style="margin-bottom: 16px;">
-                                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">Select Decision</label>
-                                <select name="decision" style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 14px;">
-                                    <option value="CONTINUE">✅ CONTINUE - Series shows growth potential</option>
-                                    <option value="CHANGE_TYPE">🔄 CHANGE_TYPE - Transform series direction</option>
-                                    <option value="CANCEL">❌ CANCEL - Terminate underperforming series</option>
+                            <div class="decision-vote-field">
+                                <label>Select Decision</label>
+                                <select name="decision">
+                                    <option value="CONTINUE">CONTINUE - Series shows growth potential</option>
+                                    <option value="CHANGE_TYPE">CHANGE_TYPE - Transform series direction</option>
+                                    <option value="CANCEL">CANCEL - Terminate underperforming series</option>
                                 </select>
                             </div>
-                            <div style="margin-bottom: 16px;">
-                                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">Justification (Required for CANCEL)</label>
-                                <input type="text" name="justification" placeholder="Explain your reasoning..." style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 14px;" />
+                            <div class="decision-vote-field">
+                                <label>Justification (Required for CANCEL)</label>
+                                <input type="text" name="justification" placeholder="Explain your reasoning..." />
                             </div>
                             <div class="vote-buttons">
                                 <button type="submit" class="vote-btn vote-btn-continue">Submit</button>
@@ -326,7 +474,7 @@
             </div>
 
             <div class="section-card" style="margin-top: 24px;">
-                <h3 class="section-title" style="font-size: 20px; margin-bottom: 20px;">📊 Board Votes</h3>
+                <h3 class="section-title section-title-sm">Board Votes</h3>
                 <c:if test="${not empty sessionDetail.votes}">
                     <table class="vote-table">
                         <thead>
@@ -343,7 +491,7 @@
                                     <td>#${v.voterId}</td>
                                     <td class="decision-${v.decision.toLowerCase()}"><c:out value="${v.decision}" /></td>
                                     <td><c:out value="${v.justification}" /></td>
-                                    <td><c:out value="${v.votedAt}" /></td>
+                                    <td><fmt:formatDate value="${v.votedAt}" pattern="dd/MM/yyyy HH:mm" /></td>
                                 </tr>
                             </c:forEach>
                         </tbody>
@@ -351,47 +499,59 @@
                 </c:if>
                 <c:if test="${empty sessionDetail.votes}">
                     <div class="empty-state">
-                        <div class="icon">📊</div>
-                        <div>No votes cast yet</div>
+                        <div class="empty-state-title">No votes cast yet</div>
                     </div>
                 </c:if>
             </div>
         </c:if>
 
-        <c:if test="${empty sessions && empty sessionDetail}">
+        <%-- The list is built from groupedSessions, so the empty state has to test that
+             same attribute. It used to test "sessions", which the controller never sets,
+             so this block rendered underneath a full list on every visit. --%>
+        <c:if test="${empty groupedSessions && empty sessionDetail}">
             <div class="empty-state">
-                <div class="icon">⚖️</div>
-                <div style="font-size: 18px;">No active decision sessions</div>
-                <div style="font-size: 14px;">Decision sessions are created by Administrator from ranking results</div>
+                <div class="empty-state-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 4.5v15"/>
+                        <path d="M7.5 19.5h9"/>
+                        <path d="M4.5 7.5h15"/>
+                        <path d="M4.5 7.5 1.8 13.2h5.4L4.5 7.5Z"/>
+                        <path d="M19.5 7.5l-2.7 5.7h5.4l-2.7-5.7Z"/>
+                    </svg>
+                </div>
+                <div class="empty-state-title">No active decision sessions</div>
+                <div class="empty-state-copy">Decision sessions are created by Administrator from ranking results</div>
             </div>
         </c:if>
 
-        <div style="margin-top: 30px;">
-            <a class="btn" href="${pageContext.request.contextPath}/main/dashboard">← Back to Dashboard</a>
+        <div class="decision-back">
+            <a class="btn" href="${pageContext.request.contextPath}/main/dashboard">&larr; Back to Dashboard</a>
         </div>
+
+        </div><%-- /.decision-page --%>
 
         <jsp:include page="../common/footer.jsp" />
         <script>
             window.revenueHistory = '${revenueHistory}';
-            
+
             function toggleHistory(seriesId) {
                 var historyDiv = document.getElementById('history-' + seriesId);
                 if (historyDiv) {
                     historyDiv.style.display = historyDiv.style.display === 'none' ? 'block' : 'none';
                 }
             }
-            
+
             function getDecisionStatusLabel(status, result) {
                 if (!status) return '';
-                
+
                 if (status === 'OPEN') {
                     return 'OPEN - Voting In Progress';
                 }
-                
+
                 if (status === 'UNDER_REVIEW') {
                     return 'Under Review';
                 }
-                
+
                 if (status === 'CLOSED' || status === 'FINALIZED') {
                     if (result === 'CONTINUE') {
                         return 'RESOLVED - Continue Publication';
@@ -403,47 +563,65 @@
                         return 'RESOLVED - Series Cancelled';
                     }
                 }
-                
+
                 return status;
             }
-            
+
+            // Same branches as before; only the colour literals moved onto the
+            // project palette (slate / red / amber / green / navy).
             function getStatusBadgeColor(status, result) {
-                if (!status) return '#7f8c8d';
-                
+                if (!status) return '#64748b';
+
                 if (status === 'OPEN') {
-                    return '#e74c3c';
+                    return '#b91c1c';
                 }
-                
+
                 if (status === 'UNDER_REVIEW') {
-                    return '#f39c12';
+                    return '#b45309';
                 }
-                
+
                 if (status === 'CLOSED' || status === 'FINALIZED') {
                     if (result === 'CONTINUE') {
-                        return '#27ae60';
+                        return '#16794b';
                     }
                     if (result === 'CHANGE_TYPE') {
-                        return '#3498db';
+                        return '#0f172a';
                     }
                     if (result === 'CANCEL') {
-                        return '#e74c3c';
+                        return '#b91c1c';
                     }
                 }
-                
-                return '#7f8c8d';
+
+                return '#64748b';
             }
-            
+
+            // Soft fill + border that go with each text colour above, so the chip reads
+            // as a filled badge instead of bare coloured text.
+            var STATUS_CHIP_TINTS = {
+                '#b91c1c': { background: '#fef2f2', border: '#fecaca' },
+                '#b45309': { background: '#fffbeb', border: '#fde68a' },
+                '#16794b': { background: '#f0fdf4', border: '#bbf7d0' },
+                '#0f172a': { background: '#f1f5f9', border: '#cbd5e1' },
+                '#64748b': { background: '#f8fafc', border: '#e2e8f0' }
+            };
+
+            function paintStatusChip(el, status, result) {
+                var color = getStatusBadgeColor(status, result);
+                var tint = STATUS_CHIP_TINTS[color] || STATUS_CHIP_TINTS['#64748b'];
+                el.textContent = getDecisionStatusLabel(status, result);
+                el.style.color = color;
+                el.style.background = tint.background;
+                el.style.borderColor = tint.border;
+            }
+
             document.addEventListener('DOMContentLoaded', function() {
                 <c:forEach items="${groupedSessions}" var="group">
                     var statusLabel = document.getElementById('status-label-${group.seriesId}');
                     if (statusLabel) {
-                        var label = getDecisionStatusLabel('${group.latestStatus}', '${group.latestResult}');
-                        var color = getStatusBadgeColor('${group.latestStatus}', '${group.latestResult}');
-                        statusLabel.textContent = label;
-                        statusLabel.style.color = color;
+                        paintStatusChip(statusLabel, '${group.latestStatus}', '${group.latestResult}');
                     }
                 </c:forEach>
-                
+
                 <c:if test="${not empty sessionDetail}">
                     var detailStatus = document.querySelector('.decision-detail-status');
                     if (detailStatus) {
@@ -460,4 +638,3 @@
         <script src="${pageContext.request.contextPath}/assets/decision-chart.js"></script>
     </body>
 </html>
-
