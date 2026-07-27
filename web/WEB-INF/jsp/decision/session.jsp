@@ -39,10 +39,7 @@
             /* Coloured edge lets you scan the column at a glance; the chip next to each
                title spells the same status out in words. */
             .decision-card.status-OPEN { border-left-color: #b91c1c; }
-            .decision-card.status-UNDER_REVIEW { border-left-color: #b45309; }
-            .decision-card.status-PENDING { border-left-color: #b45309; }
-            .decision-card.status-CLOSED,
-            .decision-card.status-FINALIZED { border-left-color: #16794b; }
+            .decision-card.status-CLOSED { border-left-color: #16794b; }
 
             /* Identity left, actions right, both vertically centred. */
             .decision-card-head {
@@ -283,16 +280,6 @@
                 background: #16794b;
             }
 
-            .vote-btn-change {
-                color: #fff;
-                background: #0f172a;
-            }
-
-            .vote-btn-cancel {
-                color: #fff;
-                background: #b91c1c;
-            }
-
             .vote-table {
                 width: 100%;
                 border-collapse: collapse;
@@ -326,7 +313,7 @@
                 font-weight: 600;
             }
 
-            .decision-change {
+            .decision-change_type {
                 color: #0f172a;
                 font-weight: 600;
             }
@@ -548,11 +535,7 @@
                     return 'OPEN - Voting In Progress';
                 }
 
-                if (status === 'UNDER_REVIEW') {
-                    return 'Under Review';
-                }
-
-                if (status === 'CLOSED' || status === 'FINALIZED') {
+                if (status === 'CLOSED') {
                     if (result === 'CONTINUE') {
                         return 'RESOLVED - Continue Publication';
                     }
@@ -576,11 +559,7 @@
                     return '#b91c1c';
                 }
 
-                if (status === 'UNDER_REVIEW') {
-                    return '#b45309';
-                }
-
-                if (status === 'CLOSED' || status === 'FINALIZED') {
+                if (status === 'CLOSED') {
                     if (result === 'CONTINUE') {
                         return '#16794b';
                     }
@@ -599,7 +578,6 @@
             // as a filled badge instead of bare coloured text.
             var STATUS_CHIP_TINTS = {
                 '#b91c1c': { background: '#fef2f2', border: '#fecaca' },
-                '#b45309': { background: '#fffbeb', border: '#fde68a' },
                 '#16794b': { background: '#f0fdf4', border: '#bbf7d0' },
                 '#0f172a': { background: '#f1f5f9', border: '#cbd5e1' },
                 '#64748b': { background: '#f8fafc', border: '#e2e8f0' }
