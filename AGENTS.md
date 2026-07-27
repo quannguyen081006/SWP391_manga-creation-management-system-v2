@@ -81,16 +81,20 @@ User and role management:
   - `web/WEB-INF/jsp/user/form.jsp`
   - `web/assets/role-assignment.js`
 
-Authentication and dev switch account:
+Authentication and session:
 - Controller:
   - `src/java/manga/controller/web/AuthController.java`
   - delegated by `src/java/manga/controller/web/MainController.java`
 - Service:
   - `src/java/manga/service/AuthService.java`
-- Header/switcher UI:
-  - `web/WEB-INF/jsp/common/header.jsp`
+- Login page:
+  - `web/WEB-INF/jsp/auth/login.jsp`
+- Session guard (re-checks `GET /api/v1/auth/me` on pageshow):
+  - `web/assets/auth-session.js`
 - Interceptor:
   - `src/java/manga/web/interceptor/AuthInterceptor.java`
+
+The dev switch-account/switch-role UI was removed (commit `fb59812`); there is no impersonation path left in the code.
 
 Dashboard and navigation:
 - Controller:
@@ -142,7 +146,6 @@ Important business rules:
 - `ASSISTANT` must be single-role only.
 - `ADMIN` should not be combined with other roles; DB also enforces only one admin role assignment.
 - The only valid multi-role combination is `TANTOU_EDITOR + EDITORIAL_BOARD`.
-- Switch account/role UI must not mutate or validate role combinations. It should only choose an existing active user/account.
 - Role assignment validation belongs in user creation / admin role assignment flows.
 
 Relevant files:
@@ -208,7 +211,6 @@ If local DB is old, proposal queries can fail with missing board round tables.
 - Header/sidebar behavior lives in `web/WEB-INF/jsp/common/header.jsp`, with extra model attributes supplied by `NotificationViewAdvice`.
 - Many pages use `sessionScope.AUTH_USER.hasRole(...)` directly in JSP.
 - When fixing role or access bugs, update both backend validation and JSP visibility if needed.
-- When changing switch account behavior, keep it read-only: no role creation, no assignment validation.
 - After JSP/CSS/JS changes, Tomcat may still serve old deployed output until redeploy.
 
 ## Git And Generated Output
