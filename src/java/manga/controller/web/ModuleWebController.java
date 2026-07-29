@@ -800,7 +800,6 @@ public class ModuleWebController {
             model.addAttribute("formUsername", username);
             model.addAttribute("formFullName", fullName);
             model.addAttribute("formEmail", email);
-            model.addAttribute("formPassword", password);
             model.addAttribute("selectedRoleOption", roleOption == null ? "" : roleOption.trim().toUpperCase());
             model.addAttribute("availableRoles", availableRoles());
             model.addAttribute("adminRoleLocked", userService.hasAnyAdmin());

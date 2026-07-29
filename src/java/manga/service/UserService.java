@@ -168,14 +168,10 @@ public class UserService {
     }
 
     /**
-     * Compares the submitted current password with the stored value, accepting
-     * both BCrypt hashes and legacy plaintext rows for the same reason described
-     * on {@link AuthService}.
+     * Compares the submitted current password with the stored BCrypt hash.
      */
     private boolean currentPasswordMatches(String submitted, String stored) {
-        return BCrypt.looksHashed(stored)
-                ? BCrypt.checkpw(submitted, stored)
-                : submitted.equals(stored);
+        return BCrypt.looksHashed(stored) && BCrypt.checkpw(submitted, stored);
     }
 
     // ------------------------------------------------------------

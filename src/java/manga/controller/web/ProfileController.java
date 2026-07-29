@@ -101,7 +101,6 @@ public class ProfileController {
         AuthenticatedUser authUser = SessionUserUtil.requireUser(session);
         try {
             userService.changePassword(authUser.getId(), currentPassword, newPassword, confirmNewPassword);
-            authUser.setPasswordHash(newPassword);
             setFlashSuccess(session, "Password changed successfully");
         } catch (RuntimeException ex) {
             setFlashError(session, messageOf(ex, "Cannot change password"));

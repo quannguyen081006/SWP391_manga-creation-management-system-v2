@@ -48,58 +48,15 @@ public class AuthService {
     }
 
     /**
-     * So khớp mật khẩu người dùng nhập với giá trị đang lưu trong DB.
-     *
-     * <p><b>Vì sao có hai nhánh?</b> Mật khẩu bây giờ lưu dạng băm BCrypt. Nhưng
-     * các tài khoản tạo từ trước khi đổi (và dữ liệu seed) vẫn đang lưu mật khẩu
-     * dạng chữ thường (plaintext). Nếu chỉ để nhánh BCrypt thì toàn bộ tài khoản
-     * cũ sẽ không đăng nhập được nữa.
-     *
-     * <p><b>Vì sao không chạy một câu SQL update hết cho xong?</b> Vì mật khẩu đã
-     * băm thì không đảo ngược lại được — muốn băm thì phải biết mật khẩu gốc, mà
-     * mật khẩu gốc chỉ xuất hiện đúng lúc user gõ vào ô đăng nhập. Nên cách duy
-     * nhất là băm ngay tại thời điểm họ đăng nhập thành công.
-     *
-     * <p>Kết quả: DB tự nâng cấp dần theo từng lần đăng nhập, không cần seed lại
-     * bằng tay. Mỗi tài khoản chỉ đi vào nhánh plaintext đúng một lần duy nhất;
-     * sau lần đó nó đã có hash nên luôn rẽ vào nhánh BCrypt.
+     * So khớp mật khẩu người dùng nhập với giá trị hash đang lưu trong DB.
+     * Mọi tài khoản đều đã được migrate sang BCrypt (xem
+     * database/migrate_plaintext_passwords.sql); không còn nhánh plaintext.
      */
     private boolean passwordMatches(AuthenticatedUser user, String password) {
         String stored = user.getPasswordHash();
-        if (stored == null) {
+        if (stored == null || !BCrypt.looksHashed(stored)) {
             return false;
         }
-        if (BCrypt.looksHashed(stored)) {
-            return BCrypt.checkpw(password, stored);
-        }
-        if (!password.equals(stored)) {
-            return false;
-        }
-        upgradeLegacyPassword(user, password);
-        return true;
-    }
-
-    /**
-     * Thay mật khẩu plaintext cũ bằng chuỗi băm BCrypt.
-     *
-     * <p><b>Vì sao lại nuốt exception (catch rỗng)?</b> Bình thường đây là code
-     * xấu, nhưng ở đây có lý do: thời điểm chạy hàm này thì user đã nhập ĐÚNG mật
-     * khẩu rồi, đăng nhập coi như đã thành công. Việc nâng cấp hash chỉ là dọn dẹp
-     * thêm. Nếu để exception ném ra, user gõ đúng mật khẩu mà vẫn bị báo lỗi đăng
-     * nhập chỉ vì DB đang bận — vô lý.
-     *
-     * <p>Bỏ qua lỗi ở đây an toàn vì nó không mất mát gì: tài khoản vẫn giữ giá
-     * trị plaintext cũ, và lần đăng nhập sau sẽ tự thử nâng cấp lại.
-     */
-    private void upgradeLegacyPassword(AuthenticatedUser user, String password) {
-        try {
-            String hashed = BCrypt.hashpw(password);
-            userRepository.updatePasswordHash(user.getId(), hashed);
-            // Cập nhật luôn object trong bộ nhớ, để nếu cùng request này có chỗ nào
-            // đọc lại passwordHash thì thấy giá trị mới chứ không phải plaintext cũ.
-            user.setPasswordHash(hashed);
-        } catch (RuntimeException ignored) {
-            // Cố tình không xử lý: xem giải thích ở javadoc phía trên.
-        }
+        return BCrypt.checkpw(password, stored);
     }
 }

@@ -1,5 +1,6 @@
 package manga.repository;
 
+import manga.common.util.BCrypt;
 import manga.common.util.RoleCombinationValidator;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -254,8 +255,8 @@ public class UserAdminRepository {
     }
 
         public void updatePassword(long userId, String newPasswordHash) {
-        if (isBlank(newPasswordHash) || newPasswordHash.length() < 5) {
-            throw new IllegalArgumentException("Password must be at least 5 characters");
+        if (isBlank(newPasswordHash) || !BCrypt.looksHashed(newPasswordHash)) {
+            throw new IllegalArgumentException("Password hash is invalid");
         }
         String sql = "UPDATE [User] SET passwordHash = ?, updatedAt = GETDATE() WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
@@ -401,8 +402,8 @@ public class UserAdminRepository {
         if (!email.contains("@")) {
             throw new IllegalArgumentException("Email is invalid");
         }
-        if (passwordHash.length() < 5) {
-            throw new IllegalArgumentException("Password must be at least 5 characters");
+        if (!BCrypt.looksHashed(passwordHash)) {
+            throw new IllegalArgumentException("Password hash is invalid");
         }
     }
 
