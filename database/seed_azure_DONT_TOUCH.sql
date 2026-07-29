@@ -1,4 +1,36 @@
-﻿SET IDENTITY_INSERT [dbo].[User] ON 
+﻿/* ==== Auto-generated cleanup block: wipe all rows before re-seeding ==== */
+/* Makes this script safe to re-run on a database that already has data.  */
+/* Azure SQL has no sp_MSForEachTable, so this uses dynamic SQL.          */
+DECLARE @sql NVARCHAR(MAX) = N'';
+
+-- 1. Disable all FK constraints so rows can be deleted in any order
+SELECT @sql += 'ALTER TABLE ' + QUOTENAME(s.name) + '.' + QUOTENAME(t.name) +
+    ' NOCHECK CONSTRAINT ALL;' + CHAR(10)
+FROM sys.tables t
+JOIN sys.schemas s ON t.schema_id = s.schema_id;
+
+EXEC sp_executesql @sql;
+
+-- 2. Delete every row from every table
+SET @sql = N'';
+SELECT @sql += 'DELETE FROM ' + QUOTENAME(s.name) + '.' + QUOTENAME(t.name) + ';' + CHAR(10)
+FROM sys.tables t
+JOIN sys.schemas s ON t.schema_id = s.schema_id;
+
+EXEC sp_executesql @sql;
+
+-- 3. Re-enable all FK constraints
+SET @sql = N'';
+SELECT @sql += 'ALTER TABLE ' + QUOTENAME(s.name) + '.' + QUOTENAME(t.name) +
+    ' WITH CHECK CHECK CONSTRAINT ALL;' + CHAR(10)
+FROM sys.tables t
+JOIN sys.schemas s ON t.schema_id = s.schema_id;
+
+EXEC sp_executesql @sql;
+GO
+/* ==== End cleanup block ==== */
+
+SET IDENTITY_INSERT [dbo].[User] ON
 
 INSERT [dbo].[User] ([id], [username], [passwordHash], [fullName], [email], [status], [createdAt], [updatedAt], [avatarUrl]) VALUES (0, N'admin', N'12345', N'System Admin', N'admin@mangaflow.local', N'ACTIVE', CAST(N'2026-05-27T03:09:39.237' AS DateTime), CAST(N'2026-05-27T03:09:39.237' AS DateTime), NULL)
 INSERT [dbo].[User] ([id], [username], [passwordHash], [fullName], [email], [status], [createdAt], [updatedAt], [avatarUrl]) VALUES (1, N'mangaka1', N'12345', N'Yuki Tanaka', N'mangaka1@mangaflow.local', N'ACTIVE', CAST(N'2026-05-27T03:09:39.237' AS DateTime), CAST(N'2026-05-27T03:09:39.237' AS DateTime), NULL)
