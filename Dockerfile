@@ -26,6 +26,14 @@ RUN mkdir -p ./webapp/WEB-INF/classes \
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# Keep the JVM inside the 512MB the Render Starter plan allows. Without a
+# Metaspace cap the container was killed with status 137 (OOM) every few
+# minutes: JSPs are compiled at runtime, so each page loads new classes that
+# Metaspace never releases, and it grows unbounded by default.
+# Heap 256m + Metaspace 128m + stacks/native leaves headroom under the limit.
+# SerialGC is deliberate — G1's bookkeeping is not worth it at this heap size.
+ENV CATALINA_OPTS="-Xms128m -Xmx256m -XX:MaxMetaspaceSize=128m -Xss512k -XX:+UseSerialGC"
+
 EXPOSE 8080
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["catalina.sh", "run"]
