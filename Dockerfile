@@ -11,6 +11,13 @@ RUN rm -rf /usr/local/tomcat/webapps/ROOT \
            /usr/local/tomcat/webapps/host-manager \
            /usr/local/tomcat/webapps/manager
 
+# Disable Tomcat's shutdown port. In a container it is useless (Render stops the
+# service with SIGTERM), it accepts an unauthenticated SHUTDOWN that would kill
+# the app, and leaving it open makes the platform's port scan find 8005 as well
+# as 8080 — health checks then land on a socket that speaks no HTTP.
+RUN sed -i 's/<Server port="8005"/<Server port="-1"/' /usr/local/tomcat/conf/server.xml \
+    && grep -q '<Server port="-1"' /usr/local/tomcat/conf/server.xml
+
 WORKDIR /build
 COPY src/java ./src/java
 COPY web ./webapp
