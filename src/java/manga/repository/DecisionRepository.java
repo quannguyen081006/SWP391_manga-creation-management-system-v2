@@ -352,10 +352,36 @@ public class DecisionRepository {
                 // AuditLog records the resulting series cancellation as a separate event.
                 auditLogRepository.insertLog(triggeringVoterId, "SERIES_CANCELLED", "SERIES", seriesId,
                         "Series " + seriesId + " cancelled due to decision session " + sessionId);
+
+                // Notify the series' Mangaka that their series was cancelled. Deliberately
+                // a separate, minimal notification that does not mention the decision
+                // session or vote outcome: BR-DEC-08 restricts visibility into the Board's
+                // internal deliberation to eligible Board members only, so the Mangaka only
+                // learns the outcome that affects them, not that a review happened.
+                String notifyMangakaSql
+                        = "INSERT INTO Notification (userId, type, title, message, viewUrl, referenceId, referenceType, isRead, createdAt)"
+                        + " SELECT s.mangakaId,"
+                        + "   'SERIES_CANCELLED',"
+                        + "   'Series cancelled',"
+                        + "   'Your series \"' + s.title + '\" has been cancelled.',"
+                        + "   '/main/series/' + CAST(s.id AS VARCHAR(30)),"
+                        + "   s.id,"
+                        + "   'SERIES',"
+                        + "   0,"
+                        + "   GETDATE()"
+                        + " FROM Series s"
+                        + " WHERE s.id = ?";
+                try ( PreparedStatement ps = conn.prepareStatement(notifyMangakaSql)) {
+                    ps.setLong(1, seriesId);
+                    ps.executeUpdate();
+                }
             }
 
             // Gửi DECISION_RESOLVED notification cho tất cả Board members active (BR-65)
-            // BR-DEC-08: Exclude Tantou Editor from notification
+            // BR-DEC-08: chỉ Board Member đủ điều kiện mới nhận thông báo về Decision
+            // session (không gửi cho Mangaka — xem notifyMangakaSql ở trên cho trường hợp
+            // CANCEL). Loại Tantou Editor vì họ có xung đột lợi ích với series đang review
+            // (BR-DEC-01, BR-DEC-02).
             String notifySql
                     = "INSERT INTO Notification (userId, type, title, message, viewUrl, referenceId, referenceType, isRead, createdAt)"
                     + " SELECT u.id,"
