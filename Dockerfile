@@ -30,6 +30,24 @@ RUN mkdir -p ./webapp/WEB-INF/classes \
     && rm -rf /usr/local/tomcat/webapps/MangaProject \
     && mv ./webapp /usr/local/tomcat/webapps/MangaProject
 
+# Serve something at "/". The app lives under /MangaProject, so the root path
+# returned 404 and any health check pointed at "/" marked the instance
+# unhealthy. This page answers 200 (health check passes) and bounces a real
+# browser on to the login screen, so the deploy no longer depends on the
+# Health Check Path being configured in the Render dashboard.
+RUN mkdir -p /usr/local/tomcat/webapps/ROOT \
+    && printf '%s\n' \
+        '<!doctype html>' \
+        '<html lang="en">' \
+        '<head>' \
+        '<meta charset="utf-8">' \
+        '<title>MangaProject</title>' \
+        '<meta http-equiv="refresh" content="0; url=/MangaProject/main/login">' \
+        '</head>' \
+        '<body>Redirecting to <a href="/MangaProject/main/login">MangaProject</a>&hellip;</body>' \
+        '</html>' \
+        > /usr/local/tomcat/webapps/ROOT/index.html
+
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
