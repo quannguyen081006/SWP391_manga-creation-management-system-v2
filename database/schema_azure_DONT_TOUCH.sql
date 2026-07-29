@@ -999,16 +999,16 @@ CREATE NONCLUSTERED INDEX [IX_Proposal_mangakaId] ON [dbo].[Proposal]
 GO
 SET ANSI_PADDING ON
 GO
-/****** Object:  Index [IX_Proposal_sampleFileHash]    Script Date: 6/11/2026 10:09:13 PM ******/
-CREATE NONCLUSTERED INDEX [IX_Proposal_sampleFileHash] ON [dbo].[Proposal]
-(
-	[sampleFileHash] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
-GO
 /****** Object:  Index [IX_Proposal_status]    Script Date: 6/11/2026 10:09:13 PM ******/
 CREATE NONCLUSTERED INDEX [IX_Proposal_status] ON [dbo].[Proposal]
 (
 	[status] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+GO
+/****** Object:  Index [IX_Proposal_sampleFileHash]    Script Date: 6/11/2026 10:09:13 PM ******/
+CREATE NONCLUSTERED INDEX [IX_Proposal_sampleFileHash] ON [dbo].[Proposal]
+(
+	[sampleFileHash] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 GO
 /****** Object:  Index [UX_Proposal_one_draft_per_mangaka]    Script Date: 6/11/2026 10:09:13 PM ******/
