@@ -39,6 +39,7 @@
     border-radius: 8px;
     display: inline-grid;
     place-items: center;
+    flex: 0 0 auto;
     color: #fff;
     background: #111827;
 }
@@ -90,7 +91,7 @@
     border-radius: 8px;
     display: inline-grid;
     place-items: center;
-    font-weight: 900;
+    font-weight: 800;
 }
 
 .proposal-settings-panel .setting-control-icon-resubmit {

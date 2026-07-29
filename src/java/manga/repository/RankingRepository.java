@@ -406,44 +406,10 @@ public class RankingRepository {
                 + " FROM ranked r";
 
 // =========================================================
-// STEP 3 — AUTO CREATE DECISION SESSION
+// STEP 3 — REMOVED - Decision Sessions now created manually by Administrator
 // =========================================================
-        String createSessionsSql
-                = "INSERT INTO DecisionSession (seriesId, rankingRecordId, status, openedAt)"
-                + " SELECT rr.seriesId, rr.id, 'OPEN', GETDATE()"
-                + " FROM RankingRecord rr"
-                + " JOIN Series s ON s.id = rr.seriesId"
-                + " WHERE rr.periodId = ?"
-                + "   AND rr.isBottomTwenty = 1"
-                + "   AND s.status != 'CANCELLED'"
-                + "   AND NOT EXISTS ("
-                + "     SELECT 1"
-                + "     FROM DecisionSession ds"
-                + "     WHERE ds.seriesId = rr.seriesId"
-                + "       AND ds.status = 'OPEN'"
-                + "   )";
-
-        String notifyDecisionSessionsSql
-                = "INSERT INTO Notification (userId, type, title, message, viewUrl, referenceId, referenceType, isRead, createdAt) "
-                + "SELECT u.id, 'DECISION_SESSION_OPENED', 'Decision session opened', "
-                + "'A new decision session is open for series #' + CAST(ds.seriesId AS VARCHAR(30)) + '.', "
-                + "'/main/decisions/' + CAST(ds.id AS VARCHAR(30)), ds.id, 'DECISION', 0, GETDATE() "
-                + "FROM DecisionSession ds "
-                + "JOIN RankingRecord rr ON rr.id = ds.rankingRecordId "
-                + "JOIN Series s ON s.id = ds.seriesId "
-                + "JOIN [User] u ON u.status = 'ACTIVE' "
-                + "JOIN UserRole ur ON ur.userId = u.id "
-                + "JOIN [Role] r ON r.id = ur.roleId "
-                + "WHERE rr.periodId = ? "
-                + "AND ds.status = 'OPEN' "
-                + "AND r.name = 'EDITORIAL_BOARD' "
-                + "AND u.id <> s.tantouEditorId "
-                + "AND NOT EXISTS ( "
-                + "  SELECT 1 FROM Notification n "
-                + "  WHERE n.userId = u.id "
-                + "  AND n.type = 'DECISION_SESSION_OPENED' "
-                + "  AND n.referenceId = ds.id "
-                + ")";
+// REMOVED: Automatic Decision Session creation for bottom 20% series
+// Decision Sessions are now created manually by Administrator from ranking results page
 
 // =========================================================
 // STEP 4 — SEND NOTIFICATION
@@ -507,26 +473,14 @@ public class RankingRepository {
                 }
 
                 // =====================================================
-                // CREATE DECISION SESSION
+                // REMOVED: CREATE DECISION SESSION
                 // =====================================================
-                try ( PreparedStatement ps
-                        = conn.prepareStatement(createSessionsSql)) {
-
-                    ps.setLong(1, periodId);
-
-                    ps.executeUpdate();
-                }
+                // Decision Sessions now created manually by Administrator
 
                 // =====================================================
-                // SEND NOTIFICATIONS
+                // REMOVED: SEND NOTIFICATIONS
                 // =====================================================
-                try ( PreparedStatement ps
-                        = conn.prepareStatement(notifyDecisionSessionsSql)) {
-
-                    ps.setLong(1, periodId);
-
-                    ps.executeUpdate();
-                }
+                // Notifications sent when Decision Session is manually created
 
                 // =====================================================
                 // UPDATE PERIOD STATUS
@@ -565,7 +519,8 @@ public class RankingRepository {
     public List<Map<String, Object>> results(long periodId) {
         String sql = "SELECT rr.id, rr.periodId, rr.seriesId, s.title AS seriesTitle, "
                 + "rr.rankScore, rr.rankPosition, rr.isBottomTwenty, rr.calculatedAt, "
-                + "rr.totalLikes, rr.totalReads "
+                + "rr.totalLikes, rr.totalReads, "
+                + "(SELECT COALESCE(SUM(ve.revenue), 0) FROM VoteEntry ve WHERE ve.periodId = rr.periodId AND ve.seriesId = rr.seriesId) AS totalRevenue "
                 + "FROM RankingRecord rr "
                 + "JOIN Series s ON s.id = rr.seriesId "
                 + "WHERE rr.periodId = ? "
@@ -586,6 +541,7 @@ public class RankingRepository {
                     row.put("calculatedAt", rs.getTimestamp("calculatedAt"));
                     row.put("totalLikes", rs.getLong("totalLikes"));
                     row.put("totalReads", rs.getLong("totalReads"));
+                    row.put("totalRevenue", rs.getBigDecimal("totalRevenue"));
                     rows.add(row);
                 }
             }
@@ -626,6 +582,69 @@ public class RankingRepository {
         return points;
     }
 
+    public List<manga.dto.RevenueDataPoint> getRevenueHistoryForSeries(long seriesId, long rankingRecordId) {
+        List<manga.dto.RevenueDataPoint> points = new ArrayList<>();
+        try ( Connection conn = dataSource.getConnection()) {
+            boolean hasRevenue = hasVoteEntryRevenueColumn(conn);
+            String revenueExpression = hasRevenue ? "COALESCE(SUM(ve.revenue), 0)" : "CAST(0 AS DECIMAL(15,2))";
+            
+            // Get periodId from ranking record
+            long periodId = -1;
+            String periodSql = "SELECT periodId FROM RankingRecord WHERE id = ?";
+            try ( PreparedStatement ps = conn.prepareStatement(periodSql)) {
+                ps.setLong(1, rankingRecordId);
+                try ( ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        periodId = rs.getLong("periodId");
+                    }
+                }
+            }
+            
+            if (periodId == -1) {
+                return points;
+            }
+            
+            String sql = "SELECT TOP 6 rp.id AS periodId, rp.name AS periodName, " + revenueExpression + " AS totalRevenue "
+                    + "FROM RankingPeriod rp "
+                    + "LEFT JOIN VoteEntry ve ON ve.periodId = rp.id AND ve.seriesId = ? "
+                    + "WHERE (rp.status = 'CALCULATED' OR rp.id = ?) "
+                    + "GROUP BY rp.id, rp.name, rp.endDate "
+                    + "ORDER BY rp.endDate DESC";
+            try ( PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setLong(1, seriesId);
+                ps.setLong(2, periodId);
+                try ( ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        points.add(new manga.dto.RevenueDataPoint(
+                                rs.getLong("periodId"),
+                                rs.getString("periodName"),
+                                rs.getBigDecimal("totalRevenue")
+                        ));
+                    }
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot load revenue history for series", ex);
+        }
+        java.util.Collections.reverse(points);
+        return points;
+    }
+
+    public long getPeriodIdByRankingRecordId(long rankingRecordId) {
+        String sql = "SELECT periodId FROM RankingRecord WHERE id = ?";
+        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, rankingRecordId);
+            try ( ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getLong("periodId");
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Cannot get periodId by ranking record id", ex);
+        }
+        return -1;
+    }
+
     // ------------------------------------------------------------------ //
     //  mapPeriod helper — không thay đổi                                  //
     // ------------------------------------------------------------------ //
@@ -640,21 +659,6 @@ public class RankingRepository {
             }
         } catch (SQLException ex) {
             throw new RuntimeException("Cannot load series mangaka id", ex);
-        }
-        return -1;
-    }
-
-    public long getPeriodIdByRankingRecordId(long rankingRecordId) {
-        String sql = "SELECT periodId FROM RankingRecord WHERE id = ?";
-        try ( Connection conn = dataSource.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, rankingRecordId);
-            try ( ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getLong("periodId");
-                }
-            }
-        } catch (SQLException ex) {
-            throw new RuntimeException("Cannot load period id by ranking record id", ex);
         }
         return -1;
     }

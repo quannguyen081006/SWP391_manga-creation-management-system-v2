@@ -70,4 +70,8 @@ public class ProductionService {
     public Map<String, Object> getSeriesTeam(long seriesId) {
         return productionRepository.getSeriesTeam(seriesId);
     }
+
+    public Map<String, Object> getSeriesById(long seriesId) {
+        return productionRepository.getSeriesById(seriesId);
+    }
 }

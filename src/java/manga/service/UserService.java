@@ -47,14 +47,6 @@ public class UserService {
         return userAdminRepository.hasAnyAdmin();
     }
 
-    public List<String> listRoles(long userId) {
-        return userAdminRepository.listRoles(userId);
-    }
-
-    public boolean hasRole(long userId, String roleName) {
-        return userAdminRepository.hasRole(userId, roleName);
-    }
-
     public String getFullNameById(long userId) {
         return userAdminRepository.getFullNameById(userId);
     }

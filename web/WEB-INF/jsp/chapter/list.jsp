@@ -5,9 +5,12 @@
     [2] ALERT BOX    — Shows inline errors (chapterResult), hidden by default
     [3] LAYOUT GRID  — 2 columns: tracker table (left) + chapter creation sidebar (right)
     [4] TRACKER TABLE — 3 chapter groups, JS automatically classifies and fills in the data:
-        [4a] groupOverdue    — Chapters past deadline, always shown, red warning color
+        [4a] groupOverdue    — Chapters past deadline, always shown
         [4b] groupInProgress — Chapters in progress (PLANNING / IN_PROGRESS), always shown
         [4c] groupCompleted  — Completed chapters, hidden by default, click "Show" to expand
+        Group heads are a word plus a count — no colour dot, because the word already
+        names the state. Progress level is carried by the Progress column bar alone
+        (the same device the Series cards use), so there is no legend above the tables.
         Each table has columns: No. | Series | Title | Status | Deadline | Progress | At Risk | Actions
         Sortable by: No, Title, Status, Deadline (JS handles sorting client-side)
         tbody (rowsOverdue / rowsInProgress / rowsCompleted) start empty — chapter-list.js fills them after fetching the API
@@ -25,8 +28,8 @@
 <head>
     <meta charset="UTF-8">
     <title>Chapters</title>
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css?v=20260717legend" />
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/chaptertask/chapter-list.css?v=20260717legend" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css?v=20260727chapterflat2" />
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/chaptertask/chapter-list.css?v=20260727chapterflat2" />
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
@@ -48,26 +51,13 @@
         <%-- chapterStatusPills: JS fills in filter pills (All / per series) for quick filtering --%>
         <div id="chapterStatusPills" class="chapter-status-pills"></div>
 
-        <%-- Legend for the Progress column bar colors. Threshold is admin-configurable via
-             Settings > Progress Display; the "50" placeholders here are the fallback default,
-             chapter-list.js overwrites #chapterProgressLegendLow/-Mid with the live value on load. --%>
-        <div class="chapter-progress-legend">
-            <span class="chapter-progress-legend-title">Progress</span>
-            <span class="chapter-progress-legend-item">
-                <span class="chapter-progress-legend-swatch chapter-progress-legend-swatch-low"></span><span id="chapterProgressLegendLow">Below 50%</span>
-            </span>
-            <span class="chapter-progress-legend-item">
-                <span class="chapter-progress-legend-swatch chapter-progress-legend-swatch-mid"></span><span id="chapterProgressLegendMid">50–99%</span>
-            </span>
-            <span class="chapter-progress-legend-item">
-                <span class="chapter-progress-legend-swatch chapter-progress-legend-swatch-done"></span><span id="chapterProgressLegendDone">100% and above</span>
-            </span>
-        </div>
+        <%-- No progress legend here: every row prints its own percentage next to the bar,
+             so the colour is never the only carrier of the information. The thresholds
+             themselves stay admin-configurable via Settings > Progress Display. --%>
 
         <%-- [4a] OVERDUE GROUP: chapters past deadline — always shown, JS counts and fills in countOverdue --%>
         <div id="groupOverdue" class="chapter-group">
             <div class="chapter-group-head">
-                <span class="chapter-group-dot chapter-group-dot-overdue"></span>
                 <span class="chapter-group-label">Overdue</span>
                 <span id="countOverdue" class="chapter-group-count">0</span>
             </div>
@@ -101,7 +91,6 @@
         <%-- [4b] IN PROGRESS GROUP: chapters currently in progress — always shown --%>
         <div id="groupInProgress" class="chapter-group">
             <div class="chapter-group-head">
-                <span class="chapter-group-dot chapter-group-dot-progress"></span>
                 <span class="chapter-group-label">In progress</span>
                 <span id="countInProgress" class="chapter-group-count">0</span>
             </div>
@@ -137,7 +126,6 @@
         --%>
         <div id="groupCompleted">
             <div class="chapter-group-head">
-                <span class="chapter-group-dot chapter-group-dot-complete"></span>
                 <span class="chapter-group-label">Completed</span>
                 <span id="countCompleted" class="chapter-group-count">0</span>
                 <button class="btn small chapter-toggle-completed" type="button" id="toggleCompleted">Show</button>

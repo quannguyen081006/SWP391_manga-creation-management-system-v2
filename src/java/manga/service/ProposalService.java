@@ -25,6 +25,9 @@ public class ProposalService {
     @Autowired
     private ProposalSettingsService proposalSettingsService;
 
+    @Autowired
+    private ProposalSampleFileHashBackfillService sampleFileHashBackfillService;
+
     public List<String> listGenres() {
         return GENRES;
     }
@@ -77,6 +80,8 @@ public class ProposalService {
             String sampleFilePath, String originalFileName, Integer approximateChapter, String sampleFileHash) {
         requireRole(user, "MANGAKA", "Only MANGAKA can create proposals");
         validateProposalContent(title, genre, synopsis, sampleFilePath, approximateChapter, true);
+        // Only PDF/DOCX documents are accepted as sample files.
+        assertSampleFileTypeAllowed(sampleFilePath, originalFileName);
         // Block a sample file whose content already exists on another proposal.
         assertSampleFileNotDuplicate(sampleFileHash, 0L);
         if (proposalRepository.hasActiveDraft(user.getId(), 0L)) {
@@ -98,7 +103,8 @@ public class ProposalService {
         if (p == null) {
             throw new IllegalArgumentException("Proposal not found");
         }
-        // Only check duplication when the Mangaka actually uploads a new file on edit/resubmit.
+        // Format and duplication are only checked when a new file is actually uploaded on edit/resubmit.
+        assertSampleFileTypeAllowed(sampleFilePath, originalFileName);
         assertSampleFileNotDuplicate(sampleFileHash, proposalId);
         boolean hasExistingFile = !isBlank(p.getSampleFilePath());
         if ("DRAFT".equalsIgnoreCase(p.getStatus()) && p.getSubmitAttemptCount() == 0) {
@@ -118,10 +124,27 @@ public class ProposalService {
         if (isBlank(sampleFileHash)) {
             return;
         }
+        // Older proposals stored no hash — hash their files first so they are compared too.
+        sampleFileHashBackfillService.ensureBackfilled();
         if (proposalRepository.isDuplicateSampleFileHash(sampleFileHash, excludeProposalId)) {
             throw new manga.common.exception.DuplicateSampleFileException(
                     "This sample file is identical to one already submitted. Please choose a different file.");
         }
+    }
+
+    /**
+     * Rejects a sample file that is not a PDF or DOCX document. No-op when the submission does
+     * not carry a new file (edit keeps the existing one).
+     *
+     * <p>The web upload path already checks this before writing to disk; repeating it here also
+     * covers the API controllers, which receive a file path instead of the file itself.</p>
+     */
+    private void assertSampleFileTypeAllowed(String sampleFilePath, String originalFileName) {
+        String nameToCheck = isBlank(originalFileName) ? sampleFilePath : originalFileName;
+        if (isBlank(nameToCheck)) {
+            return;
+        }
+        manga.common.util.ProposalSampleFileUploader.assertAllowedFileName(nameToCheck.trim());
     }
 
     public void submitProposal(AuthenticatedUser user, long proposalId) {

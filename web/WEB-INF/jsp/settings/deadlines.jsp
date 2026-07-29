@@ -11,8 +11,8 @@
 <jsp:include page="../common/header.jsp" />
 
 <main class="container settings-page">
-    <div class="settings-page-head">
-        <div class="settings-page-icon" aria-hidden="true"></div>
+    <div class="page-header">
+        <div class="page-header-icon settings-page-icon" aria-hidden="true"></div>
         <div>
             <h2>Deadline Settings</h2>
             <p>Control the minimum buffer between a task's due date and its chapter deadline, and between a chapter deadline and its series deadline.</p>

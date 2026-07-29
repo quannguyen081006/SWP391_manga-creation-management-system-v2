@@ -14,7 +14,9 @@ import manga.model.AuthenticatedUser;
 import manga.model.ManuscriptSummary;
 import manga.model.Proposal;
 import manga.model.chaptertask.TaskSummary;
+import manga.common.util.ProposalSampleFileUploader;
 import manga.common.util.SessionUserUtil;
+import manga.common.util.UploadedSampleFile;
 import manga.repository.ProductionRepository;
 import manga.service.chaptertask.PageTaskService;
 import manga.service.ProposalService;
@@ -26,7 +28,6 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-import javax.servlet.http.Part;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -42,8 +43,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 @Controller
 @RequestMapping("/main")
 public class MainController {
-
-    private static final long SAMPLE_FILE_MAX_SIZE_BYTES = 20L * 1024L * 1024L;
 
     @Autowired
     private AuthController authController;
@@ -275,14 +274,27 @@ public class MainController {
             @RequestParam("approximateChapter") Integer approximateChapter,
             Model model) {
         AuthenticatedUser user = (AuthenticatedUser) session.getAttribute("AUTH_USER");
+        UploadedSampleFile upload = UploadedSampleFile.empty();
         try {
-            UploadInfo upload = saveUpload(request, "sampleFile");
+            upload = ProposalSampleFileUploader.save(request, "sampleFile");
             long id = proposalService.createProposal(user, title, genre, synopsis,
-                    upload.path, upload.originalName, approximateChapter, upload.hash);
+                    upload.getPath(), upload.getOriginalName(), approximateChapter, upload.getHash());
             return "redirect:/main/proposals/" + id;
         } catch (manga.common.exception.DuplicateSampleFileException ex) {
             // Sample file trùng nội dung với proposal khác → hiện toast góc phải, bắt chọn file khác.
+            // File vừa lưu bị từ chối nên xoá đi, tránh rác trong /uploads/proposals.
+            ProposalSampleFileUploader.deleteQuietly(request, upload.getPath());
             model.addAttribute("duplicateFileError", ex.getMessage());
+            model.addAttribute("title", title);
+            model.addAttribute("genre", genre);
+            model.addAttribute("synopsis", synopsis);
+            model.addAttribute("approximateChapter", approximateChapter);
+            model.addAttribute("genres", proposalService.listGenres());
+            return "proposal/create";
+        } catch (manga.common.exception.InvalidSampleFileTypeException ex) {
+            // Sai định dạng (chỉ nhận .pdf/.docx) → cùng kiểu toast như file trùng.
+            ProposalSampleFileUploader.deleteQuietly(request, upload.getPath());
+            model.addAttribute("fileTypeError", ex.getMessage());
             model.addAttribute("title", title);
             model.addAttribute("genre", genre);
             model.addAttribute("synopsis", synopsis);
@@ -291,6 +303,7 @@ public class MainController {
             return "proposal/create";
         } catch (IllegalArgumentException ex) {
             // Validation từ service (thiếu field, genre không hợp lệ, v.v.)
+            ProposalSampleFileUploader.deleteQuietly(request, upload.getPath());
             model.addAttribute("error", ex.getMessage());
             model.addAttribute("title", title);
             model.addAttribute("genre", genre);
@@ -455,61 +468,4 @@ public class MainController {
         return "proposal/detail";
     }
 
-    /**
-     * Lưu file upload lên server và trả về thông tin đường dẫn.
-     *
-     * <p>Quy trình:
-     * <ol>
-     *   <li>Lấy {@link Part} từ multipart request theo {@code fieldName}.</li>
-     *   <li>Lấy tên file gốc, sanitize (xoá ký tự đặc biệt) để tránh lỗi filesystem.</li>
-     *   <li>Thêm timestamp vào đầu tên file để tránh trùng lặp.</li>
-     *   <li>Lưu vào {@code /uploads/proposals/} dưới webroot.</li>
-     * </ol>
-     * </p>
-     *
-     * @param fieldName tên field file trong HTML form (vd: "sampleFile")
-     * @return {@link UploadInfo} chứa đường dẫn relative và tên file gốc;
-     *         hoặc {@code UploadInfo(null, null)} nếu không có file được upload.
-     */
-    private UploadInfo saveUpload(HttpServletRequest request, String fieldName) throws IOException, ServletException {
-        Part part = request.getPart(fieldName);
-        if (part == null || part.getSize() == 0) {
-            return new UploadInfo(null, null, null);
-        }
-        if (part.getSize() > SAMPLE_FILE_MAX_SIZE_BYTES) {
-            throw new IllegalArgumentException("Sample file must not exceed 20 MB");
-        }
-        String submittedName = part.getSubmittedFileName();
-        // Lấy chỉ tên file (bỏ qua đường dẫn nếu browser gửi cả path)
-        String originalName = submittedName == null ? "proposal-file" : new File(submittedName).getName();
-        // Sanitize: chỉ giữ lại ký tự an toàn cho tên file
-        String safeName = originalName.replaceAll("[^A-Za-z0-9._-]", "_");
-        String storedName = System.currentTimeMillis() + "_" + safeName;
-        String uploadPath = request.getServletContext().getRealPath("/uploads/proposals");
-        if (uploadPath == null) {
-            throw new IOException("Upload directory is not available");
-        }
-        File dir = new File(uploadPath);
-        if (!dir.exists() && !dir.mkdirs()) {
-            throw new IOException("Cannot create upload directory");
-        }
-        File saved = new File(dir, storedName);
-        part.write(saved.getAbsolutePath());
-        // Hash nội dung file để phát hiện sample file trùng với proposal khác.
-        String hash = manga.common.util.FileHashUtil.sha256Hex(saved);
-        // Trả về đường dẫn relative để lưu vào DB
-        return new UploadInfo("/uploads/proposals/" + storedName, originalName, hash);
-    }
-
-    private static class UploadInfo {
-        private final String path;         // Đường dẫn relative trên server (lưu vào DB)
-        private final String originalName; // Tên file gốc từ client (dùng khi download)
-        private final String hash;         // SHA-256 nội dung file (dùng để chống trùng)
-
-        private UploadInfo(String path, String originalName, String hash) {
-            this.path = path;
-            this.originalName = originalName;
-            this.hash = hash;
-        }
-    }
 }

@@ -4,21 +4,256 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Ranking Results</title>
+    <title>Ranking Results - Administrator Review</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css" />
     <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/css/ranking.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        .admin-review-header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 15px rgba(44, 62, 80, 0.3);
+        }
+        
+        .admin-review-header h2 {
+            margin: 0 0 10px 0;
+            font-size: 28px;
+            font-weight: 700;
+        }
+        
+        .admin-review-header p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        
+        .ranking-card {
+            display: flex;
+            align-items: center;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            transition: transform 0.2s, box-shadow 0.2s;
+            border-left: 4px solid #2c3e50;
+        }
+        
+        .ranking-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+        }
+        
+        .ranking-card.rank-1 {
+            border-left-color: #f1c40f;
+            background: linear-gradient(to right, #fff9e6, white);
+        }
+        
+        .ranking-card.rank-2 {
+            border-left-color: #bdc3c7;
+            background: linear-gradient(to right, #f8f9fa, white);
+        }
+        
+        .ranking-card.rank-3 {
+            border-left-color: #cd7f32;
+            background: linear-gradient(to right, #fff4e6, white);
+        }
+        
+        /* Medal icon + placing sit side by side, same as the Top Creators board.
+           Wide enough that a 40px rank-1 trophy and its number stay on one line;
+           the gold/silver/bronze colours come from .rank-icon in ranking.css. */
+        .rank-number {
+            font-size: 36px;
+            font-weight: 700;
+            color: #2c3e50;
+            width: 110px;
+            text-align: center;
+            margin-right: 20px;
+        }
+
+        .series-info {
+            flex: 1;
+        }
+        
+        .series-info h3 {
+            margin: 0 0 8px 0;
+            font-size: 18px;
+            color: #2c3e50;
+            font-weight: 600;
+        }
+        
+        .series-meta {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .series-meta span {
+            font-size: 13px;
+            color: #7f8c8d;
+        }
+        
+        .bottom-twenty-badge {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .series-stats {
+            display: flex;
+            gap: 25px;
+            margin-right: 20px;
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+        
+        .stat-label {
+            font-size: 11px;
+            color: #95a5a6;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .stat-value-sm {
+            font-size: 12px;
+        }
+        
+        .ranking-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-width: 180px;
+        }
+        
+        .btn-create-decision {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-align: center;
+        }
+        
+        .btn-create-decision:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
+        }
+        
+        .btn-create-decision:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .btn-view-team {
+            background: #f8f9fa;
+            color: #2c3e50;
+            border: 1px solid #e9ecef;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            text-align: center;
+        }
+        
+        .btn-view-team:hover {
+            background: #e9ecef;
+        }
+        
+        .session-status-badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .session-status-badge.OPEN {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .session-status-badge.CLOSED {
+            background: #27ae60;
+            color: white;
+        }
+        
+        .session-status-badge.CONTINUE {
+            background: #27ae60;
+            color: white;
+        }
+        
+        .session-status-badge.CANCEL {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .session-status-badge.CHANGE_TYPE {
+            background: #3498db;
+            color: white;
+        }
+        
+        .recommendation-badge {
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+            color: white;
+            padding: 6px 14px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .recommendation-badge i {
+            font-size: 14px;
+        }
+    </style>
 </head>
 <body>
 <jsp:include page="../common/header.jsp" />
 
+<c:if test="${not empty error}">
+    <div class="alert error">${error}</div>
+</c:if>
+
+<div class="admin-review-header">
+    <h2>📊 Ranking Results - Administrator Review</h2>
+    <p>Review ranking performance and create Decision Sessions for series requiring editorial review</p>
+</div>
+
 <div class="section-card">
-    <h3 class="section-title section-title-sm">📊 Series Ranking Leaderboard</h3>
+    <h3 class="section-title section-title-sm">Series Performance Leaderboard</h3>
     
     <c:if test="${not empty results}">
         <div class="leaderboard">
             <c:forEach items="${results}" var="r" varStatus="status">
-                <div class="ranking-card rank-${r.rankPosition} ${r.isBottomTwenty ? 'bottom-twenty' : ''}">
+                <div class="ranking-card rank-${r.rankPosition}">
                     <div class="rank-number">
                         <c:if test="${r.rankPosition == 1}"><i class="bi bi-trophy-fill rank-icon gold"></i></c:if>
                         <c:if test="${r.rankPosition == 2}"><i class="bi bi-award-fill rank-icon silver"></i></c:if>
@@ -30,9 +265,16 @@
                         <div class="series-meta">
                             <span>ID: #${r.seriesId}</span>
                             <c:if test="${r.isBottomTwenty}">
-                                <span class="bottom-twenty-badge">⚠️ Decision Review Candidate</span>
+                                <span class="recommendation-badge">
+                                    <i class="bi bi-exclamation-triangle-fill"></i>
+                                    Suggested - Bottom 20%
+                                </span>
                             </c:if>
-                            <button class="btn-view-team" onclick="viewTeam(${r.seriesId}, '${r.seriesTitle}')">View Team</button>
+                            <c:if test="${not empty r.decisionSession}">
+                                <span class="session-status-badge ${r.decisionSession.result != null ? r.decisionSession.result : r.decisionSession.status}">
+                                    ${r.decisionSession.result != null ? r.decisionSession.result : r.decisionSession.status}
+                                </span>
+                            </c:if>
                         </div>
                     </div>
                     <div class="series-stats">
@@ -46,12 +288,35 @@
                         </div>
                         <div class="stat-item">
                             <span class="stat-value">${r.totalReads}</span>
-                            <span class="stat-label">Reads</span>
+                            <span class="stat-label">Readers</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-value stat-value-sm">${r.calculatedAt}</span>
-                            <span class="stat-label">Calculated</span>
+                            <span class="stat-value">${r.totalRevenue}</span>
+                            <span class="stat-label">Revenue</span>
                         </div>
+                    </div>
+                    <div class="ranking-actions">
+                        <c:choose>
+                            <c:when test="${empty r.decisionSession}">
+                                <form method="post" action="${pageContext.request.contextPath}/main/ranking/records/${r.id}/create-decision" style="margin: 0;">
+                                    <input type="hidden" name="seriesId" value="${r.seriesId}" />
+                                    <button type="submit" class="btn-create-decision">
+                                        <i class="bi bi-plus-circle"></i> Create Decision Session
+                                    </button>
+                                </form>
+                            </c:when>
+                            <c:otherwise>
+                                <button class="btn-create-decision" disabled>
+                                    <i class="bi bi-check-circle"></i> Decision Session Created
+                                </button>
+                                <a class="btn-view-team" href="${pageContext.request.contextPath}/main/decisions/${r.decisionSession.id}" style="text-decoration: none; display: block; text-align: center;">
+                                    <i class="bi bi-eye"></i> View Session
+                                </a>
+                            </c:otherwise>
+                        </c:choose>
+                        <button class="btn-view-team" onclick="viewTeam(${r.seriesId}, &quot;${r.seriesTitle}&quot;)">
+                            <i class="bi bi-people"></i> View Team
+                        </button>
                     </div>
                 </div>
             </c:forEach>
@@ -138,16 +403,11 @@ function viewTeam(seriesId, seriesTitle) {
         });
 }
 
-// First letter of the member's name, shown inside the round avatar badge.
 function initialOf(fullName) {
     var trimmed = (fullName || '?').trim();
     return trimmed.length > 0 ? trimmed.charAt(0).toUpperCase() : '?';
 }
 
-// Builds one "role-block" section: colored left border, a heading (with an
-// optional count badge), and one avatar + name row per person. modifierClass
-// picks the color from ranking.css (.team-role-block.lead / .assistants /
-// .board; tantou editor uses the block's default indigo, so it gets none).
 function renderTeamRoleBlock(icon, roleName, members, modifierClass) {
     var blockClass = 'team-role-block' + (modifierClass ? ' ' + modifierClass : '');
     var html = '<div class="' + blockClass + '">';
@@ -202,7 +462,6 @@ function escapeHtml(text) {
         .replace(/'/g, '&#039;');
 }
 
-// Close modal on outside click
 document.getElementById('team-modal').addEventListener('click', function(e) {
     if (e.target === this) {
         closeTeamModal();

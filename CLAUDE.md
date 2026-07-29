@@ -78,13 +78,13 @@ Repositories use plain JDBC with `DataSource`; there is no ORM. Most SQL lives i
 
 **User and role management**: `ModuleWebController`, `UserApiController` -> `UserAdminRepository`, `UserRepository`; validation in `RoleCombinationValidator`; JSP/JS in `web/WEB-INF/jsp/user/*` and `web/assets/role-assignment.js`.
 
-**Authentication and dev switch account**: `AuthController` (delegated by `MainController`) -> `AuthService`; UI in `web/WEB-INF/jsp/common/header.jsp`; enforced by `AuthInterceptor`.
+**Authentication and session**: `AuthController` (delegated by `MainController`) -> `AuthService`; login page in `web/WEB-INF/jsp/auth/login.jsp`; enforced by `AuthInterceptor`. `web/assets/auth-session.js` re-verifies the session against `GET /api/v1/auth/me` on every `pageshow` and redirects to login if it is gone. The old dev switch-account/switch-role UI was removed (commit `fb59812`) — there is no impersonation path in the code.
 
 **Dashboard and navigation**: `DashboardController`; shared header/sidebar in `web/WEB-INF/jsp/common/header.jsp`, with extra model attributes supplied by `NotificationViewAdvice`.
 
 **Series, chapters, tasks, manuscripts**: `ModuleWebController` holds many page endpoints; chapter/page/task API lives under `controller/api/chaptertask`. Repositories: `ProductionRepository`, `ChapterRepository`, `PageRepository`, `PageTaskRepository`, `ManuscriptRepository`, `ChapterImageRepository` (chaptertask sub-package). JSPs under `web/WEB-INF/jsp/series`, `chapter`, `task`, `manuscript`. See **CHAPTER_TASK_FLOW.md** for the detailed chapter/page/task/manuscript data flow (below).
 
-**Ranking, analytics, decisions**: `ModuleWebController`, `MangakaPerformanceController`, plus API controllers under `controller/api`. Repositories: `RankingRepository`, `DecisionRepository`, performance repositories. JSPs under `web/WEB-INF/jsp/ranking`, `analytics`, `decision`.
+**Ranking, analytics, decisions**: `ModuleWebController`, plus API controllers under `controller/api`. Repositories: `RankingRepository`, `DecisionRepository`, performance repositories. JSPs under `web/WEB-INF/jsp/ranking`, `analytics`, `decision`.
 
 **Salary**: `controller/web/salary`, with matching CSS/JS under `web/assets/css/salary` and `web/assets/js/salary`.
 
@@ -106,9 +106,9 @@ Valid roles: `ADMIN`, `MANGAKA`, `ASSISTANT`, `TANTOU_EDITOR`, `EDITORIAL_BOARD`
 - `MANGAKA` and `ASSISTANT` must each be single-role only.
 - `ADMIN` should not be combined with other roles; the DB also enforces only one admin role assignment.
 - The only valid multi-role combination is `TANTOU_EDITOR + EDITORIAL_BOARD`.
-- The switch-account/switch-role UI must stay read-only: it selects an existing active user/account and must never mutate or validate role combinations. Role assignment validation belongs only in user creation / admin role-assignment flows.
+- Role assignment validation belongs only in user creation / admin role-assignment flows.
 
-Relevant files: `RoleCombinationValidator.java`, `UserAdminRepository.addRole`, `ModuleWebController.validateCreateUser`, `ModuleWebController.validateAssignableRoles`, `web/assets/role-assignment.js`, `web/WEB-INF/jsp/common/header.jsp`, `web/WEB-INF/jsp/user/list.jsp`.
+Relevant files: `RoleCombinationValidator.java`, `UserAdminRepository.addRole`, `ModuleWebController.validateCreateUser`, `ModuleWebController.validateAssignableRoles`, `web/assets/role-assignment.js`, `web/WEB-INF/jsp/user/list.jsp`.
 
 ## Database Notes
 

@@ -196,7 +196,6 @@ button:disabled {
 
 .table-scroll,
 .data-table,
-.notification-table,
 .vote-table,
 .entries-table,
 .inbox-table {
@@ -206,7 +205,6 @@ button:disabled {
 }
 
 .data-table th,
-.notification-table th,
 .vote-table th,
 .entries-table th,
 .inbox-table th {
@@ -223,7 +221,6 @@ button:disabled {
 }
 
 .data-table td,
-.notification-table td,
 .vote-table td,
 .entries-table td,
 .inbox-table td {
@@ -233,7 +230,6 @@ button:disabled {
 }
 
 .data-table tbody tr:nth-child(even),
-.notification-table tbody tr:nth-child(even),
 .vote-table tbody tr:nth-child(even),
 .entries-table tbody tr:nth-child(even),
 .inbox-table tbody tr:nth-child(even) {
@@ -241,7 +237,6 @@ button:disabled {
 }
 
 .data-table tbody tr:hover,
-.notification-table tbody tr:hover,
 .vote-table tbody tr:hover,
 .entries-table tbody tr:hover,
 .inbox-table tbody tr:hover {
@@ -319,6 +314,64 @@ button:disabled {
     font-size: 14px;
 }
 
+/*
+ * Shared page frame — the single definition of the page title block.
+ * Every page that needs a heading uses .page-header + .page-header-icon; the
+ * per-feature copies (.page-head, .settings-page-head, .series-page-head) were
+ * folded into this one because all three carried identical values.
+ * The icon glyph is NOT hardcoded here — pass it as element content (inline SVG
+ * or a character), or add a modifier class such as .settings-page-icon.
+ */
+.container {
+    width: min(1180px, 100%);
+    margin-inline: auto;
+}
+
+.page-header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacing-4);
+    margin-bottom: 18px;
+}
+
+.page-header h2 {
+    margin: 0;
+    font-size: 28px;
+    line-height: 1.15;
+}
+
+.page-header p {
+    margin: 5px 0 0;
+    color: #64748b;
+    font-size: 14px;
+}
+
+.page-header-icon {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    color: #fff;
+    background: #0f172a;
+    box-shadow: 4px 4px 0 rgba(225, 29, 72, .18);
+    font-size: 24px;
+    line-height: 1;
+}
+
+.page-header-icon svg {
+    width: 26px;
+    height: 26px;
+}
+
+@media (max-width: 760px) {
+    .page-header {
+        align-items: flex-start;
+    }
+}
+
 .text-success { color: var(--success-color); }
 .text-danger { color: var(--danger-color); }
 .text-muted { color: var(--text-muted); }
@@ -342,7 +395,6 @@ button:disabled {
     }
 
     .data-table,
-    .notification-table,
     .vote-table,
     .entries-table,
     .inbox-table {

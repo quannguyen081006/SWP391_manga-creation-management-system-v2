@@ -46,39 +46,7 @@
 
                 <div class="sidebar-section">
 
-                    <div class="sidebar-title">Manuscript Info</div>
-
-                    <div class="dashboard-stat">
-
-                        <span class="stat-label">Chapter</span>
-
-                        <span class="stat-value">${chapter.chapterNumber}</span>
-
-                    </div>
-
-                    <div class="dashboard-stat">
-
-                        <span class="stat-label">Version</span>
-
-                        <span class="stat-value">v${version.version}</span>
-
-                    </div>
-
-                    <div class="dashboard-stat">
-
-                        <span class="stat-label">Status</span>
-
-                        <span class="status-badge status-${fn:toLowerCase(version.status)}">${version.status}</span>
-
-                    </div>
-
-                    <div class="dashboard-stat">
-
-                        <span class="stat-label">Pages</span>
-
-                        <span class="stat-value">${version.totalPageCount}</span>
-
-                    </div>
+                    <div class="sidebar-title">Timeline</div>
 
                     <div class="dashboard-stat">
 
@@ -154,18 +122,26 @@
                 </c:if>
 
                 <div class="sidebar-section">
-                    <div class="sidebar-title">Responsible People</div>
-                    <div class="dashboard-stat">
-                        <span class="stat-label">Mangaka</span>
-                        <span class="stat-value">${responsiblePeople.mangakaName}</span>
-                    </div>
-                    <div class="dashboard-stat">
-                        <span class="stat-label">Tantou Editor</span>
-                        <span class="stat-value">${responsiblePeople.tantouEditorName}</span>
-                    </div>
-                    <div class="dashboard-stat">
-                        <span class="stat-label">Editorial Board</span>
-                        <span class="stat-value">${responsiblePeople.editorialBoardName}</span>
+                    <div class="sidebar-title">Team</div>
+                    <div class="team-list">
+                        <div class="team-member">
+                            <span class="role-chip role-mangaka">Mangaka</span>
+                            <span class="team-name">
+                                <c:out value="${empty responsiblePeople.mangakaName ? 'Unassigned' : responsiblePeople.mangakaName}" />
+                            </span>
+                        </div>
+                        <div class="team-member">
+                            <span class="role-chip role-tantou">Tantou Editor</span>
+                            <span class="team-name">
+                                <c:out value="${empty responsiblePeople.tantouEditorName ? 'Unassigned' : responsiblePeople.tantouEditorName}" />
+                            </span>
+                        </div>
+                        <div class="team-member">
+                            <span class="role-chip role-board">Editorial Board</span>
+                            <span class="team-name">
+                                <c:out value="${empty responsiblePeople.editorialBoardName ? 'Unassigned' : responsiblePeople.editorialBoardName}" />
+                            </span>
+                        </div>
                     </div>
                 </div>
 
@@ -204,35 +180,43 @@
 
                 <div class="workspace-toolbar">
 
-                    <div>
+                    <div class="workspace-title-group">
 
-                        <strong>Chapter <c:out value="${chapter.chapterNumber}" />: <c:out value="${chapter.title}" /></strong>
+                        <c:if test="${not empty seriesTitle}">
+                            <span class="workspace-series-name">📖 <c:out value="${seriesTitle}" /></span>
+                        </c:if>
 
-                        <span class="workspace-version-meta">
+                        <div class="workspace-title-row">
 
-                            v${version.version} - <span class="status-badge status-${version.status}">${version.status}</span>
+                            <strong>Chapter <c:out value="${chapter.chapterNumber}" />: <c:out value="${chapter.title}" /></strong>
 
-                        </span>
+                            <span class="workspace-version-meta">
 
-                        <c:if test="${isReadonly}">
-
-                            <span class="workspace-lock">
-
-                                🔒 Readonly
+                                v${version.version} - <span class="status-badge status-${version.status}">${version.status}</span>
 
                             </span>
 
-                        </c:if>
+                            <c:if test="${isReadonly}">
 
-                        <c:if test="${productionLocked}">
+                                <span class="workspace-lock">
 
-                            <span class="workspace-lock is-production">
+                                    🔒 Readonly
 
-                                🔒 Production Locked
+                                </span>
 
-                            </span>
+                            </c:if>
 
-                        </c:if>
+                            <c:if test="${productionLocked}">
+
+                                <span class="workspace-lock is-production">
+
+                                    🔒 Production Locked
+
+                                </span>
+
+                            </c:if>
+
+                        </div>
 
                     </div>
 

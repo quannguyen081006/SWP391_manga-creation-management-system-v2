@@ -80,6 +80,42 @@
         });
     }
 
+    // Highlight the nav item matching the current page. This runs client-side
+    // (independent of the JSP `active` logic) so it works even when Tomcat is
+    // serving a stale compiled header. Each nav link is reduced to its
+    // "/main/<section>" key; the longest key contained in the current path
+    // wins, so sub-pages (e.g. /main/settings/proposals) keep their parent lit.
+    function highlightActiveNav() {
+        var path = window.location.pathname || '';
+        var items = document.querySelectorAll('.nav-item');
+        var best = null;
+        var bestLen = -1;
+        for (var i = 0; i < items.length; i++) {
+            var href = items[i].getAttribute('href');
+            if (!href) {
+                continue;
+            }
+            var linkPath;
+            try {
+                linkPath = new URL(href, window.location.origin).pathname;
+            } catch (e) {
+                linkPath = href;
+            }
+            var match = linkPath.match(/\/main\/[^\/]+/);
+            var key = match ? match[0] : linkPath;
+            if (path.indexOf(key) !== -1 && key.length > bestLen) {
+                best = items[i];
+                bestLen = key.length;
+            }
+        }
+        for (var j = 0; j < items.length; j++) {
+            items[j].classList.remove('active');
+        }
+        if (best) {
+            best.classList.add('active');
+        }
+    }
+
     function bindSidebar() {
         var shell = document.querySelector('.app-shell');
         var sidebar = document.querySelector('.side-nav');
@@ -241,6 +277,7 @@
     }
 
     function initialize() {
+        highlightActiveNav();
         bindSidebar();
         bindUserMenu();
         bindNotificationFlyout();

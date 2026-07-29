@@ -11,8 +11,8 @@
 <jsp:include page="../common/header.jsp" />
 
 <main class="container settings-page">
-    <div class="settings-page-head">
-        <div class="settings-page-icon" aria-hidden="true"></div>
+    <div class="page-header">
+        <div class="page-header-icon settings-page-icon" aria-hidden="true"></div>
         <div>
             <h2>Proposal Settings</h2>
             <p>Control proposal resubmission limits and Editorial Board voting quorum.</p>
