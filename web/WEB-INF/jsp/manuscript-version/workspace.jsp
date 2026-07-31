@@ -124,19 +124,19 @@
                 <div class="sidebar-section">
                     <div class="sidebar-title">Team</div>
                     <div class="team-list">
-                        <div class="team-member">
+                        <div class="team-member is-mangaka">
                             <span class="role-chip role-mangaka">Mangaka</span>
                             <span class="team-name">
                                 <c:out value="${empty responsiblePeople.mangakaName ? 'Unassigned' : responsiblePeople.mangakaName}" />
                             </span>
                         </div>
-                        <div class="team-member">
+                        <div class="team-member is-tantou">
                             <span class="role-chip role-tantou">Tantou Editor</span>
                             <span class="team-name">
                                 <c:out value="${empty responsiblePeople.tantouEditorName ? 'Unassigned' : responsiblePeople.tantouEditorName}" />
                             </span>
                         </div>
-                        <div class="team-member">
+                        <div class="team-member is-board">
                             <span class="role-chip role-board">Editorial Board</span>
                             <span class="team-name">
                                 <c:out value="${empty responsiblePeople.editorialBoardName ? 'Unassigned' : responsiblePeople.editorialBoardName}" />

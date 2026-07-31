@@ -505,7 +505,7 @@
     color: #4338ca;
     border-color: #c7d2fe;
 }
-.team-member:has(.role-mangaka) {
+.team-member.is-mangaka {
     border-left-color: #6366f1;
 }
 
@@ -515,7 +515,7 @@
     color: #0f766e;
     border-color: #99f6e4;
 }
-.team-member:has(.role-tantou) {
+.team-member.is-tantou {
     border-left-color: #14b8a6;
 }
 
@@ -525,7 +525,7 @@
     color: #b45309;
     border-color: #fde68a;
 }
-.team-member:has(.role-board) {
+.team-member.is-board {
     border-left-color: #f59e0b;
 }
 
