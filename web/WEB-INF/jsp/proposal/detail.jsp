@@ -267,6 +267,8 @@
     <p><a href="${pageContext.request.contextPath}/main/proposals">Back to list</a></p>
 </main>
 
+<script src="${pageContext.request.contextPath}/assets/js/proposal-decision.js"></script>
+
 <jsp:include page="../common/footer.jsp" />
 </body>
 </html>
