@@ -116,7 +116,7 @@ public class DecisionRepository {
     // ------------------------------------------------------------------ //
     public Map<String, Object> getSessionDetail(long sessionId) {
         String votesSql = "SELECT id, sessionId, voterId, decision, justification, votedAt"
-                + " FROM DecisionVote WHERE sessionId = ? ORDER BY votedAt DESC";
+                + " FROM DecisionVote WHERE sessionId = ? ORDER BY id DESC";
 
         try ( Connection conn = dataSource.getConnection()) {
             boolean hasSystemSuggestion = hasDecisionSessionSystemSuggestionColumn(conn);
