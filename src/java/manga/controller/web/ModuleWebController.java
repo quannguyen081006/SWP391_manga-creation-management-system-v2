@@ -142,7 +142,10 @@ public class ModuleWebController {
         }
     }
 
-    /** Renders the edit form again with the proposal reloaded and one error attribute set. */
+    /**
+     * Renders the edit form again with the proposal reloaded and one error
+     * attribute set.
+     */
     private String proposalEditWithFileToast(AuthenticatedUser user, long id, Model model,
             String errorAttribute, String message) {
         Proposal proposal = proposalService.getDetail(user, id);
@@ -237,7 +240,7 @@ public class ModuleWebController {
         model.addAttribute("settings", proposalSettingsService.getSettings());
         return "settings/proposals";
     }
-    
+
     //Deadline settings
     @RequestMapping(value = "/settings/deadlines", method = RequestMethod.GET)
     public String deadlineSettings(HttpSession session, Model model) {
@@ -246,7 +249,7 @@ public class ModuleWebController {
         model.addAttribute("settings", deadlineSettingsService.getSettings());
         return "settings/deadlines";
     }
-    
+
     //Deadlnie settings
     @RequestMapping(value = "/settings/deadlines", method = RequestMethod.POST)
     public String deadlineSettingsSave(
@@ -610,7 +613,9 @@ public class ModuleWebController {
         AuthenticatedUser user = requireUser(session);
         model.addAttribute("period", rankingService.getPeriodById(id));
         model.addAttribute("results", rankingService.getRankingResults(id));
-        model.addAttribute("entries", rankingService.listVoteEntries(id, user));
+        if (user.hasRole("ADMIN")) {
+            model.addAttribute("entries", rankingService.listVoteEntries(id, user));
+        }
         return "ranking/results";
     }
 
@@ -776,8 +781,8 @@ public class ModuleWebController {
     /**
      * Creates a user via UserService, which validates the form, assigns the
      * selected role option, and sends the account-created notification.
-     * UserAdminRepository checks remain the authority for uniqueness and
-     * ADMIN singleton rules because they run next to the database write.
+     * UserAdminRepository checks remain the authority for uniqueness and ADMIN
+     * singleton rules because they run next to the database write.
      */
     @RequestMapping(value = "/users/create", method = RequestMethod.POST)
     public String userCreate(
@@ -888,8 +893,8 @@ public class ModuleWebController {
 
     /**
      * Removes one role via UserService, which notifies the user only if the
-     * role actually existed; removing the final ADMIN role is still blocked
-     * in UserAdminRepository, the authoritative database-side guard.
+     * role actually existed; removing the final ADMIN role is still blocked in
+     * UserAdminRepository, the authoritative database-side guard.
      */
     @RequestMapping(value = "/users/{id}/roles/remove", method = RequestMethod.POST)
     public String userRoleRemove(
@@ -1435,4 +1440,3 @@ public class ModuleWebController {
     // Private Helper Methods
     // ============================================================
 }
-
