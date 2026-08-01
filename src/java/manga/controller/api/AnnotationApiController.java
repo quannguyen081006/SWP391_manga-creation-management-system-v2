@@ -75,7 +75,7 @@ public class AnnotationApiController {
      */
     @GetMapping
     public ApiResponse<List<AnnotationSummary>> listAnnotations(
-            @RequestParam Long manuscriptVersionId,
+            @RequestParam("manuscriptVersionId") Long manuscriptVersionId,
             HttpSession session) {
         AuthenticatedUser user
                 = (AuthenticatedUser) session.getAttribute("AUTH_USER");
@@ -91,7 +91,7 @@ public class AnnotationApiController {
      */
     @GetMapping("/{id}")
     public ApiResponse<AnnotationSummary> getAnnotation(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             HttpSession session) {
         AuthenticatedUser user
                 = (AuthenticatedUser) session.getAttribute("AUTH_USER");
@@ -110,7 +110,7 @@ public class AnnotationApiController {
      */
     @PostMapping("/{id}/resolve")
     public ApiResponse<Void> resolveAnnotation(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             HttpSession session) {
         AuthenticatedUser user
                 = (AuthenticatedUser) session.getAttribute("AUTH_USER");
@@ -126,7 +126,7 @@ public class AnnotationApiController {
      */
     @PostMapping("/{id}/dismiss")
     public ApiResponse<Void> dismissAnnotation(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             HttpSession session) {
         AuthenticatedUser user
                 = (AuthenticatedUser) session.getAttribute("AUTH_USER");
@@ -142,7 +142,7 @@ public class AnnotationApiController {
      */
     @DeleteMapping("/{id}")
     public ApiResponse<Void> deleteAnnotation(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             HttpSession session) {
         AuthenticatedUser user
                 = (AuthenticatedUser) session.getAttribute("AUTH_USER");
@@ -158,7 +158,7 @@ public class AnnotationApiController {
      */
     @PostMapping("/{id}/replies")
     public ApiResponse<Long> addReply(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody CreateAnnotationRequestDTO request,
             HttpSession session) {
         AuthenticatedUser user
@@ -176,7 +176,7 @@ public class AnnotationApiController {
      */
     @GetMapping("/{id}/replies")
     public ApiResponse<List<AnnotationSummary>> listReplies(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             HttpSession session) {
         AuthenticatedUser user
                 = (AuthenticatedUser) session.getAttribute("AUTH_USER");

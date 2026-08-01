@@ -41,7 +41,7 @@ public class ManuscriptVersionApiController {
      */
     @PostMapping
     public ApiResponse<ManuscriptVersionDTO> createWorkspace(
-            @RequestParam Long chapterId,
+            @RequestParam("chapterId") Long chapterId,
             @ModelAttribute AuthenticatedUser user) {
 
         ManuscriptVersion version = manuscriptVersionService.createWorkspace(chapterId, user);
@@ -53,7 +53,7 @@ public class ManuscriptVersionApiController {
      */
     @GetMapping("/{id}")
     public ApiResponse<ManuscriptVersionDTO> getVersion(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @ModelAttribute AuthenticatedUser user) {
 
         ManuscriptVersion version = manuscriptVersionService.getVersion(id);
@@ -72,7 +72,7 @@ public class ManuscriptVersionApiController {
      */
     @GetMapping
     public ApiResponse<List<ManuscriptVersionDTO>> listVersions(
-            @RequestParam Long chapterId,
+            @RequestParam("chapterId") Long chapterId,
             @ModelAttribute AuthenticatedUser user) {
 
         List<ManuscriptVersion> versions = manuscriptVersionService.listVersions(chapterId);
@@ -88,7 +88,7 @@ public class ManuscriptVersionApiController {
      */
     @PostMapping("/{id}/pages")
     public ApiResponse<ManuscriptPageDTO> addPage(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody AddPageRequestDTO request,
             @ModelAttribute AuthenticatedUser user) {
 
@@ -107,7 +107,7 @@ public class ManuscriptVersionApiController {
      */
     @GetMapping("/{id}/pages")
     public ApiResponse<List<ManuscriptPageDTO>> getPages(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @ModelAttribute AuthenticatedUser user) {
 
         List<ManuscriptPage> pages = manuscriptVersionService.getPages(id);
@@ -123,7 +123,7 @@ public class ManuscriptVersionApiController {
      */
     @PostMapping("/{id}/submit")
     public ApiResponse<Void> submitForReview(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @ModelAttribute AuthenticatedUser user) {
 
         manuscriptVersionService.submitForReview(id, user);
@@ -135,7 +135,7 @@ public class ManuscriptVersionApiController {
      */
     @PostMapping("/{id}/approve")
     public ApiResponse<Void> approve(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody(required = false) ManuscriptApprovalRequestDTO request,
             @ModelAttribute AuthenticatedUser user) {
 
@@ -148,7 +148,7 @@ public class ManuscriptVersionApiController {
      */
     @PostMapping("/{id}/publish")
     public ApiResponse<Void> publish(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @ModelAttribute AuthenticatedUser user) {
 
         manuscriptVersionService.publish(id, user);
@@ -160,7 +160,7 @@ public class ManuscriptVersionApiController {
      */
     @PostMapping("/{id}/reject")
     public ApiResponse<Void> reject(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody ManuscriptApprovalRequestDTO request,
             @ModelAttribute AuthenticatedUser user) {
 
@@ -174,7 +174,7 @@ public class ManuscriptVersionApiController {
      */
     @GetMapping("/{id}/review-task")
     public ApiResponse<ReviewTaskDTO> getReviewTask(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @ModelAttribute AuthenticatedUser user) {
 
         manga.model.ReviewTask task = reviewTaskService.getReviewTask(id);
@@ -217,7 +217,7 @@ public class ManuscriptVersionApiController {
      */
     @PostMapping("/new-version")
     public ApiResponse<ManuscriptVersionDTO> createNewVersion(
-            @RequestParam Long chapterId,
+            @RequestParam("chapterId") Long chapterId,
             @ModelAttribute AuthenticatedUser user) {
 
         ManuscriptVersion version = manuscriptVersionService.createNewVersion(chapterId, user);
@@ -229,7 +229,7 @@ public class ManuscriptVersionApiController {
      */
     @GetMapping("/{id}/decisions")
     public ApiResponse<List<manga.model.ReviewDecision>> getReviewDecisions(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @ModelAttribute AuthenticatedUser user) {
 
         List<manga.model.ReviewDecision> decisions = manuscriptVersionService.getReviewDecisions(id);
@@ -242,8 +242,8 @@ public class ManuscriptVersionApiController {
      */
     @GetMapping("/{id}/pages/{pageId}/annotations")
     public ApiResponse<List<manga.model.AnnotationSummary>> getPageAnnotations(
-            @PathVariable Long id,
-            @PathVariable Long pageId,
+            @PathVariable("id") Long id,
+            @PathVariable("pageId") Long pageId,
             @ModelAttribute AuthenticatedUser user) {
 
         List<manga.model.AnnotationSummary> annotations = manuscriptVersionService.getPageAnnotations(id, pageId);
@@ -256,7 +256,7 @@ public class ManuscriptVersionApiController {
      */
     @GetMapping("/candidate-pages")
     public ApiResponse<List<manga.dto.chaptertask.ChapterImageDTO>> getCandidatePages(
-            @RequestParam Long chapterId,
+            @RequestParam("chapterId") Long chapterId,
             @ModelAttribute AuthenticatedUser user) {
 
         List<manga.dto.chaptertask.ChapterImageDTO> candidatePages = manuscriptVersionService.getCandidatePages(chapterId);
@@ -269,8 +269,8 @@ public class ManuscriptVersionApiController {
      */
     @PostMapping("/{id}/import-pages")
     public ApiResponse<List<ManuscriptPageDTO>> importChapterPages(
-            @PathVariable Long id,
-            @RequestParam Long chapterId,
+            @PathVariable("id") Long id,
+            @RequestParam("chapterId") Long chapterId,
             @ModelAttribute AuthenticatedUser user) {
 
         List<ManuscriptPage> pages = manuscriptVersionService.importChapterPages(id, chapterId, user);
@@ -284,7 +284,7 @@ public class ManuscriptVersionApiController {
             value = "/pages/{pageId}/replace",
             consumes = "multipart/form-data")
     public ApiResponse<ManuscriptPageDTO> replacePage(
-            @PathVariable Long pageId,
+            @PathVariable("pageId") Long pageId,
             HttpServletRequest request,
             @ModelAttribute AuthenticatedUser user) {
 
@@ -343,8 +343,8 @@ public class ManuscriptVersionApiController {
      */
     @GetMapping("/compare")
     public ApiResponse<manga.dto.VersionComparisonDTO> compareVersions(
-            @RequestParam Long versionId1,
-            @RequestParam Long versionId2,
+            @RequestParam("versionId1") Long versionId1,
+            @RequestParam("versionId2") Long versionId2,
             @ModelAttribute AuthenticatedUser user) {
 
         manga.dto.VersionComparisonDTO comparison = manuscriptVersionService.compareVersions(versionId1, versionId2);
@@ -357,7 +357,7 @@ public class ManuscriptVersionApiController {
      */
     @GetMapping("/{id}/dashboard")
     public ApiResponse<manga.dto.ReviewDashboardDTO> getReviewDashboard(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @ModelAttribute AuthenticatedUser user) {
 
         manga.dto.ReviewDashboardDTO dashboard = manuscriptVersionService.getReviewDashboard(id);
@@ -373,7 +373,7 @@ public class ManuscriptVersionApiController {
      */
     @GetMapping("/workspace")
     public ApiResponse<WorkspaceStatusDTO> getWorkspaceStatus(
-            @RequestParam Long chapterId,
+            @RequestParam("chapterId") Long chapterId,
             @ModelAttribute AuthenticatedUser user) {
 
         manga.model.ManuscriptVersion workspace = manuscriptVersionService.getLatestVersion(chapterId);
